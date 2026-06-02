@@ -356,4 +356,10 @@ def run() -> list[CheckResult]:
     )]
 ```
 
-The scanner auto-dis
+The scanner auto-discovers all modules in `checks/` — no registration needed.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
