@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.4] - 2026-06-02
+
+### Fixed
+- **HTML reports now work when installed from PyPI.** The Jinja2 template
+  (`report.html.j2`) shipped outside the package with no `package-data`, so
+  wheels/sdists contained no template and `apotrope --html` failed on any
+  `pip install`. The template now lives in `apotrope/templates/` and is
+  packaged as package data; `reporter.py` loads it relative to the module.
+
+### Changed
+- First release published to **PyPI** (`pip install apotrope`).
+- Renamed the PyInstaller build script `build.py` → `build_exe.py` so it no
+  longer shadows the PyPA `build` package (`python -m build` was invoking
+  PyInstaller instead of producing the sdist/wheel).
+
+---
+
 ## [0.1.3] - 2026-06-02
 
 ### Changed

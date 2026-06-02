@@ -213,11 +213,14 @@ class Reporter:
         import sys
         if getattr(sys, "frozen", False):
             # Running inside a PyInstaller one-file bundle; templates were
-            # added with --add-data "templates;templates" so they extract to
+            # added with --add-data "...;templates" so they extract to
             # sys._MEIPASS/templates/
             template_dir = Path(sys._MEIPASS) / "templates"  # type: ignore[attr-defined]
         else:
-            template_dir = Path(__file__).parent.parent.parent / "templates"
+            # Templates ship as package data inside apotrope/templates/, so the
+            # directory sits next to this module for both editable and installed
+            # (pip / PyPI) installs.
+            template_dir = Path(__file__).parent / "templates"
         env = Environment(
             loader=FileSystemLoader(str(template_dir)),
             autoescape=True,  # Always escape — the template is always HTML.

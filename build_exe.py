@@ -2,11 +2,11 @@
 Apotrope build script — produces a self-contained apotrope.exe via PyInstaller.
 
 Usage:
-    python build.py [--no-icon]
+    python build_exe.py [--no-icon]
 
 The resulting exe is written to dist/apotrope.exe and bundles:
   - All Python dependencies (rich, jinja2, psutil, ...)
-  - The Jinja2 HTML template (templates/report.html.j2)
+  - The Jinja2 HTML template (src/apotrope/templates/report.html.j2)
   - A Windows shield application icon (assets/icon.ico)
 
 The exe runs on any Windows 10/11 machine without a Python installation.
@@ -95,7 +95,7 @@ def build(use_icon: bool = True) -> int:
     """Run PyInstaller and return its exit code."""
     print("[build] Starting PyInstaller build …")
 
-    templates_src = ROOT / "templates"
+    templates_src = ROOT / "src" / "apotrope" / "templates"
     if not templates_src.exists():
         print(f"[build] ERROR: templates/ directory not found at {templates_src}")
         return 1
