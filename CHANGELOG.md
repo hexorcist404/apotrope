@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.5] - 2026-06-02
+
+### Changed
+- First release published to PyPI through the automated trusted-publishing
+  workflow (`pip install apotrope`). No functional changes from 0.1.4 — this
+  release exists to exercise the OIDC publishing pipeline end to end.
+
+---
+
 ## [0.1.4] - 2026-06-02
 
 ### Fixed
