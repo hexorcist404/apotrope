@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.3] - 2026-06-02
+
+### Changed
+- **Renamed the project from WinPosture to Apotrope.** The Python package is now
+  `apotrope`, the console script and bundled executable are `apotrope` / `apotrope.exe`,
+  and all documentation, templates, and tests reference the new name. No functional
+  audit logic changed. (The GitHub repository slug remains `winposture`.)
+- Build icon now renders an "A" glyph to match the new name.
+
+---
+
 ## [0.1.2] - 2026-04-21
 
 ### Security
