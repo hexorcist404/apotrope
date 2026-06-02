@@ -313,21 +313,21 @@ class TestIsAdmin:
         with patch.object(sys, "platform", "win32"):
             mock_windll = MagicMock()
             mock_windll.shell32.IsUserAnAdmin.return_value = 1
-            with patch("apotrope.utils.ctypes.windll", mock_windll):
+            with patch("apotrope.utils.ctypes.windll", mock_windll, create=True):
                 assert utils.is_admin() is True
 
     def test_returns_false_when_ctypes_reports_non_admin(self):
         with patch.object(sys, "platform", "win32"):
             mock_windll = MagicMock()
             mock_windll.shell32.IsUserAnAdmin.return_value = 0
-            with patch("apotrope.utils.ctypes.windll", mock_windll):
+            with patch("apotrope.utils.ctypes.windll", mock_windll, create=True):
                 assert utils.is_admin() is False
 
     def test_returns_false_when_ctypes_raises(self):
         with patch.object(sys, "platform", "win32"):
             mock_windll = MagicMock()
             mock_windll.shell32.IsUserAnAdmin.side_effect = OSError("access denied")
-            with patch("apotrope.utils.ctypes.windll", mock_windll):
+            with patch("apotrope.utils.ctypes.windll", mock_windll, create=True):
                 assert utils.is_admin() is False
 
 

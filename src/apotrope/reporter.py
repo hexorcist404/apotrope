@@ -502,7 +502,7 @@ class Reporter:
         from rich.text import Text
 
         diamond = _u(console, "◈", "*")
-        logo = Text(f"{diamond}  W I N P O S T U R E  {diamond}", style="bold blue")
+        logo = Text(f"{diamond}  A P O T R O P E  {diamond}", style="bold blue")
         sub  = Text(f"Windows Security Posture Auditor  {_u(console, '·', '-')}  v{__version__}", style="dim")
         # Build two-line content; Text.append returns self so we can chain
         content = logo.copy()

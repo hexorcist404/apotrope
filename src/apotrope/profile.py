@@ -1,4 +1,4 @@
-"""Custom check profiles loaded from a apotrope.toml configuration file.
+"""Custom check profiles loaded from an apotrope.toml configuration file.
 
 Profile files allow MSP teams and advanced users to customise Apotrope's
 behaviour without touching source code.
