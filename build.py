@@ -67,7 +67,7 @@ def _ensure_icon() -> Path:
         # Highlight outline
         _draw_shield(draw, pad, pad, size - pad, size - pad // 2,
                      fill=None, outline=(100, 180, 255, 200), lw=max(1, size // 32))
-        # "W" label
+        # "A" label
         cx, cy = size // 2, int(size * 0.40)
         font_size = max(8, int(size * 0.38))
         try:
@@ -76,9 +76,9 @@ def _ensure_icon() -> Path:
             font = ImageFont.load_default()
         for dx, dy in [(1, 1), (0, 0)]:
             colour = (20, 40, 80, 200) if (dx, dy) == (1, 1) else (255, 255, 255, 255)
-            bb = draw.textbbox((0, 0), "W", font=font)
+            bb = draw.textbbox((0, 0), "A", font=font)
             tw, th = bb[2] - bb[0], bb[3] - bb[1]
-            draw.text((cx - tw // 2 + dx, cy - th // 2 + dy), "W",
+            draw.text((cx - tw // 2 + dx, cy - th // 2 + dy), "A",
                       font=font, fill=colour)
         return img
 
