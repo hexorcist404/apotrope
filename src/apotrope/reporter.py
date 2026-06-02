@@ -1,4 +1,4 @@
-"""Output formatting for WinPosture audit reports.
+"""Output formatting for Apotrope audit reports.
 
 Supports:
   - Rich-formatted terminal output with progress, panels, and color
@@ -16,11 +16,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from winposture.scanner import Scanner
+    from apotrope.scanner import Scanner
 
-from winposture import __version__
-from winposture.models import AuditReport, CheckResult, Severity, Status
-from winposture.scoring import calculate_category_scores, score_grade
+from apotrope import __version__
+from apotrope.models import AuditReport, CheckResult, Severity, Status
+from apotrope.scoring import calculate_category_scores, score_grade
 
 log = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ def _truncate(text: str, maxlen: int) -> str:
 # ── Reporter ──────────────────────────────────────────────────────────────────
 
 class Reporter:
-    """Formats and outputs WinPosture audit reports.
+    """Formats and outputs Apotrope audit reports.
 
     Args:
         verbose:  Show details and remediation for every check result.
@@ -116,15 +116,15 @@ class Reporter:
     def run_with_progress(self, scanner: "Scanner") -> AuditReport:
         """Run *scanner* while showing a Rich progress bar.
 
-        Prints the WinPosture banner above the progress bar, then runs each
+        Prints the Apotrope banner above the progress bar, then runs each
         check module in turn updating the bar.  The caller should then call
         :meth:`print_terminal` to display the results.
 
         Args:
-            scanner: Configured :class:`~winposture.scanner.Scanner` instance.
+            scanner: Configured :class:`~apotrope.scanner.Scanner` instance.
 
         Returns:
-            Completed :class:`~winposture.models.AuditReport`.
+            Completed :class:`~apotrope.models.AuditReport`.
         """
         try:
             from rich.progress import (
@@ -180,7 +180,7 @@ class Reporter:
         """Print the completed audit report to the terminal.
 
         Args:
-            report:    Completed :class:`~winposture.models.AuditReport`.
+            report:    Completed :class:`~apotrope.models.AuditReport`.
             html_path: If set, shown in footer as the saved HTML path.
             json_path: If set, shown in footer as the saved JSON path.
         """
@@ -201,7 +201,7 @@ class Reporter:
         """Render and save a self-contained HTML report via the Jinja2 template.
 
         Args:
-            report: Completed :class:`~winposture.models.AuditReport`.
+            report: Completed :class:`~apotrope.models.AuditReport`.
             path:   Destination file path for the HTML file.
         """
         try:
@@ -238,7 +238,7 @@ class Reporter:
         """Serialize the AuditReport to a JSON file.
 
         Args:
-            report: Completed :class:`~winposture.models.AuditReport`.
+            report: Completed :class:`~apotrope.models.AuditReport`.
             path:   Destination file path for the JSON file.
         """
 
@@ -259,10 +259,10 @@ class Reporter:
         """Print a scan comparison diff table to the terminal.
 
         Args:
-            diff: A :class:`~winposture.compare.ScanDiff` from
-                  :func:`~winposture.compare.compare_reports`.
+            diff: A :class:`~apotrope.compare.ScanDiff` from
+                  :func:`~apotrope.compare.compare_reports`.
         """
-        from winposture.compare import ScanDiff
+        from apotrope.compare import ScanDiff
 
         assert isinstance(diff, ScanDiff)
         console = self._make_console()
@@ -496,7 +496,7 @@ class Reporter:
         ))
 
     def _print_banner(self, console) -> None:
-        """Print the WinPosture logo panel."""
+        """Print the Apotrope logo panel."""
         from rich.align import Align
         from rich.panel import Panel
         from rich.text import Text
@@ -730,7 +730,7 @@ class Reporter:
         """Minimal plain-text output when Rich is unavailable."""
         letter, label = score_grade(report.score)
         print(
-            f"WinPosture v{__version__}  |  {report.hostname}"
+            f"Apotrope v{__version__}  |  {report.hostname}"
             f"  |  Score: {report.score}/100 ({letter} {label})"
         )
         print(

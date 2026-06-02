@@ -1,9 +1,9 @@
-"""Custom check profiles loaded from a winposture.toml configuration file.
+"""Custom check profiles loaded from a apotrope.toml configuration file.
 
-Profile files allow MSP teams and advanced users to customise WinPosture's
+Profile files allow MSP teams and advanced users to customise Apotrope's
 behaviour without touching source code.
 
-Example ``winposture.toml``:
+Example ``apotrope.toml``:
 
 .. code-block:: toml
 
@@ -29,8 +29,8 @@ Example ``winposture.toml``:
 
 Profiles are searched in this order:
     1. Path supplied by ``--profile`` CLI flag
-    2. ``winposture.toml`` in the current working directory
-    3. ``~/.winposture.toml`` in the user's home directory
+    2. ``apotrope.toml`` in the current working directory
+    3. ``~/.apotrope.toml`` in the user's home directory
 """
 
 from __future__ import annotations
@@ -42,8 +42,8 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 _SEARCH_PATHS = [
-    Path("winposture.toml"),
-    Path.home() / ".winposture.toml",
+    Path("apotrope.toml"),
+    Path.home() / ".apotrope.toml",
 ]
 
 
@@ -91,7 +91,7 @@ def load_profile(path: str | None = None) -> Profile:
                 break
 
     if resolved is None:
-        log.debug("No winposture.toml found — using default profile")
+        log.debug("No apotrope.toml found — using default profile")
         return Profile()
 
     try:

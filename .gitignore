@@ -50,11 +50,11 @@ $RECYCLE.BIN/
 # CIS Benchmark PDFs (proprietary — do not commit)
 *.pdf
 
-# WinPosture outputs
+# Apotrope outputs
 *.html
 *.json
 !docs/index.html
-winposture_report_*
+apotrope_report_*
 
 # Design review scaffolding
 gen_sample_report.py

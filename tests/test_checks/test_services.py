@@ -1,13 +1,13 @@
-"""Tests for winposture.checks.services."""
+"""Tests for apotrope.checks.services."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-from winposture.checks import services
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Status, Severity
+from apotrope.checks import services
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Status, Severity
 
 
 def _svc(name: str, display: str = "") -> dict:
@@ -24,7 +24,7 @@ def _unquoted(name: str, path: str) -> dict:
 
 class TestCheckRiskyServices:
     def _run(self, services_data):
-        with patch("winposture.checks.services.run_powershell_json", return_value=services_data):
+        with patch("apotrope.checks.services.run_powershell_json", return_value=services_data):
             return services._check_risky_services()
 
     def test_no_risky_services_returns_pass(self):
@@ -67,8 +67,8 @@ class TestCheckRiskyServices:
         assert results[0].status == Status.PASS
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.services.run_powershell_json",
-                   side_effect=WinPostureError("access denied")):
+        with patch("apotrope.checks.services.run_powershell_json",
+                   side_effect=ApotropeError("access denied")):
             r = services._check_risky_services()[0]
         assert r.status == Status.ERROR
 
@@ -79,7 +79,7 @@ class TestCheckRiskyServices:
 
 class TestCheckUnquotedPaths:
     def _run(self, data):
-        with patch("winposture.checks.services.run_powershell_json", return_value=data):
+        with patch("apotrope.checks.services.run_powershell_json", return_value=data):
             return services._check_unquoted_paths()
 
     def test_no_unquoted_paths_is_pass(self):
@@ -115,15 +115,15 @@ class TestCheckUnquotedPaths:
         assert "2" in r.details
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.services.run_powershell_json",
-                   side_effect=WinPostureError("boom")):
+        with patch("apotrope.checks.services.run_powershell_json",
+                   side_effect=ApotropeError("boom")):
             r = services._check_unquoted_paths()[0]
         assert r.status == Status.ERROR
 
     def test_empty_powershell_output_is_pass(self):
         """Empty PS output (no matches) should be PASS, not ERROR."""
-        with patch("winposture.checks.services.run_powershell_json",
-                   side_effect=WinPostureError("PowerShell command returned empty output (expected JSON)")):
+        with patch("apotrope.checks.services.run_powershell_json",
+                   side_effect=ApotropeError("PowerShell command returned empty output (expected JSON)")):
             r = services._check_unquoted_paths()[0]
         assert r.status == Status.PASS
 
@@ -134,17 +134,17 @@ class TestCheckUnquotedPaths:
 
 class TestRun:
     def test_run_returns_list_of_check_results(self):
-        with patch("winposture.checks.services.run_powershell_json", return_value=[]):
+        with patch("apotrope.checks.services.run_powershell_json", return_value=[]):
             results = services.run()
         assert all(isinstance(r, CheckResult) for r in results)
 
     def test_run_no_risky_no_unquoted_two_pass_results(self):
-        with patch("winposture.checks.services.run_powershell_json", return_value=[]):
+        with patch("apotrope.checks.services.run_powershell_json", return_value=[]):
             results = services.run()
         assert len(results) == 2
         assert all(r.status == Status.PASS for r in results)
 
     def test_run_category_is_services(self):
-        with patch("winposture.checks.services.run_powershell_json", return_value=[]):
+        with patch("apotrope.checks.services.run_powershell_json", return_value=[]):
             results = services.run()
         assert all(r.category == "Services" for r in results)

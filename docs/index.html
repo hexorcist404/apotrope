@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="WinPosture — portable Windows security posture auditor. Single executable, no cloud, actionable remediation." />
+  <meta name="description" content="Apotrope — portable Windows security posture auditor. Single executable, no cloud, actionable remediation." />
   <meta name="google-site-verification" content="N68F_sJSRaPAUmW1m4vSVKj0BwJBtOEP6m9mwE1SAwA" />
-  <title>WinPosture — Windows Security Posture Auditor</title>
+  <title>Apotrope — Windows Security Posture Auditor</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -269,12 +269,12 @@
 <!-- ── Navigation ── -->
 <nav>
   <div class="container">
-    <span class="nav-brand">Win<span>Posture</span></span>
+    <span class="nav-brand">Apo<span>trope</span></span>
     <ul>
       <li><a href="#features">Features</a></li>
       <li><a href="#checks">Checks</a></li>
       <li><a href="#start">Get Started</a></li>
-      <li><a href="https://github.com/hexorcist404/winposture">GitHub</a></li>
+      <li><a href="https://github.com/hexorcist404/apotrope">GitHub</a></li>
     </ul>
   </div>
 </nav>
@@ -289,11 +289,14 @@
       CIS Benchmark controls and gives you plain-English remediation steps —
       no cloud, no agent, no license.
     </p>
+    <p style="font-size:0.9rem; color:var(--muted); margin-bottom:2rem;">
+      <em>apotrope</em> &mdash; a charm that wards off harm
+    </p>
     <div class="btn-group">
-      <a class="btn btn-primary" href="https://github.com/hexorcist404/winposture/releases/latest">
-        &#8659; Download winposture.exe
+      <a class="btn btn-primary" href="https://github.com/hexorcist404/apotrope/releases/latest">
+        &#8659; Download apotrope.exe
       </a>
-      <a class="btn btn-secondary" href="https://github.com/hexorcist404/winposture">
+      <a class="btn btn-secondary" href="https://github.com/hexorcist404/apotrope">
         View on GitHub
       </a>
     </div>
@@ -330,7 +333,7 @@
       <div class="feature-card">
         <div class="feature-icon">&#127959;</div>
         <h3>Single Executable</h3>
-        <p>Drop <code>winposture.exe</code> on a USB drive and run it on any Windows machine. No installation, no Python, no dependencies.</p>
+        <p>Drop <code>apotrope.exe</code> on a USB drive and run it on any Windows machine. No installation, no Python, no dependencies.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#128274;</div>
@@ -360,7 +363,7 @@
       <div class="feature-card">
         <div class="feature-icon">&#9881;</div>
         <h3>Custom Profiles</h3>
-        <p>A <code>winposture.toml</code> config lets you disable checks, override severities, and tune thresholds for your environment.</p>
+        <p>A <code>apotrope.toml</code> config lets you disable checks, override severities, and tune thresholds for your environment.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#128295;</div>
@@ -406,7 +409,7 @@
         <div class="step-num">1</div>
         <div class="step-body">
           <h3>Download the executable</h3>
-          <p>Grab <code>winposture.exe</code> from the <a href="https://github.com/hexorcist404/winposture/releases/latest">latest release</a> and save it somewhere easy to find — your Desktop or Downloads folder works fine.</p>
+          <p>Grab <code>apotrope.exe</code> from the <a href="https://github.com/hexorcist404/apotrope/releases/latest">latest release</a> and save it somewhere easy to find — your Desktop or Downloads folder works fine.</p>
         </div>
       </div>
 
@@ -432,7 +435,7 @@
         <div class="step-num">4</div>
         <div class="step-body">
           <h3>Run a scan</h3>
-          <pre>winposture.exe</pre>
+          <pre>apotrope.exe</pre>
         </div>
       </div>
 
@@ -440,7 +443,7 @@
         <div class="step-num">5</div>
         <div class="step-body">
           <h3>Generate an HTML report (optional)</h3>
-          <pre>winposture.exe --html report.html --verbose</pre>
+          <pre>apotrope.exe --html report.html --verbose</pre>
           <p style="margin-top:0.4rem; font-size:0.85rem; color:var(--muted);">Opens as a standalone file in any browser — no server required.</p>
         </div>
       </div>
@@ -449,9 +452,9 @@
         <div class="step-num">6</div>
         <div class="step-body">
           <h3>Track changes over time</h3>
-          <pre>winposture.exe --baseline before.json
+          <pre>apotrope.exe --baseline before.json
 # ... remediate findings ...
-winposture.exe --compare before.json</pre>
+apotrope.exe --compare before.json</pre>
         </div>
       </div>
 
@@ -463,20 +466,13 @@ winposture.exe --compare before.json</pre>
 <footer>
   <div class="container">
     <p>
-      WinPosture is open source software released under the
-      <a href="https://github.com/hexorcist404/winposture/blob/main/LICENSE">MIT License</a>.
+      Apotrope is open source software released under the
+      <a href="https://github.com/hexorcist404/apotrope/blob/main/LICENSE">MIT License</a>.
       &nbsp;&middot;&nbsp;
-      <a href="https://github.com/hexorcist404/winposture">GitHub</a>
+      <a href="https://github.com/hexorcist404/apotrope">GitHub</a>
       &nbsp;&middot;&nbsp;
-      <a href="https://github.com/hexorcist404/winposture/releases">Releases</a>
+      <a href="https://github.com/hexorcist404/apotrope/releases">Releases</a>
       &nbsp;&middot;&nbsp;
-      <a href="https://github.com/hexorcist404/winposture/issues">Issues</a>
+      <a href="https://github.com/hexorcist404/apotrope/issues">Issues</a>
     </p>
-    <p style="margin-top:0.5rem; color:#484f58;">
-      For authorized security assessment use only.
-    </p>
-  </div>
-</footer>
-
-</body>
-</html>
+    <p sty

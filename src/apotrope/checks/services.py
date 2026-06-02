@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell_json
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ def _check_risky_services() -> list[CheckResult]:
     """Flag known-dangerous services that are currently running."""
     try:
         data = run_powershell_json(_PS_RUNNING)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Risky Services", str(exc))]
 
     services = data if isinstance(data, list) else ([data] if data else [])
@@ -121,7 +121,7 @@ def _check_unquoted_paths() -> list[CheckResult]:
     """Detect services with unquoted executable paths containing spaces."""
     try:
         data = run_powershell_json(_PS_UNQUOTED)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         if "empty output" in str(exc):
             data = []
         else:

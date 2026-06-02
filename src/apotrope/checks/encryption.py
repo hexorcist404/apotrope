@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell_json
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def run() -> list[CheckResult]:
     """
     try:
         data = run_powershell_json(_PS_BITLOCKER)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [CheckResult(
             category=CATEGORY,
             check_name="BitLocker Status",
@@ -46,7 +46,7 @@ def run() -> list[CheckResult]:
             description="Checks BitLocker drive encryption status.",
             details=str(exc),
             remediation=(
-                "Run WinPosture as Administrator for full BitLocker status. "
+                "Run Apotrope as Administrator for full BitLocker status. "
                 "Run with --log-level DEBUG for more detail."
             ),
         )]
@@ -65,7 +65,7 @@ def run() -> list[CheckResult]:
                 "BitLocker may be unavailable, or elevated privileges are required."
             ),
             remediation=(
-                "Run WinPosture as Administrator to retrieve BitLocker status. "
+                "Run Apotrope as Administrator to retrieve BitLocker status. "
                 "To enable BitLocker on the OS drive: "
                 "Enable-BitLocker -MountPoint 'C:' "
                 "-EncryptionMethod XtsAes256 -RecoveryPasswordProtector"

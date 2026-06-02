@@ -1,10 +1,10 @@
 """
-WinPosture build script — produces a self-contained winposture.exe via PyInstaller.
+Apotrope build script — produces a self-contained apotrope.exe via PyInstaller.
 
 Usage:
     python build.py [--no-icon]
 
-The resulting exe is written to dist/winposture.exe and bundles:
+The resulting exe is written to dist/apotrope.exe and bundles:
   - All Python dependencies (rich, jinja2, psutil, ...)
   - The Jinja2 HTML template (templates/report.html.j2)
   - A Windows shield application icon (assets/icon.ico)
@@ -100,7 +100,7 @@ def build(use_icon: bool = True) -> int:
         print(f"[build] ERROR: templates/ directory not found at {templates_src}")
         return 1
 
-    entry = ROOT / "src" / "winposture" / "__main__.py"
+    entry = ROOT / "src" / "apotrope" / "__main__.py"
     if not entry.exists():
         print(f"[build] ERROR: entry point not found at {entry}")
         return 1
@@ -108,10 +108,10 @@ def build(use_icon: bool = True) -> int:
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--onefile",
-        "--name", "winposture",
+        "--name", "apotrope",
         "--add-data", f"{templates_src};templates",
         "--paths", str(ROOT / "src"),
-        "--collect-submodules", "winposture.checks",
+        "--collect-submodules", "apotrope.checks",
         "--noconfirm",
         "--clean",
         str(entry),
@@ -128,10 +128,10 @@ def build(use_icon: bool = True) -> int:
     result = subprocess.run(cmd, cwd=str(ROOT))
 
     if result.returncode == 0:
-        exe = ROOT / "dist" / "winposture.exe"
+        exe = ROOT / "dist" / "apotrope.exe"
         size_mb = exe.stat().st_size / 1024 / 1024 if exe.exists() else 0
-        print(f"\n[build] SUCCESS — dist/winposture.exe ({size_mb:.1f} MB)")
-        print("[build] Test with:  dist\\winposture.exe --version")
+        print(f"\n[build] SUCCESS — dist/apotrope.exe ({size_mb:.1f} MB)")
+        print("[build] Test with:  dist\\apotrope.exe --version")
     else:
         print(f"\n[build] FAILED (exit {result.returncode})")
 
@@ -139,7 +139,7 @@ def build(use_icon: bool = True) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build winposture.exe via PyInstaller")
+    parser = argparse.ArgumentParser(description="Build apotrope.exe via PyInstaller")
     parser.add_argument("--no-icon", action="store_true",
                         help="Skip icon embedding (faster, good for CI)")
     args = parser.parse_args()

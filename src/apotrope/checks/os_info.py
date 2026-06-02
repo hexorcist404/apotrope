@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell, run_powershell_json
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell, run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ def _check_os_build() -> list[CheckResult]:
     """Check OS version and end-of-support status."""
     try:
         data = run_powershell_json(_PS_OS)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("OS Version", str(exc)), _error("OS End-of-Support Status", str(exc))]
 
     if isinstance(data, list):
@@ -198,7 +198,7 @@ def _check_uptime() -> list[CheckResult]:
     try:
         output = run_powershell(_PS_UPTIME)
         days = int(output.strip())
-    except (WinPostureError, ValueError) as exc:
+    except (ApotropeError, ValueError) as exc:
         return [_error("System Uptime", str(exc))]
 
     if days > _UPTIME_WARN_DAYS:
@@ -230,7 +230,7 @@ def _check_domain() -> list[CheckResult]:
     """Report domain vs workgroup membership (informational)."""
     try:
         data = run_powershell_json(_PS_DOMAIN)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Domain Membership", str(exc))]
 
     if isinstance(data, list):
@@ -255,7 +255,7 @@ def _check_secure_boot() -> list[CheckResult]:
     """Check UEFI Secure Boot status."""
     try:
         output = run_powershell(_PS_SECUREBOOT).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Secure Boot", str(exc))]
 
     if output.upper() == "UNSUPPORTED":
@@ -292,7 +292,7 @@ def _check_tpm() -> list[CheckResult]:
     """Check TPM chip presence, readiness, and version."""
     try:
         data = run_powershell_json(_PS_TPM)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("TPM Status", str(exc))]
 
     if isinstance(data, list):

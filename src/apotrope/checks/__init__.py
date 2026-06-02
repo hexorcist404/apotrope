@@ -1,4 +1,4 @@
-"""WinPosture check modules package.
+"""Apotrope check modules package.
 
 Each module in this package must expose:
   CATEGORY: str          — logical grouping name (e.g. "Firewall")

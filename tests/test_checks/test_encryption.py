@@ -1,13 +1,13 @@
-"""Tests for winposture.checks.encryption."""
+"""Tests for apotrope.checks.encryption."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-from winposture.checks import encryption
-from winposture.exceptions import WinPostureError
-from winposture.models import Status, Severity
+from apotrope.checks import encryption
+from apotrope.exceptions import ApotropeError
+from apotrope.models import Status, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ _OS_IN_PROGRESS = _vol("C:", "OperatingSystem", "EncryptionInProgress", protecti
 
 class TestEncryptionRunEmpty:
     def test_empty_list_returns_warn(self):
-        with patch("winposture.checks.encryption.run_powershell_json", return_value=[]):
+        with patch("apotrope.checks.encryption.run_powershell_json", return_value=[]):
             results = encryption.run()
         assert len(results) == 1
         assert results[0].status == Status.WARN
@@ -47,15 +47,15 @@ class TestEncryptionRunEmpty:
         assert results[0].remediation != ""
 
     def test_ps_error_returns_error_result(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
-                   side_effect=WinPostureError("access denied")):
+        with patch("apotrope.checks.encryption.run_powershell_json",
+                   side_effect=ApotropeError("access denied")):
             results = encryption.run()
         assert len(results) == 1
         assert results[0].status == Status.ERROR
 
     def test_error_result_has_admin_remediation(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
-                   side_effect=WinPostureError("access denied")):
+        with patch("apotrope.checks.encryption.run_powershell_json",
+                   side_effect=ApotropeError("access denied")):
             results = encryption.run()
         assert "Administrator" in results[0].remediation
 
@@ -66,7 +66,7 @@ class TestEncryptionRunEmpty:
 
 class TestEncryptionRunOsDrive:
     def test_encrypted_os_drive_returns_pass(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_OS_ENCRYPTED]):
             results = encryption.run()
         assert len(results) == 1
@@ -74,7 +74,7 @@ class TestEncryptionRunOsDrive:
         assert results[0].severity == Severity.HIGH
 
     def test_unencrypted_os_drive_returns_high_fail(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_OS_UNENCRYPTED]):
             results = encryption.run()
         assert results[0].status == Status.FAIL
@@ -83,21 +83,21 @@ class TestEncryptionRunOsDrive:
         assert "Enable-BitLocker" in results[0].remediation
 
     def test_unencrypted_os_drive_remediation_includes_mount_point(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_OS_UNENCRYPTED]):
             results = encryption.run()
         assert "C:" in results[0].remediation
 
     def test_encryption_in_progress_treated_as_unprotected(self):
         """ProtectionStatus=0 while encrypting → still FAIL until protection is On."""
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_OS_IN_PROGRESS]):
             results = encryption.run()
         assert results[0].status == Status.FAIL
         assert "45%" in results[0].details
 
     def test_pass_details_include_encryption_method(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_OS_ENCRYPTED]):
             results = encryption.run()
         assert "XtsAes256" in results[0].details
@@ -109,21 +109,21 @@ class TestEncryptionRunOsDrive:
 
 class TestEncryptionRunDataDrives:
     def test_encrypted_data_drive_returns_pass_medium(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_DATA_ENCRYPTED]):
             results = encryption.run()
         assert results[0].status == Status.PASS
         assert results[0].severity == Severity.MEDIUM
 
     def test_unencrypted_data_drive_returns_medium_fail(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_DATA_PLAIN]):
             results = encryption.run()
         assert results[0].status == Status.FAIL
         assert results[0].severity == Severity.MEDIUM
 
     def test_check_name_includes_drive_letter(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_DATA_PLAIN]):
             results = encryption.run()
         assert "D:" in results[0].check_name
@@ -135,13 +135,13 @@ class TestEncryptionRunDataDrives:
 
 class TestEncryptionRunMultipleDrives:
     def test_mixed_drives_returns_one_result_per_drive(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_OS_ENCRYPTED, _DATA_PLAIN]):
             results = encryption.run()
         assert len(results) == 2
 
     def test_os_pass_and_data_fail(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_OS_ENCRYPTED, _DATA_PLAIN]):
             results = encryption.run()
         c_result = next(r for r in results if "C:" in r.check_name)
@@ -150,20 +150,20 @@ class TestEncryptionRunMultipleDrives:
         assert d_result.status == Status.FAIL
 
     def test_all_encrypted_all_pass(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_OS_ENCRYPTED, _DATA_ENCRYPTED]):
             results = encryption.run()
         assert all(r.status == Status.PASS for r in results)
 
     def test_all_unencrypted_all_fail(self):
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=[_OS_UNENCRYPTED, _DATA_PLAIN]):
             results = encryption.run()
         assert all(r.status == Status.FAIL for r in results)
 
     def test_single_dict_response_treated_as_one_volume(self):
         """PS returns bare dict when only one volume exists."""
-        with patch("winposture.checks.encryption.run_powershell_json",
+        with patch("apotrope.checks.encryption.run_powershell_json",
                    return_value=_OS_ENCRYPTED):
             results = encryption.run()
         assert len(results) == 1
@@ -172,7 +172,7 @@ class TestEncryptionRunMultipleDrives:
         vol = {"MountPoint": "E:", "VolumeType": None, "VolumeStatus": None,
                "ProtectionStatus": None, "EncryptionMethod": None,
                "EncryptionPercentage": None}
-        with patch("winposture.checks.encryption.run_powershell_json", return_value=[vol]):
+        with patch("apotrope.checks.encryption.run_powershell_json", return_value=[vol]):
             results = encryption.run()
         assert len(results) == 1
         assert results[0].status == Status.FAIL  # ProtectionStatus None → 0 → Off

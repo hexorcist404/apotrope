@@ -1,4 +1,4 @@
-"""Risk scoring logic for WinPosture.
+"""Risk scoring logic for Apotrope.
 
 Calculates a 0–100 security score from a list of CheckResult objects.
 Scoring model:
@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 
-from winposture.models import CheckResult, Severity, Status
+from apotrope.models import CheckResult, Severity, Status
 
 log = logging.getLogger(__name__)
 

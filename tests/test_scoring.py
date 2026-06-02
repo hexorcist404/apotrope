@@ -1,11 +1,11 @@
-"""Unit tests for winposture.scoring."""
+"""Unit tests for apotrope.scoring."""
 
 from __future__ import annotations
 
 import pytest
 
-from winposture.models import CheckResult, Severity, Status
-from winposture.scoring import (
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.scoring import (
     calculate_category_scores,
     calculate_score,
     score_grade,

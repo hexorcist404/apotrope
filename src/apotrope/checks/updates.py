@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def _check_last_update() -> list[CheckResult]:
     """Check when the last Windows Update was installed."""
     try:
         output = run_powershell(_PS_LAST_HOTFIX).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Last Windows Update", str(exc))]
 
     if not output or output == "NONE":
@@ -153,7 +153,7 @@ def _check_wu_service() -> list[CheckResult]:
     """Check whether the Windows Update service is running."""
     try:
         output = run_powershell(_PS_WU_SERVICE).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Windows Update Service", str(exc))]
 
     if not output:
@@ -190,7 +190,7 @@ def _check_pending_updates() -> list[CheckResult]:
         # COM object query can be slow on machines with many updates pending;
         # use a 60s timeout to avoid stalling the entire scan.
         output = run_powershell(_PS_PENDING, timeout=60).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Pending Windows Updates", str(exc))]
 
     if output == "UNAVAILABLE":

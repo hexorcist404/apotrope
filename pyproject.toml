@@ -3,13 +3,13 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "winposture"
+name = "apotrope"
 version = "0.1.2"
 description = "A portable Windows security posture auditor"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
-authors = [{ name = "WinPosture Contributors" }]
+authors = [{ name = "Apotrope Contributors" }]
 keywords = ["windows", "security", "audit", "posture", "hardening"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -35,7 +35,7 @@ dev = [
 ]
 
 [project.scripts]
-winposture = "winposture.cli:main"
+apotrope = "apotrope.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -45,4 +45,4 @@ testpaths = ["tests"]
 addopts = "-v"
 
 [tool.coverage.run]
-source = ["src/winposture"]
+source = ["src/apotrope"]

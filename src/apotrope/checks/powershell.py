@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def _check_execution_policy() -> list[CheckResult]:
     """Check the LocalMachine PowerShell execution policy."""
     try:
         output = run_powershell(_PS_EXEC_POLICY).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("PowerShell Execution Policy", str(exc))]
 
     policy = output.lower()
@@ -90,7 +90,7 @@ def _check_script_block_logging() -> list[CheckResult]:
     """Check whether PowerShell Script Block Logging is enabled."""
     try:
         output = run_powershell(_PS_SBL).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("PowerShell Script Block Logging", str(exc))]
 
     enabled = output == "1"
@@ -120,7 +120,7 @@ def _check_module_logging() -> list[CheckResult]:
     """Check whether PowerShell Module Logging is enabled."""
     try:
         output = run_powershell(_PS_ML).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("PowerShell Module Logging", str(exc))]
 
     enabled = output == "1"
@@ -150,7 +150,7 @@ def _check_constrained_language() -> list[CheckResult]:
     """Report the current PowerShell language mode (informational)."""
     try:
         output = run_powershell(_PS_CLM).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("PowerShell Constrained Language Mode", str(exc))]
 
     is_constrained = output.lower() == "constrainedlanguage"
@@ -170,7 +170,7 @@ def _check_psv2() -> list[CheckResult]:
     """Check whether PowerShell v2 is installed (downgrade attack vector)."""
     try:
         output = run_powershell(_PS_V2).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("PowerShell v2", str(exc))]
 
     state = output.lower()

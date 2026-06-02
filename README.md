@@ -1,24 +1,27 @@
-# WinPosture
+# Apotrope
 
-**Portable Windows security posture auditor.** Runs locally, requires no cloud
-connectivity, and produces a scored terminal report and/or self-contained HTML
-report of your system's security configuration.
+**Portable Windows security posture auditor.** Runs entirely on the machine it's
+auditing, talks to no network, and hands back a scored terminal report — or a
+self-contained HTML report you can send to someone who wasn't in the room.
 
-[![Tests](https://github.com/hexorcist404/winposture/actions/workflows/test.yml/badge.svg)](https://github.com/hexorcist404/winposture/actions/workflows/test.yml)
+[![Tests](https://github.com/hexorcist404/apotrope/actions/workflows/test.yml/badge.svg)](https://github.com/hexorcist404/apotrope/actions/workflows/test.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
 
-## Why WinPosture?
+## Why Apotrope?
 
-Most security auditing tools are either cloud-based (sending your data somewhere),
-require expensive licenses, or are complex enterprise platforms. WinPosture is a
-single executable you can drop on a USB drive and run on any Windows machine in
-seconds — no installation, no internet, no surprises. Run it as Administrator for
-full results — it works without admin too, but some checks (like BitLocker and
-certain security policies) will be limited. It gives you an actionable security
-score with plain-English remediation advice.
+An *apotrope* is a charm that wards off harm. This one audits Windows.
+
+Most posture tools want something before they'll help you: a cloud account, a
+license key, an agent to install, your data shipped off to a dashboard somewhere.
+Apotrope wants none of it. It's a single executable. Drop it on a USB stick, run it
+on any Windows machine, and you get a 0–100 score plus a list of exactly what's
+wrong and how to fix it — in plain English, not bare control IDs.
+
+Run it as Administrator for the full picture. It works without admin too; a handful
+of checks (BitLocker, some policy reads) just come back limited.
 
 ---
 
@@ -26,7 +29,7 @@ score with plain-English remediation advice.
 
 No Python required.
 
-1. Download `winposture.exe` from the [Releases](https://github.com/hexorcist404/winposture/releases) page
+1. Download `apotrope.exe` from the [Releases](https://github.com/hexorcist404/apotrope/releases) page
 2. Open **Command Prompt** or **PowerShell** as Administrator
    (Right-click the Start button → *Terminal (Admin)* or search for *cmd* → *Run as administrator*)
 3. Navigate to the folder where you saved the file — for example, if it's in Downloads:
@@ -38,13 +41,13 @@ cd %USERPROFILE%\Downloads
 4. Run:
 
 ```
-winposture.exe
+apotrope.exe
 ```
 
 For a full HTML report:
 
 ```
-winposture.exe --html report.html
+apotrope.exe --html report.html
 ```
 
 Then open `report.html` in your browser.
@@ -55,15 +58,15 @@ Then open `report.html` in your browser.
 
 **Standard scan (default view):**
 
-![WinPosture scan overview](assets/screenshots/scan-overview.png)
+![Apotrope scan overview](assets/screenshots/scan-overview.png)
 
 **Verbose mode (`--verbose`) — full details and remediation steps for every check:**
 
-![WinPosture verbose output](assets/screenshots/scan-verbose.png)
+![Apotrope verbose output](assets/screenshots/scan-verbose.png)
 
 **Top issues summary (shown at the end of every scan):**
 
-![WinPosture top issues](assets/screenshots/scan-top-issues.png)
+![Apotrope top issues](assets/screenshots/scan-top-issues.png)
 
 ---
 
@@ -74,10 +77,10 @@ Requires Python 3.12+ and Windows 10/11 or Server 2019/2022.
 Install from source:
 
 ```bash
-git clone https://github.com/hexorcist404/winposture.git
-cd winposture
+git clone https://github.com/hexorcist404/apotrope.git
+cd apotrope
 pip install -e .
-winposture
+apotrope
 ```
 
 PyPI package coming soon.
@@ -86,16 +89,16 @@ PyPI package coming soon.
 
 ## Authorized Use Notice
 
-> **WinPosture is a READ-ONLY auditing tool.**  It does not modify any system
+> **Apotrope is a READ-ONLY auditing tool.**  It does not modify any system
 > settings, write to the registry, or make network connections.  All data stays
 > on the machine being audited.
 >
-> **Only run WinPosture on systems you own or have explicit written authorization
+> **Only run Apotrope on systems you own or have explicit written authorization
 > to audit.**  Unauthorized use may violate computer fraud laws in your jurisdiction.
 
-### How WinPosture queries your system
+### How Apotrope queries your system
 
-WinPosture uses PowerShell subprocesses with `-ExecutionPolicy Bypass` to read system
+Apotrope uses PowerShell subprocesses with `-ExecutionPolicy Bypass` to read system
 configuration. This flag is required so the tool can run on machines with any execution
 policy setting — including the default `Restricted` policy — without requiring you to
 permanently change your policy. **No scripts are written to disk.** Each command is a
@@ -107,7 +110,7 @@ that subprocess and does not change the machine's policy setting.
 ## Usage
 
 ```
-winposture [OPTIONS]
+apotrope [OPTIONS]
 
 Options:
   --html PATH          Save a self-contained HTML report to PATH
@@ -134,38 +137,38 @@ Exit codes:
 
 ```bash
 # Full audit, terminal only
-winposture
+apotrope
 
 # Save HTML report
-winposture --html report.html
+apotrope --html report.html
 
 # Save JSON for automation / SIEM integration
-winposture --json report.json
+apotrope --json report.json
 
 # Audit only firewall and patching
-winposture --category firewall,patching
+apotrope --category firewall,patching
 
 # Show pass/fail details for every check
-winposture --verbose
+apotrope --verbose
 
 # Silent mode for scripts (exits 0 if score>=70, 1 if score<70, 2 on error)
-winposture --no-color --log-level ERROR
+apotrope --no-color --log-level ERROR
 echo Exit code: %ERRORLEVEL%
 
 # Save a baseline, then compare on the next run
-winposture --baseline baseline.json
-winposture --compare  baseline.json
+apotrope --baseline baseline.json
+apotrope --compare  baseline.json
 
 # Apply a custom check profile (e.g. for MSP clients)
-winposture --profile myprofile.toml
+apotrope --profile myprofile.toml
 
 # List which checks would run without executing anything
-winposture --dry-run
+apotrope --dry-run
 ```
 
-### Custom Profiles (`winposture.toml`)
+### Custom Profiles (`apotrope.toml`)
 
-Create a `winposture.toml` in your working directory (or pass `--profile FILE`)
+Create a `apotrope.toml` in your working directory (or pass `--profile FILE`)
 to customise scan behaviour:
 
 ```toml
@@ -193,7 +196,7 @@ max_update_age_fail = 90
 
 ## Scoring System
 
-WinPosture calculates a **0–100 security score** by starting at 100 and
+Apotrope calculates a **0–100 security score** by starting at 100 and
 deducting points for failed and warned checks, weighted by severity:
 
 | Outcome | Severity | Deduction |
@@ -227,14 +230,14 @@ INFO and ERROR results do not affect the score.
 
 Where applicable, findings are mapped to CIS Microsoft Windows Benchmark control
 IDs. These references appear as blue badges in the HTML report's detailed findings
-section, making WinPosture useful for compliance documentation and audit
+section, making Apotrope useful for compliance documentation and audit
 preparation. Mappings are based on the CIS Microsoft Windows 11 Enterprise
 Benchmark v5.0.0 and CIS Microsoft Windows 10 Enterprise Benchmark v4.0.0.
 The correct version is selected automatically based on the OS build number at
 scan time.
 
 > **Attribution:** CIS Benchmarks are the registered trademarks of the Center
-> for Internet Security, Inc. WinPosture is an independent tool that references
+> for Internet Security, Inc. Apotrope is an independent tool that references
 > CIS Benchmark recommendations for informational purposes. This project is not
 > affiliated with, endorsed by, or sponsored by CIS. To obtain the official CIS
 > Benchmarks, visit [cisecurity.org](https://www.cisecurity.org).
@@ -314,7 +317,7 @@ Prerequisites: Python 3.12+, `pip install pyinstaller pillow`
 python build.py
 ```
 
-The exe will be at `dist/winposture.exe`. To build without the custom icon:
+The exe will be at `dist/apotrope.exe`. To build without the custom icon:
 
 ```bash
 python build.py --no-icon
@@ -325,17 +328,17 @@ python build.py --no-icon
 ## Contributing
 
 1. Fork the repo and create a branch: `git checkout -b feat/my-change`
-2. Make your changes — each check module is self-contained in `src/winposture/checks/`
+2. Make your changes — each check module is self-contained in `src/apotrope/checks/`
 3. Add or update tests in `tests/`
 4. Run `pytest tests/ -q` — all tests must pass
 5. Open a pull request into `main`
 
 ### Adding a New Check Module
 
-Create `src/winposture/checks/mycheck.py` with:
+Create `src/apotrope/checks/mycheck.py` with:
 
 ```python
-from winposture.models import CheckResult, Severity, Status
+from apotrope.models import CheckResult, Severity, Status
 
 CATEGORY = "MyCategory"
 # REQUIRES_ADMIN = True  # uncomment if elevation is needed
@@ -353,10 +356,4 @@ def run() -> list[CheckResult]:
     )]
 ```
 
-The scanner auto-discovers all modules in `checks/` — no registration needed.
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+The scanner auto-dis

@@ -1,13 +1,13 @@
-"""Tests for winposture.checks.accounts."""
+"""Tests for apotrope.checks.accounts."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-from winposture.checks import accounts
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Status, Severity
+from apotrope.checks import accounts
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Status, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@ from winposture.models import CheckResult, Status, Severity
 
 class TestCheckGuestAccount:
     def test_guest_disabled_is_pass(self):
-        with patch("winposture.checks.accounts.run_powershell", return_value="False"):
+        with patch("apotrope.checks.accounts.run_powershell", return_value="False"):
             results = accounts._check_guest_account()
         assert len(results) == 1
         r = results[0]
@@ -24,7 +24,7 @@ class TestCheckGuestAccount:
         assert r.severity == Severity.HIGH
 
     def test_guest_enabled_is_fail(self):
-        with patch("winposture.checks.accounts.run_powershell", return_value="True"):
+        with patch("apotrope.checks.accounts.run_powershell", return_value="True"):
             results = accounts._check_guest_account()
         r = results[0]
         assert r.status == Status.FAIL
@@ -32,15 +32,15 @@ class TestCheckGuestAccount:
         assert "Disable-LocalUser" in r.remediation
 
     def test_guest_not_found_is_info(self):
-        with patch("winposture.checks.accounts.run_powershell", return_value=""):
+        with patch("apotrope.checks.accounts.run_powershell", return_value=""):
             results = accounts._check_guest_account()
         r = results[0]
         assert r.status == Status.INFO
         assert "not found" in r.details.lower()
 
     def test_powershell_error_returns_error(self):
-        with patch("winposture.checks.accounts.run_powershell",
-                   side_effect=WinPostureError("boom")):
+        with patch("apotrope.checks.accounts.run_powershell",
+                   side_effect=ApotropeError("boom")):
             results = accounts._check_guest_account()
         assert results[0].status == Status.ERROR
 
@@ -51,7 +51,7 @@ class TestCheckGuestAccount:
 
 class TestCheckBuiltinAdmin:
     def _run(self, data):
-        with patch("winposture.checks.accounts.run_powershell_json", return_value=data):
+        with patch("apotrope.checks.accounts.run_powershell_json", return_value=data):
             return accounts._check_builtin_admin()
 
     def test_enabled_default_name_is_fail(self):
@@ -89,8 +89,8 @@ class TestCheckBuiltinAdmin:
         assert results[0].status == Status.PASS
 
     def test_error_returns_error_result(self):
-        with patch("winposture.checks.accounts.run_powershell_json",
-                   side_effect=WinPostureError("access denied")):
+        with patch("apotrope.checks.accounts.run_powershell_json",
+                   side_effect=ApotropeError("access denied")):
             results = accounts._check_builtin_admin()
         assert results[0].status == Status.ERROR
 
@@ -101,7 +101,7 @@ class TestCheckBuiltinAdmin:
 
 class TestCheckAdminCount:
     def _run(self, members):
-        with patch("winposture.checks.accounts.run_powershell_json", return_value=members):
+        with patch("apotrope.checks.accounts.run_powershell_json", return_value=members):
             return accounts._check_admin_count()
 
     def test_one_admin_is_pass(self):
@@ -137,8 +137,8 @@ class TestCheckAdminCount:
         assert results[0].status == Status.PASS
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.accounts.run_powershell_json",
-                   side_effect=WinPostureError("denied")):
+        with patch("apotrope.checks.accounts.run_powershell_json",
+                   side_effect=ApotropeError("denied")):
             results = accounts._check_admin_count()
         assert results[0].status == Status.ERROR
 
@@ -205,7 +205,7 @@ class TestCheckPasswordPolicy:
 
     def _run(self, net_output, complexity_val):
         with (
-            patch("winposture.checks.accounts.run_powershell",
+            patch("apotrope.checks.accounts.run_powershell",
                   side_effect=[net_output, complexity_val]),
         ):
             return accounts._check_password_policy()
@@ -245,8 +245,8 @@ class TestCheckPasswordPolicy:
         assert r.status == Status.INFO
 
     def test_net_accounts_error_returns_error(self):
-        with patch("winposture.checks.accounts.run_powershell",
-                   side_effect=WinPostureError("denied")):
+        with patch("apotrope.checks.accounts.run_powershell",
+                   side_effect=ApotropeError("denied")):
             results = accounts._check_password_policy()
         assert any(r.status == Status.ERROR for r in results)
 
@@ -263,9 +263,9 @@ class TestRun:
             "Lockout duration (minutes): 30\n"
         )
         with (
-            patch("winposture.checks.accounts.run_powershell",
+            patch("apotrope.checks.accounts.run_powershell",
                   side_effect=["False", "1", net_output, "1"]),
-            patch("winposture.checks.accounts.run_powershell_json",
+            patch("apotrope.checks.accounts.run_powershell_json",
                   side_effect=[
                       {"Name": "Administrator", "Enabled": False},
                       [{"Name": "MACHINE\\Admin"}],

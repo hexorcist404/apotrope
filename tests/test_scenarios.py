@@ -7,8 +7,8 @@ import os
 import tempfile
 from datetime import datetime, timezone
 
-from winposture.models import AuditReport, CheckResult, Severity, Status
-from winposture.scoring import calculate_score, score_grade
+from apotrope.models import AuditReport, CheckResult, Severity, Status
+from apotrope.scoring import calculate_score, score_grade
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +313,7 @@ class TestNonAdminScan:
 
 class TestReportRoundTrip:
     def test_html_report_contains_all_categories(self):
-        from winposture.reporter import Reporter
+        from apotrope.reporter import Reporter
 
         results = _clean_win11_pro_results()
         report = _report(results)
@@ -332,7 +332,7 @@ class TestReportRoundTrip:
             assert cat in content, f"Category '{cat}' not found in HTML report"
 
     def test_json_report_preserves_all_results(self):
-        from winposture.reporter import Reporter
+        from apotrope.reporter import Reporter
 
         results = _clean_win11_pro_results()
         report = _report(results)

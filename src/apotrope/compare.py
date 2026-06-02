@@ -1,8 +1,8 @@
 """Comparative scanning — diff two AuditReports to track remediation progress.
 
 Usage from CLI:
-    winposture --baseline baseline.json   # save current scan as baseline
-    winposture --compare  baseline.json   # compare current scan against baseline
+    apotrope --baseline baseline.json   # save current scan as baseline
+    apotrope --compare  baseline.json   # compare current scan against baseline
 
 The diff identifies:
   - New findings: FAIL/WARN in current scan that weren't in the baseline
@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from winposture.models import AuditReport, CheckResult, Severity, Status
+from apotrope.models import AuditReport, CheckResult, Severity, Status
 
 log = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ def save_baseline(report: AuditReport, path: str) -> None:
         report: A completed AuditReport from scanner.run().
         path:   Destination file path.
     """
-    from winposture.reporter import Reporter
+    from apotrope.reporter import Reporter
     Reporter().generate_json_report(report, path)
     log.info("Baseline saved to %s", path)
 
@@ -140,7 +140,7 @@ def load_baseline(path: str) -> AuditReport:
 
     Args:
         path: Path to a JSON file previously saved by :func:`save_baseline`
-              or ``winposture --json``.
+              or ``apotrope --json``.
 
     Returns:
         An AuditReport reconstructed from the JSON.

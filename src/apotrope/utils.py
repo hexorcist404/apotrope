@@ -1,4 +1,4 @@
-"""Shared helper utilities for WinPosture.
+"""Shared helper utilities for Apotrope.
 
 All PowerShell, WMI, and registry access goes through this module so that
 check modules stay clean and testable (mock subprocess.run in tests, not
@@ -13,7 +13,7 @@ import logging
 import subprocess
 import sys
 
-from winposture.exceptions import WinPostureError
+from apotrope.exceptions import ApotropeError
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def run_powershell(command: str, timeout: int = 30) -> str:
         stdout stripped of leading/trailing whitespace.
 
     Raises:
-        WinPostureError: On non-zero exit code, timeout, or launch failure.
+        ApotropeError: On non-zero exit code, timeout, or launch failure.
     """
     log.debug("run_powershell: %s", command[:200])
     try:
@@ -55,15 +55,15 @@ def run_powershell(command: str, timeout: int = 30) -> str:
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise WinPostureError(
+        raise ApotropeError(
             f"PowerShell command timed out after {timeout}s: {command[:80]}"
         ) from exc
     except FileNotFoundError as exc:
-        raise WinPostureError("powershell.exe not found — is this Windows?") from exc
+        raise ApotropeError("powershell.exe not found — is this Windows?") from exc
 
     if result.returncode != 0:
         stderr = result.stderr.strip()
-        raise WinPostureError(
+        raise ApotropeError(
             f"PowerShell exited {result.returncode}: {stderr}"
         )
 
@@ -88,19 +88,19 @@ def run_powershell_json(command: str, timeout: int = 30) -> dict | list:
         Parsed Python ``dict`` or ``list``.
 
     Raises:
-        WinPostureError: On PowerShell failure, empty output, or invalid JSON.
+        ApotropeError: On PowerShell failure, empty output, or invalid JSON.
     """
     output = run_powershell(command, timeout=timeout)
 
     if not output:
-        raise WinPostureError(
+        raise ApotropeError(
             "PowerShell command returned empty output (expected JSON)"
         )
 
     try:
         return json.loads(output)
     except json.JSONDecodeError as exc:
-        raise WinPostureError(
+        raise ApotropeError(
             f"Failed to parse PowerShell JSON output: {exc}"
         ) from exc
 
@@ -127,12 +127,12 @@ def read_registry(hive: str, path: str, value_name: str) -> str | int | None:
         value does not exist or access is denied.
 
     Raises:
-        WinPostureError: If *hive* is not one of the supported abbreviations.
+        ApotropeError: If *hive* is not one of the supported abbreviations.
     """
     _SUPPORTED_HIVES = {"HKLM", "HKCU", "HKU"}
     hive_upper = hive.upper()
     if hive_upper not in _SUPPORTED_HIVES:
-        raise WinPostureError(
+        raise ApotropeError(
             f"Unsupported registry hive {hive!r}. "
             f"Supported: {', '.join(sorted(_SUPPORTED_HIVES))}"
         )
@@ -147,7 +147,7 @@ def read_registry(hive: str, path: str, value_name: str) -> str | int | None:
 
     try:
         output = run_powershell(script)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         log.warning(
             "Registry read failed (%s\\%s\\%s): %s", hive, path, value_name, exc
         )
@@ -196,7 +196,7 @@ def get_wmi_object(
 
     try:
         output = run_powershell(script)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         log.warning("WMI query failed for %s: %s", wmi_class, exc)
         return []
 
@@ -236,16 +236,16 @@ def is_admin() -> bool:
 
 
 def require_windows() -> None:
-    """Raise ``WinPostureError`` if not running on Windows.
+    """Raise ``ApotropeError`` if not running on Windows.
 
     Call once at startup or at the top of any check that is Windows-only.
 
     Raises:
-        WinPostureError: When ``sys.platform`` is not ``"win32"``.
+        ApotropeError: When ``sys.platform`` is not ``"win32"``.
     """
     if sys.platform != "win32":
-        raise WinPostureError(
-            f"WinPosture requires Windows. Current platform: {sys.platform!r}"
+        raise ApotropeError(
+            f"Apotrope requires Windows. Current platform: {sys.platform!r}"
         )
 
 
