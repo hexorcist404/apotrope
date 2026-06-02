@@ -314,13 +314,13 @@ scan time.
 Prerequisites: Python 3.12+, `pip install pyinstaller pillow`
 
 ```bash
-python build.py
+python build_exe.py
 ```
 
 The exe will be at `dist/apotrope.exe`. To build without the custom icon:
 
 ```bash
-python build.py --no-icon
+python build_exe.py --no-icon
 ```
 
 ---

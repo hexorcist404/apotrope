@@ -113,7 +113,7 @@ class CheckResult:
 ## Output Formats
 
 - **Terminal**: Rich tables with color-coded status/severity
-- **HTML**: Jinja2 template at `templates/report.html.j2`
+- **HTML**: Jinja2 template at `src/apotrope/templates/report.html.j2`
 - **JSON**: Serialized `AuditReport` dataclass (use `dataclasses.asdict`)
 
 ## Scoring Logic (`scoring.py`)
