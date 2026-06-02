@@ -1,13 +1,13 @@
-"""Tests for winposture.checks.network."""
+"""Tests for apotrope.checks.network."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-from winposture.checks import network
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Status, Severity
+from apotrope.checks import network
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Status, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ def _conn(port: int, addr: str = "0.0.0.0", proc: str = "svchost") -> dict:
 
 class TestListeningPorts:
     def _run(self, conns):
-        with patch("winposture.checks.network.run_powershell_json", return_value=conns):
+        with patch("apotrope.checks.network.run_powershell_json", return_value=conns):
             return network._check_listening_ports()
 
     def test_no_risky_ports_no_flag(self):
@@ -77,8 +77,8 @@ class TestListeningPorts:
         assert "1" in summary.details
 
     def test_error_returns_error_result(self):
-        with patch("winposture.checks.network.run_powershell_json",
-                   side_effect=WinPostureError("boom")):
+        with patch("apotrope.checks.network.run_powershell_json",
+                   side_effect=ApotropeError("boom")):
             results = network._check_listening_ports()
         assert results[0].status == Status.ERROR
 
@@ -89,7 +89,7 @@ class TestListeningPorts:
 
 class TestCheckLlmnr:
     def _run(self, output):
-        with patch("winposture.checks.network.run_powershell", return_value=output):
+        with patch("apotrope.checks.network.run_powershell", return_value=output):
             return network._check_llmnr()
 
     def test_notset_is_warn(self):
@@ -110,8 +110,8 @@ class TestCheckLlmnr:
         assert "Responder" in results[0].details
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.network.run_powershell",
-                   side_effect=WinPostureError("denied")):
+        with patch("apotrope.checks.network.run_powershell",
+                   side_effect=ApotropeError("denied")):
             results = network._check_llmnr()
         assert results[0].status == Status.ERROR
 
@@ -122,7 +122,7 @@ class TestCheckLlmnr:
 
 class TestCheckNetbios:
     def _run(self, data):
-        with patch("winposture.checks.network.run_powershell_json", return_value=data):
+        with patch("apotrope.checks.network.run_powershell_json", return_value=data):
             return network._check_netbios()
 
     def test_all_disabled_is_pass(self):
@@ -150,8 +150,8 @@ class TestCheckNetbios:
         assert results[0].status == Status.PASS
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.network.run_powershell_json",
-                   side_effect=WinPostureError("denied")):
+        with patch("apotrope.checks.network.run_powershell_json",
+                   side_effect=ApotropeError("denied")):
             results = network._check_netbios()
         assert results[0].status == Status.ERROR
 
@@ -162,7 +162,7 @@ class TestCheckNetbios:
 
 class TestCheckIpv6:
     def _run(self, output):
-        with patch("winposture.checks.network.run_powershell", return_value=output):
+        with patch("apotrope.checks.network.run_powershell", return_value=output):
             return network._check_ipv6()
 
     def test_active_adapters_reported(self):
@@ -187,8 +187,8 @@ class TestRun:
     def test_run_returns_list_of_check_results(self):
         conns = [_conn(443), _conn(80)]
         with (
-            patch("winposture.checks.network.run_powershell_json", return_value=conns),
-            patch("winposture.checks.network.run_powershell", side_effect=["0", "0"]),
+            patch("apotrope.checks.network.run_powershell_json", return_value=conns),
+            patch("apotrope.checks.network.run_powershell", side_effect=["0", "0"]),
         ):
             results = network.run()
         assert all(isinstance(r, CheckResult) for r in results)

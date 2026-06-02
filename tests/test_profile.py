@@ -1,4 +1,4 @@
-"""Tests for winposture.profile — TOML profile loading and parsing."""
+"""Tests for apotrope.profile — TOML profile loading and parsing."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import os
 import tempfile
 
 
-from winposture.profile import Profile, load_profile
+from apotrope.profile import Profile, load_profile
 
 
 # ---------------------------------------------------------------------------
@@ -34,14 +34,14 @@ class TestProfileDefaults:
 
 class TestLoadProfileNoFile:
     def test_returns_default_when_no_file(self, tmp_path, monkeypatch):
-        """No winposture.toml in cwd → default profile."""
+        """No apotrope.toml in cwd → default profile."""
         monkeypatch.chdir(tmp_path)
         profile = load_profile()
         assert isinstance(profile, Profile)
 
     def test_returns_default_when_explicit_missing(self):
         """Explicit non-existent path → default profile, no exception."""
-        profile = load_profile("/nonexistent/winposture.toml")
+        profile = load_profile("/nonexistent/apotrope.toml")
         assert isinstance(profile, Profile)
 
 
@@ -121,9 +121,9 @@ class TestLoadProfileFromToml:
             os.unlink(path)
 
     def test_auto_detect_from_cwd(self, tmp_path, monkeypatch):
-        """winposture.toml in cwd is auto-detected."""
+        """apotrope.toml in cwd is auto-detected."""
         monkeypatch.chdir(tmp_path)
-        (tmp_path / "winposture.toml").write_text(
+        (tmp_path / "apotrope.toml").write_text(
             '[profile]\nname = "AutoDetected"\n', encoding="utf-8"
         )
         p = load_profile()

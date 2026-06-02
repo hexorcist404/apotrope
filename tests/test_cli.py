@@ -1,4 +1,4 @@
-"""Tests for winposture.cli — argument parsing and main() dispatch."""
+"""Tests for apotrope.cli — argument parsing and main() dispatch."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from winposture.cli import build_parser
+from apotrope.cli import build_parser
 
 
 # ---------------------------------------------------------------------------
@@ -82,11 +82,11 @@ class TestBuildParser:
 
 class TestMain:
     # Scanner/Reporter/is_admin/load_profile are lazy-imported inside main(),
-    # so we patch them in their source modules (not in winposture.cli).
-    _SCANNER_PATH  = "winposture.scanner.Scanner"
-    _REPORTER_PATH = "winposture.reporter.Reporter"
-    _ADMIN_PATH    = "winposture.utils.is_admin"
-    _PROFILE_PATH  = "winposture.profile.load_profile"
+    # so we patch them in their source modules (not in apotrope.cli).
+    _SCANNER_PATH  = "apotrope.scanner.Scanner"
+    _REPORTER_PATH = "apotrope.reporter.Reporter"
+    _ADMIN_PATH    = "apotrope.utils.is_admin"
+    _PROFILE_PATH  = "apotrope.profile.load_profile"
 
     def _run_main(self, argv=None, is_admin=False, score=80):
         """Run main() with mocked scanner, reporter, is_admin, and load_profile."""
@@ -103,13 +103,13 @@ class TestMain:
 
         argv = argv or []
         with (
-            patch("sys.argv", ["winposture"] + argv),
+            patch("sys.argv", ["apotrope"] + argv),
             patch(self._SCANNER_PATH, return_value=mock_scanner_instance) as MockScanner,
             patch(self._REPORTER_PATH, return_value=mock_reporter_instance),
             patch(self._ADMIN_PATH, return_value=is_admin),
             patch(self._PROFILE_PATH, return_value=MagicMock()),
         ):
-            from winposture import cli as cli_mod
+            from apotrope import cli as cli_mod
             import importlib
             importlib.reload(cli_mod)
             cli_mod.main()
@@ -157,14 +157,14 @@ class TestMain:
         mock_reporter.run_with_progress.return_value = mock_report
 
         with (
-            patch("sys.argv", ["winposture"]),
+            patch("sys.argv", ["apotrope"]),
             patch(self._SCANNER_PATH, return_value=mock_scanner),
             patch(self._REPORTER_PATH, return_value=mock_reporter),
             patch(self._ADMIN_PATH, return_value=False),
             patch(self._PROFILE_PATH, return_value=MagicMock()),
             pytest.raises(SystemExit) as exc_info,
         ):
-            from winposture import cli as cli_mod
+            from apotrope import cli as cli_mod
             import importlib
             importlib.reload(cli_mod)
             cli_mod.main()
@@ -183,13 +183,13 @@ class TestMain:
         mock_reporter.run_with_progress.return_value = mock_report
 
         with (
-            patch("sys.argv", ["winposture"]),
+            patch("sys.argv", ["apotrope"]),
             patch(self._SCANNER_PATH, return_value=mock_scanner),
             patch(self._REPORTER_PATH, return_value=mock_reporter),
             patch(self._ADMIN_PATH, return_value=False),
             patch(self._PROFILE_PATH, return_value=MagicMock()),
         ):
-            from winposture import cli as cli_mod
+            from apotrope import cli as cli_mod
             import importlib
             importlib.reload(cli_mod)
             cli_mod.main()  # Should NOT raise SystemExit
@@ -206,13 +206,13 @@ class TestMain:
         mock_reporter.run_with_progress.return_value = mock_report
 
         with (
-            patch("sys.argv", ["winposture", "--verbose"]),
+            patch("sys.argv", ["apotrope", "--verbose"]),
             patch(self._SCANNER_PATH, return_value=mock_scanner),
             patch(self._REPORTER_PATH, return_value=mock_reporter) as MockReporter,
             patch(self._ADMIN_PATH, return_value=False),
             patch(self._PROFILE_PATH, return_value=MagicMock()),
         ):
-            from winposture import cli as cli_mod
+            from apotrope import cli as cli_mod
             import importlib
             importlib.reload(cli_mod)
             cli_mod.main()
@@ -227,14 +227,14 @@ class TestMain:
         mock_reporter.run_with_progress.return_value = mock_report
 
         with (
-            patch("sys.argv", ["winposture"]),
+            patch("sys.argv", ["apotrope"]),
             patch(self._SCANNER_PATH, return_value=mock_scanner),
             patch(self._REPORTER_PATH, return_value=mock_reporter),
             patch(self._ADMIN_PATH, return_value=False),
             patch(self._PROFILE_PATH, return_value=MagicMock()),
             pytest.raises(SystemExit) as exc,
         ):
-            from winposture import cli as cli_mod
+            from apotrope import cli as cli_mod
             import importlib
             importlib.reload(cli_mod)
             cli_mod.main()
@@ -248,13 +248,13 @@ class TestMain:
         mock_reporter.run_with_progress.return_value = mock_report
 
         with (
-            patch("sys.argv", ["winposture"]),
+            patch("sys.argv", ["apotrope"]),
             patch(self._SCANNER_PATH, return_value=mock_scanner),
             patch(self._REPORTER_PATH, return_value=mock_reporter),
             patch(self._ADMIN_PATH, return_value=False),
             patch(self._PROFILE_PATH, return_value=MagicMock()),
         ):
-            from winposture import cli as cli_mod
+            from apotrope import cli as cli_mod
             import importlib
             importlib.reload(cli_mod)
             cli_mod.main()  # should not raise
@@ -262,16 +262,16 @@ class TestMain:
     def test_dry_run_exits_cleanly(self):
         """--dry-run should print module list and return without scanning."""
         mock_scanner = MagicMock()
-        mock_scanner.dry_run.return_value = ["winposture.checks.firewall", "winposture.checks.smb"]
+        mock_scanner.dry_run.return_value = ["apotrope.checks.firewall", "apotrope.checks.smb"]
 
         with (
-            patch("sys.argv", ["winposture", "--dry-run"]),
+            patch("sys.argv", ["apotrope", "--dry-run"]),
             patch(self._SCANNER_PATH, return_value=mock_scanner),
             patch(self._REPORTER_PATH, return_value=MagicMock()),
             patch(self._ADMIN_PATH, return_value=False),
             patch(self._PROFILE_PATH, return_value=MagicMock()),
         ):
-            from winposture import cli as cli_mod
+            from apotrope import cli as cli_mod
             import importlib
             importlib.reload(cli_mod)
             cli_mod.main()  # should return without calling run_with_progress

@@ -1,13 +1,13 @@
-"""Tests for winposture.checks.misc (Hardening category)."""
+"""Tests for apotrope.checks.misc (Hardening category)."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-from winposture.checks import misc
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Status, Severity
+from apotrope.checks import misc
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Status, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@ from winposture.models import CheckResult, Status, Severity
 
 class TestCheckAutoplay:
     def _run(self, output: str):
-        with patch("winposture.checks.misc.run_powershell", return_value=output):
+        with patch("apotrope.checks.misc.run_powershell", return_value=output):
             return misc._check_autoplay()
 
     def test_fully_disabled_255_is_pass(self):
@@ -41,8 +41,8 @@ class TestCheckAutoplay:
         assert "NoDriveTypeAutoRun" in r.remediation
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.misc.run_powershell",
-                   side_effect=WinPostureError("denied")):
+        with patch("apotrope.checks.misc.run_powershell",
+                   side_effect=ApotropeError("denied")):
             r = misc._check_autoplay()[0]
         assert r.status == Status.ERROR
 
@@ -53,7 +53,7 @@ class TestCheckAutoplay:
 
 class TestCheckWinrm:
     def _run(self, output: str):
-        with patch("winposture.checks.misc.run_powershell", return_value=output):
+        with patch("apotrope.checks.misc.run_powershell", return_value=output):
             return misc._check_winrm()
 
     def test_stopped_is_pass(self):
@@ -74,8 +74,8 @@ class TestCheckWinrm:
         assert "WinRM" in r.remediation
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.misc.run_powershell",
-                   side_effect=WinPostureError("boom")):
+        with patch("apotrope.checks.misc.run_powershell",
+                   side_effect=ApotropeError("boom")):
             r = misc._check_winrm()[0]
         assert r.status == Status.ERROR
 
@@ -86,7 +86,7 @@ class TestCheckWinrm:
 
 class TestCheckSpectre:
     def _run(self, data):
-        with patch("winposture.checks.misc.run_powershell_json", return_value=data):
+        with patch("apotrope.checks.misc.run_powershell_json", return_value=data):
             return misc._check_spectre()
 
     def test_no_override_key_is_info(self):
@@ -114,8 +114,8 @@ class TestCheckSpectre:
         assert "FeatureSettingsOverride" in r.remediation
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.misc.run_powershell_json",
-                   side_effect=WinPostureError("denied")):
+        with patch("apotrope.checks.misc.run_powershell_json",
+                   side_effect=ApotropeError("denied")):
             r = misc._check_spectre()[0]
         assert r.status == Status.ERROR
 
@@ -129,7 +129,7 @@ class TestCheckAuditPolicy:
         return {"Subcategory": name, "Inclusion Setting": setting}
 
     def _run(self, data):
-        with patch("winposture.checks.misc.run_powershell_json", return_value=data):
+        with patch("apotrope.checks.misc.run_powershell_json", return_value=data):
             return misc._check_audit_policy()
 
     def test_all_audited_is_pass(self):
@@ -158,8 +158,8 @@ class TestCheckAuditPolicy:
         assert "auditpol" in r.remediation
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.misc.run_powershell_json",
-                   side_effect=WinPostureError("boom")):
+        with patch("apotrope.checks.misc.run_powershell_json",
+                   side_effect=ApotropeError("boom")):
             r = misc._check_audit_policy()[0]
         assert r.status == Status.ERROR
 
@@ -173,7 +173,7 @@ class TestCheckScreenLock:
         return {"Active": active, "Secure": secure, "Timeout": timeout}
 
     def _run(self, data):
-        with patch("winposture.checks.misc.run_powershell_json", return_value=data):
+        with patch("apotrope.checks.misc.run_powershell_json", return_value=data):
             return misc._check_screen_lock()
 
     def test_good_config_is_pass(self):
@@ -203,8 +203,8 @@ class TestCheckScreenLock:
         assert r.status == Status.WARN
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.misc.run_powershell_json",
-                   side_effect=WinPostureError("access denied")):
+        with patch("apotrope.checks.misc.run_powershell_json",
+                   side_effect=ApotropeError("access denied")):
             r = misc._check_screen_lock()[0]
         assert r.status == Status.ERROR
 
@@ -219,9 +219,9 @@ class TestRun:
         good_spectre = {"Override": None, "Mask": None}
         audit_entries = [{"Subcategory": "Logon", "Inclusion Setting": "Success and Failure"}]
         with (
-            patch("winposture.checks.misc.run_powershell",
+            patch("apotrope.checks.misc.run_powershell",
                   side_effect=["255", "Stopped"]),
-            patch("winposture.checks.misc.run_powershell_json",
+            patch("apotrope.checks.misc.run_powershell_json",
                   side_effect=[good_spectre, audit_entries, good_screen]),
         ):
             results = misc.run()
@@ -233,9 +233,9 @@ class TestRun:
         good_spectre = {"Override": None, "Mask": None}
         audit_entries = [{"Subcategory": "Logon", "Inclusion Setting": "Success"}]
         with (
-            patch("winposture.checks.misc.run_powershell",
+            patch("apotrope.checks.misc.run_powershell",
                   side_effect=["255", "Stopped"]),
-            patch("winposture.checks.misc.run_powershell_json",
+            patch("apotrope.checks.misc.run_powershell_json",
                   side_effect=[good_spectre, audit_entries, good_screen]),
         ):
             results = misc.run()

@@ -1,12 +1,12 @@
-"""Tests for winposture.checks.startup."""
+"""Tests for apotrope.checks.startup."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
-from winposture.checks import startup
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Status, Severity
+from apotrope.checks import startup
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Status, Severity
 
 
 def _item(name: str = "MyApp", command: str = "C:\\app.exe") -> dict:
@@ -19,7 +19,7 @@ def _item(name: str = "MyApp", command: str = "C:\\app.exe") -> dict:
 
 class TestCheckStartupPrograms:
     def _run(self, data):
-        with patch("winposture.checks.startup.run_powershell_json", return_value=data):
+        with patch("apotrope.checks.startup.run_powershell_json", return_value=data):
             return startup._check_startup_programs()
 
     def test_empty_data_says_no_programs(self):
@@ -52,8 +52,8 @@ class TestCheckStartupPrograms:
         assert r.severity == Severity.LOW
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.startup.run_powershell_json",
-                   side_effect=WinPostureError("denied")):
+        with patch("apotrope.checks.startup.run_powershell_json",
+                   side_effect=ApotropeError("denied")):
             r = startup._check_startup_programs()[0]
         assert r.status == Status.ERROR
 
@@ -75,7 +75,7 @@ class TestCheckScheduledTasks:
         return {"TaskName": name, "TaskPath": "\\Custom\\", "RunAs": "SYSTEM", "State": "Ready"}
 
     def _run(self, data):
-        with patch("winposture.checks.startup.run_powershell_json", return_value=data):
+        with patch("apotrope.checks.startup.run_powershell_json", return_value=data):
             return startup._check_scheduled_tasks()
 
     def test_empty_data_says_no_tasks(self):
@@ -97,8 +97,8 @@ class TestCheckScheduledTasks:
         assert r.status == Status.INFO
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.startup.run_powershell_json",
-                   side_effect=WinPostureError("boom")):
+        with patch("apotrope.checks.startup.run_powershell_json",
+                   side_effect=ApotropeError("boom")):
             r = startup._check_scheduled_tasks()[0]
         assert r.status == Status.ERROR
 
@@ -110,13 +110,13 @@ class TestCheckScheduledTasks:
 class TestRun:
     def test_run_returns_two_results(self):
         empty = []
-        with patch("winposture.checks.startup.run_powershell_json", return_value=empty):
+        with patch("apotrope.checks.startup.run_powershell_json", return_value=empty):
             results = startup.run()
         assert len(results) == 2
         assert all(isinstance(r, CheckResult) for r in results)
 
     def test_run_check_names(self):
-        with patch("winposture.checks.startup.run_powershell_json", return_value=[]):
+        with patch("apotrope.checks.startup.run_powershell_json", return_value=[]):
             results = startup.run()
         names = {r.check_name for r in results}
         assert "Startup Programs" in names

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell, run_powershell_json
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell, run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def _check_listening_ports() -> list[CheckResult]:
     """Enumerate TCP listening ports and flag known-dangerous services."""
     try:
         data = run_powershell_json(_PS_TCP_LISTEN)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Listening Ports", str(exc))]
 
     conns = data if isinstance(data, list) else ([data] if data else [])
@@ -133,7 +133,7 @@ def _check_llmnr() -> list[CheckResult]:
     """Check whether Link-Local Multicast Name Resolution (LLMNR) is disabled."""
     try:
         output = run_powershell(_PS_LLMNR).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("LLMNR", str(exc))]
 
     # NOTSET means the registry key doesn't exist → LLMNR is enabled by default
@@ -174,7 +174,7 @@ def _check_netbios() -> list[CheckResult]:
     """Check whether NetBIOS over TCP/IP is disabled on all adapters."""
     try:
         data = run_powershell_json(_PS_NETBIOS)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("NetBIOS over TCP/IP", str(exc))]
 
     options = data if isinstance(data, list) else ([data] if data else [])
@@ -246,7 +246,7 @@ def _check_ipv6() -> list[CheckResult]:
     try:
         output = run_powershell(_PS_IPV6).strip()
         count = int(output) if output.isdigit() else 0
-    except (WinPostureError, ValueError):
+    except (ApotropeError, ValueError):
         count = 0
 
     return [CheckResult(

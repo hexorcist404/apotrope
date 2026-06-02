@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell, run_powershell_json
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell, run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def _check_guest_account() -> list[CheckResult]:
     """Check whether the built-in Guest account is enabled."""
     try:
         output = run_powershell(_PS_GUEST).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Guest Account", str(exc))]
 
     if not output:
@@ -93,7 +93,7 @@ def _check_builtin_admin() -> list[CheckResult]:
     """Check whether the built-in Administrator account is enabled and/or renamed."""
     try:
         data = run_powershell_json(_PS_ADMIN)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Built-in Administrator Account", str(exc))]
 
     if not data:
@@ -150,7 +150,7 @@ def _check_admin_count() -> list[CheckResult]:
     """Count members of the local Administrators group."""
     try:
         data = run_powershell_json(_PS_ADMINS)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Local Administrators", str(exc))]
 
     members = data if isinstance(data, list) else ([data] if data else [])
@@ -182,7 +182,7 @@ def _check_password_policy() -> list[CheckResult]:
     # --- net accounts: length and lockout ---
     try:
         net_output = run_powershell(_PS_NET_ACCOUNTS)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Password Policy", str(exc))]
 
     policy = _parse_net_accounts(net_output)
@@ -249,7 +249,7 @@ def _check_password_policy() -> list[CheckResult]:
     # --- secedit: password complexity ---
     try:
         complexity_val = run_powershell(_PS_COMPLEXITY).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         results.append(_error("Password Policy — Complexity", str(exc)))
         return results
 

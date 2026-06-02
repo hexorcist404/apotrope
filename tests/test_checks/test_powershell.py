@@ -1,13 +1,13 @@
-"""Tests for winposture.checks.powershell."""
+"""Tests for apotrope.checks.powershell."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-from winposture.checks import powershell
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Status, Severity
+from apotrope.checks import powershell
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Status, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@ from winposture.models import CheckResult, Status, Severity
 
 class TestCheckExecutionPolicy:
     def _run(self, output: str):
-        with patch("winposture.checks.powershell.run_powershell", return_value=output):
+        with patch("apotrope.checks.powershell.run_powershell", return_value=output):
             return powershell._check_execution_policy()
 
     def test_restricted_is_info(self):
@@ -53,8 +53,8 @@ class TestCheckExecutionPolicy:
         assert "RemoteSigned" in r.details
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.powershell.run_powershell",
-                   side_effect=WinPostureError("denied")):
+        with patch("apotrope.checks.powershell.run_powershell",
+                   side_effect=ApotropeError("denied")):
             r = powershell._check_execution_policy()[0]
         assert r.status == Status.ERROR
 
@@ -65,7 +65,7 @@ class TestCheckExecutionPolicy:
 
 class TestCheckScriptBlockLogging:
     def _run(self, output: str):
-        with patch("winposture.checks.powershell.run_powershell", return_value=output):
+        with patch("apotrope.checks.powershell.run_powershell", return_value=output):
             return powershell._check_script_block_logging()
 
     def test_enabled_value_1_is_pass(self):
@@ -86,8 +86,8 @@ class TestCheckScriptBlockLogging:
         assert "EnableScriptBlockLogging" in r.remediation
 
     def test_error_returns_error(self):
-        with patch("winposture.checks.powershell.run_powershell",
-                   side_effect=WinPostureError("boom")):
+        with patch("apotrope.checks.powershell.run_powershell",
+                   side_effect=ApotropeError("boom")):
             r = powershell._check_script_block_logging()[0]
         assert r.status == Status.ERROR
 
@@ -98,7 +98,7 @@ class TestCheckScriptBlockLogging:
 
 class TestCheckModuleLogging:
     def _run(self, output: str):
-        with patch("winposture.checks.powershell.run_powershell", return_value=output):
+        with patch("apotrope.checks.powershell.run_powershell", return_value=output):
             return powershell._check_module_logging()
 
     def test_enabled_is_pass(self):
@@ -124,7 +124,7 @@ class TestCheckModuleLogging:
 
 class TestCheckConstrainedLanguage:
     def _run(self, output: str):
-        with patch("winposture.checks.powershell.run_powershell", return_value=output):
+        with patch("apotrope.checks.powershell.run_powershell", return_value=output):
             return powershell._check_constrained_language()
 
     def test_constrained_mode_is_pass(self):
@@ -150,7 +150,7 @@ class TestCheckConstrainedLanguage:
 
 class TestCheckPsv2:
     def _run(self, output: str):
-        with patch("winposture.checks.powershell.run_powershell", return_value=output):
+        with patch("apotrope.checks.powershell.run_powershell", return_value=output):
             return powershell._check_psv2()
 
     def test_enabled_is_warn(self):
@@ -196,13 +196,13 @@ class TestRun:
             "FullLanguage",  # CLM
             "Disabled",      # PSv2
         ]
-        with patch("winposture.checks.powershell.run_powershell", side_effect=side_effects):
+        with patch("apotrope.checks.powershell.run_powershell", side_effect=side_effects):
             results = powershell.run()
         assert len(results) == 5
         assert all(isinstance(r, CheckResult) for r in results)
 
     def test_run_category_is_powershell(self):
         side_effects = ["RemoteSigned", "1", "1", "ConstrainedLanguage", "Disabled"]
-        with patch("winposture.checks.powershell.run_powershell", side_effect=side_effects):
+        with patch("apotrope.checks.powershell.run_powershell", side_effect=side_effects):
             results = powershell.run()
         assert all(r.category == "PowerShell" for r in results)

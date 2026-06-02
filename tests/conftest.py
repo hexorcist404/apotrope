@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for WinPosture tests."""
+"""Shared pytest fixtures for Apotrope tests."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from winposture.models import AuditReport, CheckResult, Severity, Status
+from apotrope.models import AuditReport, CheckResult, Severity, Status
 
 
 @pytest.fixture()

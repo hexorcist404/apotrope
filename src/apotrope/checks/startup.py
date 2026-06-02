@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell_json
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def _check_startup_programs() -> list[CheckResult]:
     """Enumerate startup programs via Win32_StartupCommand."""
     try:
         data = run_powershell_json(_PS_STARTUP)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Startup Programs", str(exc))]
 
     items = data if isinstance(data, list) else ([data] if data else [])
@@ -81,7 +81,7 @@ def _check_scheduled_tasks() -> list[CheckResult]:
     """Enumerate non-Microsoft enabled scheduled tasks."""
     try:
         data = run_powershell_json(_PS_TASKS)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Scheduled Tasks", str(exc))]
 
     items = data if isinstance(data, list) else ([data] if data else [])

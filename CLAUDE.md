@@ -1,4 +1,16 @@
-# WinPosture — Claude Code Project Context
+# Apotrope — Claude Code Project Context
+
+## Git Commit Author
+
+Always use these credentials for commits in this repo:
+
+```
+git config user.name "hexorcist404"
+git config user.email "hexorcist404@pm.me"
+```
+
+The `Co-Authored-By` trailer should also use this identity:
+`Co-Authored-By: hexorcist404 <hexorcist404@pm.me>`
 
 ## Git Commit Author
 
@@ -14,7 +26,7 @@ The `Co-Authored-By` trailer should also use this identity:
 
 ## Project Overview
 
-WinPosture is a portable Windows security posture auditor. It runs locally on a
+Apotrope is a portable Windows security posture auditor. It runs locally on a
 Windows machine, audits common security configurations, scores the result (0–100),
 and produces a terminal report (Rich) and/or HTML/JSON output.
 
@@ -34,7 +46,7 @@ cli.py  →  scanner.py  →  checks/*.py  →  models.CheckResult
                   scoring.py   (0-100 score from results list)
 ```
 
-### Check Modules (`src/winposture/checks/`)
+### Check Modules (`src/apotrope/checks/`)
 
 Each file is an independent audit module. Conventions:
 

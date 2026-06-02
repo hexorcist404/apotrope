@@ -1,4 +1,4 @@
-"""Tests for winposture.scanner — admin detection, REQUIRES_ADMIN skipping, timing."""
+"""Tests for apotrope.scanner — admin detection, REQUIRES_ADMIN skipping, timing."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from types import ModuleType
 from unittest.mock import patch
 
 
-from winposture.models import AuditReport, CheckResult, Severity, Status
-from winposture.scanner import Scanner
+from apotrope.models import AuditReport, CheckResult, Severity, Status
+from apotrope.scanner import Scanner
 
 
 # ---------------------------------------------------------------------------

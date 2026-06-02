@@ -1,4 +1,4 @@
-"""Tests for winposture.compare — scan diffing and baseline serialisation."""
+"""Tests for apotrope.compare — scan diffing and baseline serialisation."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from winposture.compare import compare_reports, load_baseline, save_baseline
-from winposture.models import AuditReport, CheckResult, Severity, Status
+from apotrope.compare import compare_reports, load_baseline, save_baseline
+from apotrope.models import AuditReport, CheckResult, Severity, Status
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-"""Tests for winposture.reporter — HTML/JSON generation and executive summary."""
+"""Tests for apotrope.reporter — HTML/JSON generation and executive summary."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-from winposture.models import AuditReport, CheckResult, Severity, Status
-from winposture.reporter import Reporter
+from apotrope.models import AuditReport, CheckResult, Severity, Status
+from apotrope.reporter import Reporter
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ class TestGenerateHtmlReport:
 
     def test_version_in_footer(self):
         html = self._generate(_make_report())
-        assert "WinPosture" in html
+        assert "Apotrope" in html
 
     def test_executive_summary_present(self):
         html = self._generate(_make_report())

@@ -1,13 +1,13 @@
-"""Tests for winposture.checks.rdp."""
+"""Tests for apotrope.checks.rdp."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-from winposture.checks import rdp
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Status, Severity
+from apotrope.checks import rdp
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Status, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -105,36 +105,36 @@ class TestCheckRdpPort:
 
 class TestRun:
     def test_rdp_disabled_returns_one_result(self):
-        with patch("winposture.checks.rdp.run_powershell_json", return_value=_data(deny=1)):
+        with patch("apotrope.checks.rdp.run_powershell_json", return_value=_data(deny=1)):
             results = rdp.run()
         assert len(results) == 1
         assert results[0].status == Status.PASS
 
     def test_rdp_enabled_returns_three_results(self):
-        with patch("winposture.checks.rdp.run_powershell_json", return_value=_data(deny=0)):
+        with patch("apotrope.checks.rdp.run_powershell_json", return_value=_data(deny=0)):
             results = rdp.run()
         assert len(results) == 3
 
     def test_rdp_enabled_nla_off_has_fail(self):
-        with patch("winposture.checks.rdp.run_powershell_json",
+        with patch("apotrope.checks.rdp.run_powershell_json",
                    return_value=_data(deny=0, nla=0)):
             results = rdp.run()
         statuses = {r.check_name: r.status for r in results}
         assert statuses["RDP Network Level Authentication"] == Status.FAIL
 
     def test_run_handles_powershell_error(self):
-        with patch("winposture.checks.rdp.run_powershell_json",
-                   side_effect=WinPostureError("timeout")):
+        with patch("apotrope.checks.rdp.run_powershell_json",
+                   side_effect=ApotropeError("timeout")):
             results = rdp.run()
         assert results[0].status == Status.ERROR
 
     def test_run_wraps_list_data(self):
-        with patch("winposture.checks.rdp.run_powershell_json",
+        with patch("apotrope.checks.rdp.run_powershell_json",
                    return_value=[_data(deny=0)]):
             results = rdp.run()
         assert len(results) == 3
 
     def test_all_results_are_check_results(self):
-        with patch("winposture.checks.rdp.run_powershell_json", return_value=_data(deny=0)):
+        with patch("apotrope.checks.rdp.run_powershell_json", return_value=_data(deny=0)):
             results = rdp.run()
         assert all(isinstance(r, CheckResult) for r in results)

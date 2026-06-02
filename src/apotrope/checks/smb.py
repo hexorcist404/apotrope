@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell_json
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def run() -> list[CheckResult]:
     """
     try:
         data = run_powershell_json(_PS_SMB)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [CheckResult(
             category=CATEGORY,
             check_name="SMB Configuration",

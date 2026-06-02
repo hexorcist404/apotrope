@@ -1,13 +1,13 @@
-"""Tests for winposture.checks.uac."""
+"""Tests for apotrope.checks.uac."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-from winposture.checks import uac
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Status, Severity
+from apotrope.checks import uac
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Status, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -136,31 +136,31 @@ class TestCheckUserBehavior:
 
 class TestRun:
     def test_run_returns_four_results_on_normal_config(self):
-        with patch("winposture.checks.uac.run_powershell_json", return_value=_data()):
+        with patch("apotrope.checks.uac.run_powershell_json", return_value=_data()):
             results = uac.run()
         assert len(results) == 4
         assert all(isinstance(r, CheckResult) for r in results)
 
     def test_run_returns_all_non_fail_on_good_config(self):
-        with patch("winposture.checks.uac.run_powershell_json", return_value=_data()):
+        with patch("apotrope.checks.uac.run_powershell_json", return_value=_data()):
             results = uac.run()
         fail_results = [r for r in results if r.status == Status.FAIL]
         assert fail_results == []
 
     def test_run_handles_powershell_error(self):
-        with patch("winposture.checks.uac.run_powershell_json",
-                   side_effect=WinPostureError("access denied")):
+        with patch("apotrope.checks.uac.run_powershell_json",
+                   side_effect=ApotropeError("access denied")):
             results = uac.run()
         assert len(results) == 1
         assert results[0].status == Status.ERROR
 
     def test_run_wraps_list_data(self):
-        with patch("winposture.checks.uac.run_powershell_json", return_value=[_data()]):
+        with patch("apotrope.checks.uac.run_powershell_json", return_value=[_data()]):
             results = uac.run()
         assert len(results) == 4
 
     def test_uac_disabled_scan_includes_fail(self):
-        with patch("winposture.checks.uac.run_powershell_json",
+        with patch("apotrope.checks.uac.run_powershell_json",
                    return_value=_data(lua=0)):
             results = uac.run()
         statuses = {r.check_name: r.status for r in results}

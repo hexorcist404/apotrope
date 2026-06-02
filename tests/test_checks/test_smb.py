@@ -1,13 +1,13 @@
-"""Tests for winposture.checks.smb."""
+"""Tests for apotrope.checks.smb."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-from winposture.checks import smb
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Status, Severity
+from apotrope.checks import smb
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Status, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -120,26 +120,26 @@ class TestCheckSmbEncryption:
 class TestRun:
     def test_run_returns_three_results_on_good_config(self):
         good = _data(smb1=False, require_signing=True, enable_signing=True, encrypt=True)
-        with patch("winposture.checks.smb.run_powershell_json", return_value=good):
+        with patch("apotrope.checks.smb.run_powershell_json", return_value=good):
             results = smb.run()
         assert len(results) == 3
         assert all(isinstance(r, CheckResult) for r in results)
 
     def test_run_returns_all_passes_on_good_config(self):
         good = _data(smb1=False, require_signing=True, enable_signing=True, encrypt=True)
-        with patch("winposture.checks.smb.run_powershell_json", return_value=good):
+        with patch("apotrope.checks.smb.run_powershell_json", return_value=good):
             results = smb.run()
         non_pass = [r for r in results if r.status not in (Status.PASS, Status.INFO)]
         assert non_pass == []
 
     def test_run_handles_powershell_error(self):
-        with patch("winposture.checks.smb.run_powershell_json",
-                   side_effect=WinPostureError("boom")):
+        with patch("apotrope.checks.smb.run_powershell_json",
+                   side_effect=ApotropeError("boom")):
             results = smb.run()
         assert results[0].status == Status.ERROR
 
     def test_run_wraps_list_data(self):
         good = [_data()]
-        with patch("winposture.checks.smb.run_powershell_json", return_value=good):
+        with patch("apotrope.checks.smb.run_powershell_json", return_value=good):
             results = smb.run()
         assert len(results) == 3

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from winposture.exceptions import WinPostureError
-from winposture.models import CheckResult, Severity, Status
-from winposture.utils import run_powershell, run_powershell_json
+from apotrope.exceptions import ApotropeError
+from apotrope.models import CheckResult, Severity, Status
+from apotrope.utils import run_powershell, run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def _check_autoplay() -> list[CheckResult]:
     """Check whether AutoPlay/AutoRun is disabled for all drive types."""
     try:
         output = run_powershell(_PS_AUTOPLAY).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("AutoPlay Disabled", str(exc))]
 
     # NoDriveTypeAutoRun = 255 (0xFF) disables AutoPlay for all drive types.
@@ -161,7 +161,7 @@ def _check_winrm() -> list[CheckResult]:
     """Check whether Windows Remote Management (WinRM) service is running."""
     try:
         output = run_powershell(_PS_WINRM).strip()
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("WinRM Status", str(exc))]
 
     if not output:
@@ -203,7 +203,7 @@ def _check_spectre() -> list[CheckResult]:
     """Check for explicit disabling of speculative-execution mitigations."""
     try:
         data = run_powershell_json(_PS_SPECTRE)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Speculative Execution Mitigations", str(exc))]
 
     if isinstance(data, list):
@@ -274,7 +274,7 @@ def _check_audit_policy() -> list[CheckResult]:
     """Check that key audit policy subcategories are logging Success and/or Failure."""
     try:
         data = run_powershell_json(_PS_AUDIT)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Audit Policy", str(exc))]
 
     entries = data if isinstance(data, list) else ([data] if data else [])
@@ -290,7 +290,7 @@ def _check_audit_policy() -> list[CheckResult]:
                 "Could not retrieve audit policy (auditpol may require elevation). "
                 "Key events like logon failures may not be recorded."
             ),
-            remediation="Run WinPosture as Administrator to check audit policy.",
+            remediation="Run Apotrope as Administrator to check audit policy.",
         )]
 
     # Build subcategory → inclusion setting map
@@ -338,7 +338,7 @@ def _check_screen_lock() -> list[CheckResult]:
     """Check that the screen-lock / screensaver timeout is configured."""
     try:
         data = run_powershell_json(_PS_SCREEN)
-    except WinPostureError as exc:
+    except ApotropeError as exc:
         return [_error("Screen Lock Timeout", str(exc))]
 
     if isinstance(data, list):

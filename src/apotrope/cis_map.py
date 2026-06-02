@@ -1,4 +1,4 @@
-"""CIS Benchmark reference mapping for WinPosture check results.
+"""CIS Benchmark reference mapping for Apotrope check results.
 
 Maps check_name values to CIS Microsoft Windows Benchmark control IDs.
 The base map (_PREFIX_MAP) uses CIS Microsoft Windows 11 Enterprise Benchmark

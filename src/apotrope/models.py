@@ -1,4 +1,4 @@
-"""Core data models for WinPosture audit results."""
+"""Core data models for Apotrope audit results."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ class CheckResult:
 
 @dataclass
 class AuditReport:
-    """A complete WinPosture audit report.
+    """A complete Apotrope audit report.
 
     Attributes:
         hostname:       Name of the audited machine.

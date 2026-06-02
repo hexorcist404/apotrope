@@ -15,12 +15,12 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from winposture import checks as checks_pkg
-from winposture.models import AuditReport, CheckResult, Status, Severity
-from winposture.scoring import calculate_score
+from apotrope import checks as checks_pkg
+from apotrope.models import AuditReport, CheckResult, Status, Severity
+from apotrope.scoring import calculate_score
 
 if TYPE_CHECKING:
-    from winposture.profile import Profile
+    from apotrope.profile import Profile
 
 log = logging.getLogger(__name__)
 
@@ -35,8 +35,8 @@ class Scanner:
         is_admin:   Whether the current process has administrator privileges.
                     Modules with ``REQUIRES_ADMIN = True`` are skipped when
                     this is ``False``, producing an INFO result instead.
-        profile:    Optional :class:`~winposture.profile.Profile` loaded from
-                    a ``winposture.toml`` file.  Applies disabled checks,
+        profile:    Optional :class:`~apotrope.profile.Profile` loaded from
+                    a ``apotrope.toml`` file.  Applies disabled checks,
                     severity overrides, and threshold configuration.
     """
 
@@ -62,7 +62,7 @@ class Scanner:
         """Return the names of modules that would run without executing them.
 
         Returns:
-            List of module names (e.g. ``"winposture.checks.firewall"``).
+            List of module names (e.g. ``"apotrope.checks.firewall"``).
         """
         return [m.__name__ for m in self._discover_modules()]
 
@@ -162,7 +162,7 @@ class Scanner:
 
         for name in check_names:
 
-            full_name = f"winposture.checks.{name}"
+            full_name = f"apotrope.checks.{name}"
             try:
                 module = importlib.import_module(full_name)
             except Exception as exc:
@@ -206,7 +206,7 @@ class Scanner:
                 status=Status.INFO,
                 severity=Severity.INFO,
                 description="This check module requires administrator privileges.",
-                details="Run WinPosture as Administrator to include these checks.",
+                details="Run Apotrope as Administrator to include these checks.",
                 remediation="",
             )]
 
@@ -250,7 +250,7 @@ class Scanner:
     @staticmethod
     def _apply_cis_references(results: list[CheckResult], is_win10: bool = False) -> None:
         """Populate the cis_reference field on results that don't already have one."""
-        from winposture import cis_map
+        from apotrope import cis_map
         for r in results:
             if not r.cis_reference:
                 r.cis_reference = cis_map.lookup(r.check_name, is_win10=is_win10)

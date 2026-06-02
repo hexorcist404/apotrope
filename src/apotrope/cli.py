@@ -1,4 +1,4 @@
-"""CLI entry point for WinPosture.
+"""CLI entry point for Apotrope.
 
 Parses arguments and dispatches to the scanner and reporter.
 
@@ -14,28 +14,28 @@ import argparse
 import logging
 import sys
 
-from winposture import __version__
+from apotrope import __version__
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Build and return the argument parser."""
     parser = argparse.ArgumentParser(
-        prog="winposture",
-        description="WinPosture — Windows Security Posture Auditor",
+        prog="apotrope",
+        description="Apotrope — Windows Security Posture Auditor",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  winposture                             Full audit, terminal output\n"
-            "  winposture --html report.html          Also save HTML report\n"
-            "  winposture --json report.json          Also save JSON report\n"
-            "  winposture --baseline b.json           Save scan as a baseline\n"
-            "  winposture --compare  b.json           Compare scan against baseline\n"
-            "  winposture --profile  custom.toml      Apply a custom check profile\n"
-            "  winposture --category firewall,encryption  Specific categories only\n"
-            "  winposture --dry-run                   List checks without running\n"
-            "  winposture --verbose                   Show details for every check\n"
+            "  apotrope                             Full audit, terminal output\n"
+            "  apotrope --html report.html          Also save HTML report\n"
+            "  apotrope --json report.json          Also save JSON report\n"
+            "  apotrope --baseline b.json           Save scan as a baseline\n"
+            "  apotrope --compare  b.json           Compare scan against baseline\n"
+            "  apotrope --profile  custom.toml      Apply a custom check profile\n"
+            "  apotrope --category firewall,encryption  Specific categories only\n"
+            "  apotrope --dry-run                   List checks without running\n"
+            "  apotrope --verbose                   Show details for every check\n"
             "\n"
-            "NOTICE: WinPosture is a READ-ONLY tool for AUTHORISED auditing only.\n"
+            "NOTICE: Apotrope is a READ-ONLY tool for AUTHORISED auditing only.\n"
             "It makes no changes to the system.  Do not run on systems you do\n"
             "not own or have explicit written permission to audit.\n"
         ),
@@ -70,7 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help=(
             "Load a custom check profile from a TOML file.  "
-            "Auto-detected from winposture.toml in the current directory if omitted."
+            "Auto-detected from apotrope.toml in the current directory if omitted."
         ),
     )
     parser.add_argument(
@@ -113,16 +113,16 @@ def main() -> None:
     )
 
     # Import here so startup is fast for --version / --help
-    from winposture.scanner import Scanner
-    from winposture.reporter import Reporter
-    from winposture.profile import load_profile
-    from winposture.utils import is_admin
+    from apotrope.scanner import Scanner
+    from apotrope.reporter import Reporter
+    from apotrope.profile import load_profile
+    from apotrope.utils import is_admin
 
     categories: list[str] | None = None
     if args.category:
         categories = [c.strip().lower() for c in args.category.split(",")]
 
-    # Load optional profile (auto-detects winposture.toml if --profile not given)
+    # Load optional profile (auto-detects apotrope.toml if --profile not given)
     profile = load_profile(getattr(args, "profile", None))
 
     admin    = is_admin()
@@ -132,7 +132,7 @@ def main() -> None:
     # --dry-run: list modules and exit without scanning
     if args.dry_run:
         module_names = scanner.dry_run()
-        print(f"WinPosture {__version__} — dry run ({len(module_names)} module(s) would run)\n")
+        print(f"Apotrope {__version__} — dry run ({len(module_names)} module(s) would run)\n")
         for name in module_names:
             print(f"  {name}")
         return
@@ -140,7 +140,7 @@ def main() -> None:
     # Load baseline for comparison mode
     baseline = None
     if args.compare:
-        from winposture.compare import load_baseline
+        from apotrope.compare import load_baseline
         try:
             baseline = load_baseline(args.compare)
         except (FileNotFoundError, ValueError) as exc:
@@ -164,7 +164,7 @@ def main() -> None:
         reporter.generate_json_report(report, args.json)
 
     if args.baseline:
-        from winposture.compare import save_baseline
+        from apotrope.compare import save_baseline
         save_baseline(report, args.baseline)
 
     # Terminal output
@@ -172,7 +172,7 @@ def main() -> None:
 
     # Comparison diff display
     if baseline is not None:
-        from winposture.compare import compare_reports
+        from apotrope.compare import compare_reports
         diff = compare_reports(baseline, report)
         reporter.print_comparison(diff)
 
