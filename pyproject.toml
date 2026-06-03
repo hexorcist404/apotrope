@@ -28,6 +28,12 @@ dependencies = [
     "psutil>=5.9",
 ]
 
+[project.urls]
+Homepage = "https://apotrope.sh"
+Repository = "https://github.com/hexorcist404/apotrope"
+Changelog = "https://github.com/hexorcist404/apotrope/blob/main/CHANGELOG.md"
+Issues = "https://github.com/hexorcist404/apotrope/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
