@@ -5,8 +5,12 @@ auditing, talks to no network, and hands back a scored terminal report — or a
 self-contained HTML report you can send to someone who wasn't in the room.
 
 [![Tests](https://github.com/hexorcist404/apotrope/actions/workflows/test.yml/badge.svg)](https://github.com/hexorcist404/apotrope/actions/workflows/test.yml)
+[![PyPI](https://img.shields.io/pypi/v/apotrope.svg)](https://pypi.org/project/apotrope/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Website](https://img.shields.io/badge/web-apotrope.sh-5b21b6.svg)](https://apotrope.sh)
+
+**Website: [apotrope.sh](https://apotrope.sh)**
 
 ---
 
@@ -74,7 +78,14 @@ Then open `report.html` in your browser.
 
 Requires Python 3.12+ and Windows 10/11 or Server 2019/2022.
 
-Install from source:
+Install from [PyPI](https://pypi.org/project/apotrope/):
+
+```bash
+pip install apotrope
+apotrope
+```
+
+Or install from source:
 
 ```bash
 git clone https://github.com/hexorcist404/apotrope.git
@@ -82,8 +93,6 @@ cd apotrope
 pip install -e .
 apotrope
 ```
-
-PyPI package coming soon.
 
 ---
 
