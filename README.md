@@ -16,7 +16,7 @@ self-contained HTML report you can send to someone who wasn't in the room.
 
 ## Why Apotrope?
 
-An *apotrope* is a charm that wards off harm. This one audits Windows.
+Some charms ward off harm. This one audits Windows.
 
 Most posture tools want something before they'll help you: a cloud account, a
 license key, an agent to install, your data shipped off to a dashboard somewhere.
@@ -62,15 +62,15 @@ Then open `report.html` in your browser.
 
 **Standard scan (default view):**
 
-![Apotrope scan overview](assets/screenshots/scan-overview.png)
+![Apotrope scan overview](assets/screenshots/Ap-scan-overview.png)
 
 **Verbose mode (`--verbose`) — full details and remediation steps for every check:**
 
-![Apotrope verbose output](assets/screenshots/scan-verbose.png)
+![Apotrope verbose output](assets/screenshots/Ap-scan-verbose.png)
 
 **Top issues summary (shown at the end of every scan):**
 
-![Apotrope top issues](assets/screenshots/scan-top-issues.png)
+![Apotrope top issues](assets/screenshots/Ap-scan-top-issues.png)
 
 ---
 
