@@ -16,7 +16,7 @@ self-contained HTML report you can send to someone who wasn't in the room.
 
 ## Why Apotrope?
 
-An *apotrope* is a charm that wards off harm. This one audits Windows.
+Some charms ward off harm. This one audits Windows.
 
 Most posture tools want something before they'll help you: a cloud account, a
 license key, an agent to install, your data shipped off to a dashboard somewhere.
