@@ -526,7 +526,7 @@
       </div>
       <div class="findings">
         {% for f in cat.findings %}
-        <div class="frow" data-status="{{ f.status }}" data-text="{{ f.check_name|lower }} {{ f.category|lower }} {{ f.details|lower }} {{ f.cis|lower }}">
+        <div class="frow" data-status="{{ f.status }}" data-text="{{ f.check_name|lower }} {{ f.category|lower }} {{ f.details|lower }} {{ f.cis|lower }} {{ f.command|lower }}">
           <button class="fhead">
             <span class="ficon" style="color:{{ f.status_color }}">{{ f.status_glyph }}</span>
             <span class="fsev" style="color:{{ f.sev_color }};border:1px solid {{ f.sev_color }};background:transparent">{{ f.severity }}</span>

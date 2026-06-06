@@ -39,6 +39,7 @@ _PS_COMPLEXITY = (
 _ADMIN_WARN_THRESHOLD = 2
 _MIN_PW_FAIL = 8
 _MIN_PW_WARN = 12
+_MIN_PW_TARGET = 14  # CIS 1.1.4 recommended length — the value remediation sets
 
 
 def run() -> list[CheckResult]:
@@ -217,8 +218,8 @@ def _check_password_policy() -> list[CheckResult]:
             severity=Severity.HIGH,
             description=f"Minimum password length must be ≥{_MIN_PW_FAIL} (WARN if <{_MIN_PW_WARN}).",
             details=f"Minimum password length: {min_len} characters.",
-            remediation="Require a minimum password length of 14 characters.",
-            command="net accounts /minpwlen:14",
+            remediation=f"Require a minimum password length of {_MIN_PW_TARGET} characters.",
+            command=f"net accounts /minpwlen:{_MIN_PW_TARGET}",
         ))
     elif min_len < _MIN_PW_WARN:
         results.append(CheckResult(
@@ -227,9 +228,9 @@ def _check_password_policy() -> list[CheckResult]:
             status=Status.WARN,
             severity=Severity.MEDIUM,
             description=f"Minimum password length must be ≥{_MIN_PW_FAIL} (WARN if <{_MIN_PW_WARN}).",
-            details=f"Minimum password length: {min_len} characters (recommended: {_MIN_PW_WARN}+).",
-            remediation="Require a minimum password length of 14 characters.",
-            command="net accounts /minpwlen:14",
+            details=f"Minimum password length: {min_len} characters (recommended: {_MIN_PW_TARGET}+).",
+            remediation=f"Require a minimum password length of {_MIN_PW_TARGET} characters.",
+            command=f"net accounts /minpwlen:{_MIN_PW_TARGET}",
         ))
     else:
         results.append(CheckResult(
