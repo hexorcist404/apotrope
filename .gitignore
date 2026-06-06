@@ -59,3 +59,4 @@ apotrope_report_*
 # Design review scaffolding
 gen_sample_report.py
 sample_report.html
+.gstack/
