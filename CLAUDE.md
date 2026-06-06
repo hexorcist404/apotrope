@@ -88,14 +88,14 @@ class CheckResult:
 | `antivirus.py` | Antivirus | Defender / third-party AV |
 | `encryption.py` | Encryption | BitLocker per drive |
 | `accounts.py` | Accounts | Local users, admins, guest, password policy |
-| `services.py` | Services | Risky/unnecessary running services |
-| `network.py` | Network | Open ports, listening services |
+| `services.py` | Services | Risky running services (Remote Registry, Telnet, SNMP), unquoted service paths |
+| `network.py` | Network | Open/listening ports, LLMNR, NetBIOS, IPv6 |
 | `startup.py` | Persistence | Startup programs, scheduled tasks |
 | `smb.py` | File Sharing | SMBv1 disabled? Signing? |
 | `rdp.py` | Remote Access | Enabled? NLA enforced? |
 | `uac.py` | Access Control | UAC level |
 | `powershell.py` | PowerShell | Execution policy, logging, constrained mode |
-| `misc.py` | Hardening | AutoPlay, remote registry, LLMNR |
+| `misc.py` | Hardening | AutoPlay, WinRM, Spectre/Meltdown mitigations, audit policy, screen lock |
 
 ## Testing
 
