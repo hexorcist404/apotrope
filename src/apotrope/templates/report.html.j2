@@ -1,599 +1,625 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Apotrope Security Audit &mdash; {{ report.hostname }}</title>
-  <style>
-    /* ── Reset ─────────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Apotrope — Security Posture Report · {{ hostname }}</title>
+<style>{% raw %}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* ── Base ──────────────────────────────────────────────────── */
-    body {
-      /* Segoe UI leads: this is a Windows tool, viewed by Windows users.
-         Segoe UI is the native Windows UI font — professional, readable at density. */
-      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto,
-                   "Helvetica Neue", Arial, sans-serif;
-      background: #f1f5f9;
-      color: #1e293b;
-      font-size: 14px;
-      line-height: 1.6;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
+  :root {
+    /* near-black, faint blue-green */
+    --void:      #03060a;
+    --bg:        #05090c;
+    --panel:     #080d11;
+    --panel-2:   #0b1218;
+    --line:      rgba(0, 255, 102, 0.10);
+    --line-soft: rgba(120, 200, 170, 0.07);
 
-    /* ── Page wrapper ──────────────────────────────────────────── */
-    .page {
-      max-width: 1100px;
-      margin: 1.5rem auto;
-      background: #ffffff;
-      border-radius: 6px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.10);
-      overflow: hidden;
-    }
+    /* status / semantic */
+    --green:  #2bff88;   /* PASS / good     */
+    --cyan:   #44e0e6;   /* INFO            */
+    --amber:  #ffb23d;   /* WARN / fair     */
+    --red:    #ff5147;   /* FAIL            */
+    --crit:   #ff2d6b;   /* CRITICAL        */
+    --orange: #ff7a18;   /* decorative glow */
 
-    /* ── Report header ─────────────────────────────────────────── */
-    .report-header {
-      background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 100%);
-      color: #ffffff;
-      padding: 2rem 2.5rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 2rem;
-    }
-    .header-brand {
-      font-size: .8rem;
-      font-weight: 700;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-      opacity: .75;
-      margin-bottom: .35rem;
-    }
-    .header-title {
-      font-size: 1.55rem;
-      font-weight: 700;
-      margin-bottom: .75rem;
-    }
-    .header-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: .5rem 1.5rem;
-      font-size: .8rem;
-      opacity: .85;
-    }
-    .header-meta span::before { margin-right: .3em; }
+    --text:   #c4d6cd;
+    --bright: #e8fff2;
+    --muted:  #5d776c;
+    --faint:  #2f4138;
 
-    /* ── Score gauge (CSS conic-gradient) ──────────────────────── */
-    .gauge-wrap { text-align: center; flex-shrink: 0; }
-    .gauge {
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto .4rem;
-      position: relative;
-    }
-    /* Grade colour sets --gauge-color via class */
-    .gauge-A { background: conic-gradient(#059669 {{ report.score | int }}%, #e2f8ef {{ report.score | int }}%); }
-    .gauge-B { background: conic-gradient(#16a34a {{ report.score | int }}%, #e2f5e6 {{ report.score | int }}%); }
-    .gauge-C { background: conic-gradient(#ca8a04 {{ report.score | int }}%, #fef9e7 {{ report.score | int }}%); }
-    .gauge-D { background: conic-gradient(#ea580c {{ report.score | int }}%, #fff4ec {{ report.score | int }}%); }
-    .gauge-F { background: conic-gradient(#dc2626 {{ report.score | int }}%, #fff0f0 {{ report.score | int }}%); }
-    .gauge-inner {
-      width: 126px;
-      height: 126px;
-      border-radius: 50%;
-      background: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      line-height: 1;
-    }
-    .gauge-num  { font-size: 2.2rem; font-weight: 800; color: #1e293b; }
-    .gauge-denom { font-size: .75rem; color: #64748b; }
-    .gauge-letter { font-size: 1.2rem; font-weight: 700; margin-top: .15rem; }
-    .gauge-A .gauge-letter { color: #059669; }
-    .gauge-B .gauge-letter { color: #16a34a; }
-    .gauge-C .gauge-letter { color: #ca8a04; }
-    .gauge-D .gauge-letter { color: #ea580c; }
-    .gauge-F .gauge-letter { color: #dc2626; }
-    .gauge-label {
-      font-size: .8rem;
-      font-weight: 600;
-      color: rgba(255,255,255,.85);
-      letter-spacing: .04em;
-    }
+    /* accent (tweakable) — defaults to terminal green */
+    --accent: #2bff88;
+    --accent-dim: rgba(43, 255, 136, 0.14);
 
-    /* ── Stats bar ─────────────────────────────────────────────── */
-    .stats-bar {
-      display: flex;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .stat-box {
-      flex: 1;
-      padding: .9rem 1rem;
-      text-align: center;
-      border-right: 1px solid #e2e8f0;
-    }
-    .stat-box:last-child { border-right: none; }
-    .stat-num { font-size: 1.6rem; font-weight: 800; line-height: 1; }
-    .stat-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-top: .15rem; }
-    .stat-total .stat-num { color: #1d4ed8; }
-    .stat-pass  .stat-num { color: #059669; }
-    .stat-fail  .stat-num { color: #dc2626; }
-    .stat-warn  .stat-num { color: #d97706; }
-    .stat-error .stat-num { color: #7c3aed; }
+    /* offline font stacks — no Google Fonts, no embedding required */
+    --mono: "IBM Plex Mono","Cascadia Code","Consolas",ui-monospace,monospace;
+    --sans: "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
 
-    /* ── Section ───────────────────────────────────────────────── */
-    section { padding: 1.75rem 2.5rem; border-bottom: 1px solid #e2e8f0; }
-    section:last-of-type { border-bottom: none; }
-    .section-title {
-      font-size: .7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: #64748b;
-      margin-bottom: 1rem;
-      padding-bottom: .5rem;
-      border-bottom: 1px solid #e2e8f0;
-    }
+    --r: 3px;
+    --gap: 22px;
+    --pad: 22px;
+    --maxw: 1180px;
 
-    /* ── Executive summary ─────────────────────────────────────── */
-    .exec-summary { color: #374151; max-width: 80ch; margin-bottom: 1.25rem; }
+    --glitch: 1;       /* 0..1 scanline/glow intensity */
+    --row-pad: 13px;   /* density */
+    --fs: 15px;
+  }
 
-    /* ── Callout ───────────────────────────────────────────────── */
-    .callout {
-      border-radius: 5px;
-      padding: 1rem 1.25rem;
-      margin-bottom: .75rem;
-    }
-    .callout-alert {
-      background: #fef2f2;
-      border: 1px solid #fca5a5;
-      border-left: 4px solid #dc2626;
-    }
-    .callout-title {
-      font-size: .8rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: #991b1b;
-      margin-bottom: .6rem;
-    }
-    .callout ul { list-style: none; display: flex; flex-direction: column; gap: .4rem; }
-    .callout li { display: flex; align-items: flex-start; gap: .5rem; flex-wrap: wrap; font-size: .85rem; color: #374151; }
-    .callout li .rem-text { color: #6b7280; margin-left: .25rem; }
+  html { scroll-behavior: smooth; }
 
-    /* ── Badges ────────────────────────────────────────────────── */
-    .badge {
-      display: inline-block;
-      padding: .12rem .45rem;
-      border-radius: 3px;
-      font-size: .7rem;
-      font-weight: 700;
-      white-space: nowrap;
-      vertical-align: middle;
-    }
-    .badge-PASS  { background: #dcfce7; color: #15803d; }
-    .badge-FAIL  { background: #fee2e2; color: #b91c1c; }
-    .badge-WARN  { background: #fef3c7; color: #b45309; }
-    .badge-INFO  { background: #dbeafe; color: #1d4ed8; }
-    .badge-ERROR { background: #f3e8ff; color: #6d28d9; }
+  body {
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(255, 122, 24, 0.07), transparent 60%),
+      radial-gradient(900px 600px at -5% 4%, rgba(43, 255, 136, 0.05), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: var(--fs);
+    line-height: 1.55;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
 
-    .sev {
-      display: inline-block;
-      padding: .1rem .4rem;
-      border-radius: 3px;
-      font-size: .7rem;
-      font-weight: 600;
-      white-space: nowrap;
-      vertical-align: middle;
-    }
-    .sev-CRITICAL { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
-    .sev-HIGH     { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
-    .sev-MEDIUM   { background: #fefce8; color: #854d0e; border: 1px solid #fde047; }
-    .sev-LOW      { background: #eff6ff; color: #1e40af; border: 1px solid #93c5fd; }
-    .sev-INFO     { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; }
+  /* ── CRT / scanline overlay ────────────────────────────────────────────── */
+  .crt-overlay {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 9000;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0, 30, 18, calc(0.16 * var(--glitch))) 3px,
+      rgba(0, 30, 18, calc(0.16 * var(--glitch))) 3px
+    );
+    mix-blend-mode: multiply;
+    opacity: var(--glitch);
+  }
+  .crt-vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 9001;
+    box-shadow: inset 0 0 240px 40px rgba(0,0,0,0.9);
+    opacity: calc(0.7 * var(--glitch));
+  }
+  .crt-flicker {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 8999;
+    background: rgba(43,255,136,0.012);
+    animation: flicker 7s infinite steps(60);
+    opacity: var(--glitch);
+  }
+  @keyframes flicker {
+    0%,100%{opacity:calc(0.5*var(--glitch));} 3%{opacity:calc(0.2*var(--glitch));}
+    6%{opacity:calc(0.6*var(--glitch));} 9%{opacity:calc(0.3*var(--glitch));}
+    50%{opacity:calc(0.55*var(--glitch));} 53%{opacity:calc(0.25*var(--glitch));}
+  }
+  @media (prefers-reduced-motion: reduce) { .crt-flicker { animation: none; } }
 
-    /* ── Category section ──────────────────────────────────────── */
-    .cat-block { margin-bottom: 1.5rem; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
-    .cat-block:last-child { margin-bottom: 0; }
-    .cat-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: .65rem 1rem;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
-      cursor: pointer;
-      user-select: none;
-      list-style: none;
-    }
-    .cat-header::-webkit-details-marker { display: none; }
-    .cat-name { font-weight: 600; font-size: .9rem; color: #1e293b; }
-    .cat-meta { display: flex; align-items: center; gap: .75rem; font-size: .8rem; color: #64748b; }
-    .cat-score { font-weight: 700; }
-    .cat-score-A { color: #059669; }
-    .cat-score-B { color: #16a34a; }
-    .cat-score-C { color: #ca8a04; }
-    .cat-score-D { color: #ea580c; }
-    .cat-score-F { color: #dc2626; }
-    .cat-chevron { font-size: .65rem; color: #94a3b8; }
-    details.cat-block[open] .cat-chevron::after { content: "▲"; }
-    details.cat-block:not([open]) .cat-chevron::after { content: "▼"; }
+  /* faint binary rain behind everything */
+  .bin-rain {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 0;
+    overflow: hidden;
+    opacity: calc(0.5 * var(--glitch));
+  }
 
-    /* ── Category table ────────────────────────────────────────── */
-    .cat-table { width: 100%; border-collapse: collapse; }
-    .cat-table thead th {
-      background: #f8fafc;
-      font-size: .7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: #64748b;
-      padding: .55rem .75rem;
-      text-align: left;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .cat-table tbody td {
-      padding: .6rem .75rem;
-      border-bottom: 1px solid #f1f5f9;
-      vertical-align: top;
-      font-size: .85rem;
-    }
-    .cat-table tbody tr:last-child td { border-bottom: none; }
-    .row-FAIL { background: #fff8f8; }
-    .row-WARN { background: #fffdf0; }
-    .row-INFO { background: #f8fbff; }
-    .row-ERROR { background: #fdf8ff; }
+  /* ── Layout ─────────────────────────────────────────────────────────────── */
+  .wrap { position: relative; z-index: 1; max-width: var(--maxw); margin: 0 auto; padding: 0 24px 120px; }
 
-    .check-name { font-weight: 500; }
-    .check-desc { font-size: .78rem; color: #64748b; margin-top: .15rem; }
-    .details-text { font-size: .8rem; color: #374151; white-space: pre-wrap; word-break: break-word; }
+  ::selection { background: var(--accent); color: #00120a; }
 
-    details.row-detail summary {
-      list-style: none;
-      cursor: pointer;
-      font-size: .78rem;
-      color: #2563eb;
-    }
-    details.row-detail summary::-webkit-details-marker { display: none; }
-    details.row-detail[open] .rem-block { margin-top: .4rem; }
-    .rem-block {
-      font-size: .78rem;
-      color: #374151;
-      background: #f8fafc;
-      border-left: 3px solid #93c5fd;
-      padding: .4rem .6rem;
-      margin-top: .4rem;
-      border-radius: 0 3px 3px 0;
-    }
+  a { color: var(--accent); text-decoration: none; }
 
-    /* ── Detailed findings cards ───────────────────────────────── */
-    .finding {
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      margin-bottom: 1rem;
-      overflow: hidden;
-    }
-    .finding:last-child { margin-bottom: 0; }
-    .finding-FAIL { border-color: #fca5a5; }
-    .finding-WARN { border-color: #fde68a; }
+  /* ── Scrollbar ──────────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: var(--void); }
+  ::-webkit-scrollbar-thumb { background: #16241d; border: 2px solid var(--void); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: #1d3329; }
 
-    .finding-header {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: .5rem;
-      padding: .7rem 1rem;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .finding-FAIL .finding-header { background: #fff5f5; border-bottom-color: #fecaca; }
-    .finding-WARN .finding-header { background: #fffbeb; border-bottom-color: #fde68a; }
-    .finding-title { font-weight: 600; font-size: .9rem; color: #1e293b; margin-left: .25rem; flex: 1; }
-    .finding-cat   { font-size: .75rem; color: #94a3b8; margin-left: auto; }
-    .cis-badge { display: inline-block; font-size: .65rem; font-weight: 700; letter-spacing: .04em;
-                 background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
-                 border-radius: 3px; padding: .1rem .35rem; margin-left: .4rem; vertical-align: middle; }
+  /* ── Panel primitive ────────────────────────────────────────────────────── */
+  .panel {
+    background:
+      linear-gradient(180deg, rgba(43,255,136,0.018), transparent 120px),
+      var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    position: relative;
+  }
+  .panel::before {
+    /* corner ticks */
+    content: "";
+    position: absolute; top: -1px; left: -1px;
+    width: 12px; height: 12px;
+    border-top: 1px solid var(--accent); border-left: 1px solid var(--accent);
+    opacity: 0.55;
+  }
+  .panel::after {
+    content: "";
+    position: absolute; bottom: -1px; right: -1px;
+    width: 12px; height: 12px;
+    border-bottom: 1px solid var(--accent); border-right: 1px solid var(--accent);
+    opacity: 0.55;
+  }
 
-    .finding-body { padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: .75rem 1.5rem; }
-    .finding-field dt { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin-bottom: .25rem; }
-    .finding-field dd { font-size: .85rem; color: #374151; white-space: pre-wrap; word-break: break-word; }
-    .finding-field.full-width { grid-column: 1 / -1; }
+  .mono { font-family: var(--mono); }
+  .sans { font-family: var(--sans); }
 
-    /* ── Appendix table ────────────────────────────────────────── */
-    .app-table { width: 100%; border-collapse: collapse; }
-    .app-table thead th {
-      background: #f8fafc;
-      font-size: .7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: #64748b;
-      padding: .5rem .75rem;
-      text-align: left;
-      border-bottom: 2px solid #e2e8f0;
-    }
-    .app-table tbody td {
-      padding: .5rem .75rem;
-      border-bottom: 1px solid #f1f5f9;
-      vertical-align: top;
-      font-size: .82rem;
-    }
-    .app-table tbody tr:last-child td { border-bottom: none; }
+  .label {
+    font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500;
+  }
+  .kicker {
+    font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600;
+  }
 
-    /* ── Footer ────────────────────────────────────────────────── */
-    .report-footer {
-      padding: 1rem 2.5rem;
-      background: #f8fafc;
-      border-top: 1px solid #e2e8f0;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 2rem;
-      flex-wrap: wrap;
-    }
-    .footer-brand { font-size: .78rem; color: #475569; }
-    .footer-brand strong { color: #1e293b; }
-    .footer-disclaimer {
-      font-size: .72rem;
-      color: #94a3b8;
-      max-width: 60ch;
-      font-style: italic;
-    }
+  /* blinking cursor */
+  .cursor { display:inline-block; width:9px; height:1.05em; background: var(--accent);
+            vertical-align: -2px; margin-left: 3px; animation: blink 1.05s steps(2) infinite; }
+  @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
 
-    /* ── Print ─────────────────────────────────────────────────── */
-    @media print {
-      @page { size: A4; margin: 15mm 12mm; }
-      body { background: white; font-size: 10pt; }
-      .page { box-shadow: none; border-radius: 0; margin: 0; max-width: 100%; }
-      .report-header { background: #1d4ed8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      section { break-inside: avoid; }
-      .finding { break-inside: avoid; page-break-inside: avoid; }
-      .cat-block { break-inside: avoid; }
-      details.cat-block { display: block; }
-      details.cat-block summary { display: flex; }
-      details.row-detail { display: block; }
-      details.row-detail summary { display: none; }
-      details.row-detail .rem-block { display: block; }
-    }
+  /* focus rings */
+  button, input, select { font-family: inherit; color: inherit; }
+  button { cursor: pointer; background: none; border: none; }
+  input:focus-visible, button:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 
-    @media (max-width: 700px) {
-      .report-header { flex-direction: column; }
-      .stats-bar { flex-wrap: wrap; }
-      .stat-box { min-width: 50%; }
-      .finding-body { grid-template-columns: 1fr; }
-    }
-  </style>
+  /* ── Header ─────────────────────────────────────────────────────────────── */
+  .topbar { display:flex; align-items:center; justify-content:space-between; gap:24px;
+            padding:20px 0 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .brand { display:flex; align-items:center; gap:13px; }
+  .brand .diamond { color:var(--accent); font-size:22px; filter:drop-shadow(0 0 7px var(--accent)); }
+  .brand .name { font-size:19px; font-weight:700; letter-spacing:0.42em; color:var(--bright);
+                 text-transform:uppercase; }
+  .brand .ver { font-size:10.5px; color:var(--muted); letter-spacing:0.12em; align-self:flex-end; padding-bottom:3px; }
+  .topbar-meta { display:flex; gap:26px; flex-wrap:wrap; align-items:center; }
+  .meta-item { display:flex; flex-direction:column; gap:2px; }
+  .meta-item .v { color:var(--text); font-size:13px; }
+  .meta-item .v b { color:var(--bright); font-weight:600; }
+  .ro-tag { display:inline-flex; align-items:center; gap:7px; font-size:10px; letter-spacing:0.18em;
+            text-transform:uppercase; color:var(--cyan); border:1px solid rgba(68,224,230,0.3);
+            background:rgba(68,224,230,0.06); padding:5px 10px; border-radius:2px; white-space:nowrap; }
+  .ro-tag .dot { width:6px; height:6px; border-radius:50%; background:var(--cyan); box-shadow:0 0 7px var(--cyan); }
+
+  /* hero grid */
+  .hero { display:grid; grid-template-columns: 320px 1fr; gap:var(--gap); margin-top:var(--gap); align-items:start; }
+  @media (max-width: 880px){ .hero { grid-template-columns: 1fr; } }
+
+  .gauge-panel { padding:26px 20px 22px; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .gauge-wrap { position:relative; width:230px; height:230px; }
+  .gauge-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .gauge-score { font-size:64px; font-weight:700; line-height:0.9; letter-spacing:-0.02em; }
+  .gauge-of { font-size:12px; color:var(--muted); letter-spacing:0.18em; margin-top:4px; }
+  .gauge-grade { margin-top:9px; display:flex; align-items:center; gap:8px; }
+  .grade-chip { font-size:15px; font-weight:700; padding:2px 10px; border-radius:2px; letter-spacing:0.05em; }
+  .grade-label { font-size:11px; letter-spacing:0.24em; text-transform:uppercase; color:var(--muted); }
+  .gauge-cat { font-size:10.5px; color:var(--faint); letter-spacing:0.2em; text-transform:uppercase; margin-top:6px; }
+
+  /* right column */
+  .hero-right { display:flex; flex-direction:column; gap:var(--gap); }
+  .summary-panel { padding:18px 20px 20px; flex:1; }
+  .summary-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .summary-body { font-size:13.5px; line-height:1.72; color:var(--text); }
+  .summary-body .hl-crit { color:var(--crit); font-weight:600; }
+  .summary-body .hl-high { color:var(--red); font-weight:600; }
+  .summary-body .hl-ok { color:var(--green); font-weight:600; }
+
+  .stat-strip { display:grid; grid-template-columns: 1.1fr 1fr; gap:var(--gap); }
+  @media (max-width: 560px){ .stat-strip { grid-template-columns:1fr; } }
+  .donut-panel, .bars-panel { padding:16px 18px 18px; }
+  .panel-h { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+
+  /* count pills */
+  .pills { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:500;
+          padding:5px 11px; border-radius:2px; border:1px solid transparent; letter-spacing:0.02em; }
+  .pill .n { font-weight:700; font-variant-numeric: tabular-nums; }
+  .pill-pass { color:var(--green); border-color:rgba(43,255,136,0.28); background:rgba(43,255,136,0.06); }
+  .pill-fail { color:var(--red);   border-color:rgba(255,81,71,0.3);  background:rgba(255,81,71,0.07); }
+  .pill-warn { color:var(--amber); border-color:rgba(255,178,61,0.3); background:rgba(255,178,61,0.06); }
+  .pill-info { color:var(--cyan);  border-color:rgba(68,224,230,0.28);background:rgba(68,224,230,0.05); }
+
+  /* donut */
+  .donut-row { display:flex; align-items:center; gap:18px; }
+  .donut-legend { display:flex; flex-direction:column; gap:7px; flex:1; }
+  .leg { display:flex; align-items:center; gap:9px; font-size:12px; }
+  .leg .sw { width:9px; height:9px; border-radius:1px; flex-shrink:0; }
+  .leg .lk { color:var(--muted); flex:1; letter-spacing:0.08em; }
+  .leg .lv { color:var(--bright); font-weight:600; font-variant-numeric:tabular-nums; }
+
+  /* category bars */
+  .cbar { display:grid; grid-template-columns: 116px 1fr 42px; align-items:center; gap:11px;
+          padding:6px 0; cursor:pointer; border:none; width:100%; text-align:left; }
+  .cbar:hover .cbar-name { color:var(--bright); }
+  .cbar:hover .cbar-track { box-shadow: inset 0 0 0 1px var(--line); }
+  .cbar-name { font-size:11.5px; color:var(--text); letter-spacing:0.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cbar-track { height:13px; background:#0a130d; border:1px solid rgba(43,255,136,0.12); border-radius:2px; overflow:hidden; position:relative; }
+  .cbar-fill { height:100%; border-radius:0; transition:width .6s cubic-bezier(.2,.7,.2,1); }
+  /* HP-bar segmentation: 20 cells, score maps to filled cells */
+  .cbar-track::after { content:""; position:absolute; inset:0; pointer-events:none; z-index:2;
+     background: repeating-linear-gradient(90deg, transparent 0 calc(5% - 2px), var(--panel) calc(5% - 2px) 5%); }
+  .cbar-val { font-size:11.5px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+  .cbar.flagged .cbar-name::before { content:"› "; color:var(--accent); }
+
+  /* toolbar */
+  .toolbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:var(--gap) 0 14px;
+             padding:13px 16px; }
+  .filters { display:flex; gap:7px; flex-wrap:wrap; }
+  .fchip { display:inline-flex; align-items:center; gap:8px; font-size:11.5px; letter-spacing:0.08em;
+           padding:6px 12px; border:1px solid var(--line); border-radius:2px; color:var(--muted);
+           text-transform:uppercase; transition:all .15s; }
+  .fchip:hover { color:var(--text); border-color:rgba(120,200,170,0.25); }
+  .fchip[data-on="true"] { color:var(--void); font-weight:700; }
+  .fchip .fn { font-variant-numeric:tabular-nums; font-weight:700; opacity:0.9; }
+  .fchip.f-all[data-on="true"]  { background:var(--accent); border-color:var(--accent); }
+  .fchip.f-fail[data-on="true"] { background:var(--red);   border-color:var(--red); }
+  .fchip.f-warn[data-on="true"] { background:var(--amber); border-color:var(--amber); }
+  .fchip.f-pass[data-on="true"] { background:var(--green); border-color:var(--green); }
+  .fchip.f-info[data-on="true"] { background:var(--cyan);  border-color:var(--cyan); }
+
+  .search { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:2px;
+            padding:6px 11px; min-width:210px; flex:1; max-width:340px; }
+  .search:focus-within { border-color:var(--accent); }
+  .search input { background:none; border:none; outline:none; width:100%; font-size:13px; color:var(--bright); }
+  .search input::placeholder { color:var(--faint); }
+  .search .pr { color:var(--accent); font-size:13px; }
+  .tool-right { display:flex; align-items:center; gap:14px; margin-left:auto; }
+  .linkbtn { font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); border-bottom:1px dashed transparent; }
+  .linkbtn:hover { color:var(--accent); border-bottom-color:var(--accent); }
+  .showing { font-size:11px; color:var(--faint); letter-spacing:0.06em; white-space:nowrap; }
+
+  /* top issues */
+  .top-issues { margin:var(--gap) 0; padding:18px 20px 20px; border-color:rgba(255,81,71,0.22)!important; }
+  .top-issues::before, .top-issues::after { border-color:var(--red)!important; }
+  .ti-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .ti-flag { color:var(--red); font-size:14px; letter-spacing:0.2em; text-transform:uppercase; font-weight:700; }
+  .ti-list { display:flex; flex-direction:column; gap:10px; }
+  .ti-item { display:grid; grid-template-columns: 26px 1fr; gap:12px; padding:11px 13px;
+             background:rgba(255,81,71,0.035); border:1px solid rgba(255,81,71,0.14); border-radius:2px; }
+  .ti-num { font-size:13px; font-weight:700; color:var(--red); }
+  .ti-name { font-size:13.5px; color:var(--bright); font-weight:600; margin-bottom:3px; }
+  .ti-tags { display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
+  .ti-fix { font-size:12px; color:var(--muted); line-height:1.6; }
+  .ti-fix b { color:var(--text); font-weight:500; }
+
+  /* category section */
+  .cat-section { margin-top:var(--gap); }
+  .cat-bar { display:flex; align-items:center; gap:14px; padding:11px 16px;
+             border:1px solid var(--line); border-top-left-radius:var(--r); border-top-right-radius:var(--r);
+             background:var(--panel-2); position:sticky; top:0; z-index:5; }
+  .cat-name { font-size:13.5px; font-weight:600; letter-spacing:0.08em; color:var(--bright); text-transform:uppercase; }
+  .cat-meta { display:flex; align-items:center; gap:10px; margin-left:auto; }
+  .cat-score { font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .cat-tally { display:flex; gap:9px; font-size:11px; }
+  .cat-tally span { font-variant-numeric:tabular-nums; }
+
+  /* finding rows */
+  .findings { border:1px solid var(--line); border-top:none;
+              border-bottom-left-radius:var(--r); border-bottom-right-radius:var(--r); overflow:hidden; }
+  .frow { border-top:1px solid var(--line-soft); }
+  .frow:first-child { border-top:none; }
+  .fhead { display:grid; grid-template-columns: 30px 86px 1fr auto; align-items:center; gap:13px;
+           padding:var(--row-pad) 16px; width:100%; text-align:left; transition:background .12s; }
+  .fhead:hover { background:rgba(43,255,136,0.025); }
+  .fhead.is-open { background:rgba(43,255,136,0.03); }
+  .ficon { font-size:14px; text-align:center; font-weight:700; }
+  .fsev { font-size:10px; letter-spacing:0.1em; font-weight:600; text-transform:uppercase;
+          padding:3px 7px; border-radius:2px; text-align:center; white-space:nowrap; }
+  .fname { font-size:13.5px; color:var(--text); }
+  .fname .fcat { color:var(--faint); font-size:11px; margin-right:8px; letter-spacing:0.06em; }
+  .fname .fsnip { color:var(--muted); font-size:12px; margin-top:2px; }
+  .fname b { color:var(--bright); font-weight:500; }
+  .fright { display:flex; align-items:center; gap:12px; }
+  .chev { color:var(--muted); font-size:11px; transition:transform .2s; }
+  .fhead.is-open .chev { transform:rotate(90deg); color:var(--accent); }
+
+  .fbody { padding:2px 16px 18px 59px; display:grid; gap:13px;
+           border-top:1px solid var(--line-soft); background:rgba(0,0,0,0.18); }
+  .fbody .fld { display:grid; grid-template-columns: 82px 1fr; gap:14px; align-items:start; }
+  .fbody .fld .k { font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--faint); padding-top:2px; }
+  .fbody .fld .vv { font-size:13px; color:var(--text); line-height:1.65; }
+  .code { font-size:12.5px; background:#02060a; border:1px solid var(--line); border-left:2px solid var(--accent);
+          border-radius:2px; padding:11px 13px; color:var(--green); white-space:pre-wrap; word-break:break-word;
+          position:relative; }
+  .code .copy { position:absolute; top:7px; right:8px; font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase;
+                color:var(--muted); border:1px solid var(--line); padding:3px 7px; border-radius:2px; background:var(--void); }
+  .code .copy:hover { color:var(--accent); border-color:var(--accent); }
+  .cis { display:inline-flex; align-items:center; gap:6px; font-size:11px; letter-spacing:0.06em;
+         color:var(--cyan); border:1px solid rgba(68,224,230,0.28); background:rgba(68,224,230,0.05);
+         padding:3px 9px; border-radius:2px; }
+
+  .empty { padding:46px 20px; text-align:center; color:var(--faint); font-size:13px; letter-spacing:0.08em; }
+
+  /* footer */
+  .foot { margin-top:46px; padding-top:22px; border-top:1px solid var(--line);
+          display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap;
+          font-size:11.5px; color:var(--muted); letter-spacing:0.05em; }
+  .foot .auth { color:var(--faint); }
+  .foot a { color:var(--muted); border-bottom:1px dashed transparent; }
+  .foot a:hover { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* fade-in */
+  .rise { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes rise { from { transform: translateY(10px); } to { transform:none; } }
+  @media (prefers-reduced-motion: reduce){ .rise { animation:none; } }
+
+  /* ── Print: drop the CRT atmosphere, expand every finding, ink-friendly ─── */
+  @media print {
+    .crt-overlay, .crt-vignette, .crt-flicker, .bin-rain { display:none !important; }
+    html, body { background:#fff !important; color:#111 !important; }
+    .wrap { padding-bottom:0; }
+    .panel { background:#fff !important; border-color:#bbb !important; }
+    .panel::before, .panel::after { display:none; }
+    .toolbar, .tool-right, .search, .filters { display:none !important; }
+    .cat-bar { position:static; background:#f2f2f2 !important; }
+    .cat-name, .brand .name, .ti-name, .fname b, .meta-item .v b { color:#111 !important; }
+    .fbody[hidden] { display:grid !important; }   /* show all details on paper */
+    .code { background:#f6f6f6 !important; color:#111 !important; }
+  }
+{% endraw %}</style>
 </head>
 <body>
-<div class="page">
+  <div class="bin-rain" id="binRain"></div>
+  <div class="crt-flicker"></div>
 
-  {# ── HEADER ──────────────────────────────────────────────────── #}
-  <header class="report-header">
-    <div class="header-left">
-      <div class="header-brand">Apotrope Security Audit Report</div>
-      <div class="header-title">{{ report.hostname }}</div>
-      <div class="header-meta">
-        <span>OS: {{ report.os_version }}</span>
-        <span>Scanned: {{ generated_at }}</span>
-        <span>Duration: {{ "%.1f"|format(report.scan_duration) }}s</span>
+  <div class="wrap">
+
+    <!-- ── Header ──────────────────────────────────────────────────────── -->
+    <div class="topbar">
+      <div class="brand">
+        <span class="diamond">◈</span>
+        <span class="name">APOTROPE</span>
+        <span class="ver">v{{ version }}</span>
+      </div>
+      <div class="topbar-meta">
+        <div class="meta-item"><span class="label">Host</span><span class="v"><b>{{ hostname }}</b></span></div>
+        <div class="meta-item"><span class="label">System</span><span class="v">{{ os_version }}</span></div>
+        <div class="meta-item"><span class="label">Scan</span><span class="v">{{ scan_timestamp }} <span style="color:var(--faint)">· {{ scan_duration }}s</span></span></div>
+        <span class="ro-tag"><span class="dot"></span>Read-only audit</span>
       </div>
     </div>
-    <div class="gauge-wrap">
-      <div class="gauge gauge-{{ score_grade }}">
-        <div class="gauge-inner">
-          <span class="gauge-num">{{ report.score }}</span>
-          <span class="gauge-denom">/100</span>
-          <span class="gauge-letter">{{ score_grade }}</span>
+
+    <!-- ── Hero: score gauge + executive summary + stat strip ──────────── -->
+    <div class="hero">
+      <div class="gauge-panel panel rise">
+        <div class="kicker" style="align-self:flex-start">Security Score</div>
+        <div class="gauge-wrap">
+          <svg width="230" height="230" viewBox="0 0 230 230" style="position:absolute;inset:0">
+            <defs><filter id="gl"><feGaussianBlur stdDeviation="3.2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+            {% for t in gauge_ticks %}<line x1="{{ t.x1 }}" y1="{{ t.y1 }}" x2="{{ t.x2 }}" y2="{{ t.y2 }}" stroke="{{ t.color }}" stroke-width="2" opacity="{{ t.opacity }}"/>{% endfor %}
+            <circle cx="115" cy="115" r="96" fill="none" stroke="#0c1610" stroke-width="9"/>
+            <circle cx="115" cy="115" r="96" fill="none" stroke="{{ band_color }}" stroke-width="9"
+              stroke-linecap="round" stroke-dasharray="603.2" stroke-dashoffset="{{ gauge_dashoffset }}"
+              transform="rotate(-90 115 115)" filter="url(#gl)"/>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-score" style="color:{{ band_color }};text-shadow:0 0 22px {{ band_color }}">{{ score }}</div>
+            <div class="gauge-of">/ 100</div>
+            <div class="gauge-grade">
+              <span class="grade-chip" style="color:var(--void);background:{{ band_color }}">{{ grade_letter }}</span>
+              <span class="grade-label">{{ grade_label }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="gauge-cat">{{ total_checks }} checks evaluated</div>
+      </div>
+
+      <div class="hero-right">
+        <div class="summary-panel panel rise">
+          <div class="summary-head">
+            <span class="kicker">Executive Summary</span>
+            <div class="pills">
+              <span class="pill pill-pass"><span class="n">{{ pass_count }}</span> passed</span>
+              <span class="pill pill-fail"><span class="n">{{ fail_count }}</span> failed</span>
+              <span class="pill pill-warn"><span class="n">{{ warn_count }}</span> warnings</span>
+              <span class="pill pill-info"><span class="n">{{ info_count }}</span> info</span>
+            </div>
+          </div>
+          <div class="summary-body">{{ exec_summary_html }}</div>
+        </div>
+
+        <div class="stat-strip">
+          <div class="donut-panel panel rise">
+            <div class="panel-h"><span class="label">Result Distribution</span><span class="label">{{ total_checks }}</span></div>
+            <div class="donut-row">
+              <svg width="128" height="128" viewBox="0 0 128 128">
+                <circle cx="64" cy="64" r="52" fill="none" stroke="#0c1610" stroke-width="13"/>
+                {% for d in donut %}<circle cx="64" cy="64" r="52" fill="none" stroke="{{ d.color }}" stroke-width="13"
+                  stroke-dasharray="{{ d.dash }} {{ d.gap }}" stroke-dashoffset="{{ d.offset }}"
+                  transform="rotate(-90 64 64)"/>{% endfor %}
+                <text x="64" y="60" text-anchor="middle" fill="var(--red)" font-size="22" font-weight="700">{{ donut_center }}</text>
+                <text x="64" y="77" text-anchor="middle" fill="var(--muted)" font-size="8.5" letter-spacing="1.4">FAILED</text>
+              </svg>
+              <div class="donut-legend">
+                <div class="leg"><span class="sw" style="background:var(--green)"></span><span class="lk">PASS</span><span class="lv">{{ pass_count }}</span></div>
+                <div class="leg"><span class="sw" style="background:var(--red)"></span><span class="lk">FAIL</span><span class="lv">{{ fail_count }}</span></div>
+                <div class="leg"><span class="sw" style="background:var(--amber)"></span><span class="lk">WARN</span><span class="lv">{{ warn_count }}</span></div>
+                <div class="leg"><span class="sw" style="background:var(--cyan)"></span><span class="lk">INFO</span><span class="lv">{{ info_count }}</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bars-panel panel rise">
+            <div class="panel-h"><span class="label">Category Scores</span><span class="label">{{ n_cats }} areas</span></div>
+            {% for c in category_bars %}
+            <button class="cbar{% if c.score < 80 %} flagged{% endif %}" onclick="apoJump('{{ c.slug }}')">
+              <span class="cbar-name">{{ c.name }}</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:{{ c.score }}%;background:{{ c.band }};box-shadow:0 0 8px {{ c.band }}"></span></span>
+              <span class="cbar-val" style="color:{{ c.band }}">{{ c.score }}</span>
+            </button>
+            {% endfor %}
+          </div>
         </div>
       </div>
-      <div class="gauge-label">{{ score_label }}</div>
     </div>
-  </header>
 
-  {# ── STATS BAR ────────────────────────────────────────────────── #}
-  <div class="stats-bar">
-    <div class="stat-box stat-total">
-      <div class="stat-num">{{ report.results | length }}</div>
-      <div class="stat-lbl">Total Checks</div>
-    </div>
-    <div class="stat-box stat-pass">
-      <div class="stat-num">{{ report.pass_count }}</div>
-      <div class="stat-lbl">Passed</div>
-    </div>
-    <div class="stat-box stat-fail">
-      <div class="stat-num">{{ report.fail_count }}</div>
-      <div class="stat-lbl">Failed</div>
-    </div>
-    <div class="stat-box stat-warn">
-      <div class="stat-num">{{ report.warn_count }}</div>
-      <div class="stat-lbl">Warnings</div>
-    </div>
-    {% if report.error_count %}
-    <div class="stat-box stat-error">
-      <div class="stat-num">{{ report.error_count }}</div>
-      <div class="stat-lbl">Errors</div>
-    </div>
-    {% endif %}
-  </div>
-
-  {# ── EXECUTIVE SUMMARY ────────────────────────────────────────── #}
-  <section>
-    <h2 class="section-title">Executive Summary</h2>
-    <p class="exec-summary">{{ executive_summary }}</p>
-
-    {% if top_findings %}
-    <div class="callout callout-alert">
-      <div class="callout-title">Critical &amp; High Priority Findings</div>
-      <ul>
-        {% for f in top_findings %}
-        <li>
-          <span class="badge badge-{{ f.status.value }}">{{ f.status.value }}</span>
-          <span class="sev sev-{{ f.severity.value }}">{{ f.severity.value }}</span>
-          <strong>{{ f.check_name }}</strong>
-          {% if f.remediation %}
-          <span class="rem-text">&mdash; {{ f.remediation }}</span>
-          {% endif %}
-        </li>
+    {% if top_issues %}
+    <!-- ── Top issues ──────────────────────────────────────────────────── -->
+    <div class="top-issues panel">
+      <div class="ti-head">
+        <span class="ti-flag">⚑ Top Issues</span>
+        <span class="label">Prioritized remediation · {{ top_issues|length }}</span>
+      </div>
+      <div class="ti-list">
+        {% for r in top_issues %}
+        <div class="ti-item">
+          <span class="ti-num">{{ r.num }}</span>
+          <div>
+            <div class="ti-tags">
+              <span class="fsev" style="color:{{ r.sev_color }};border:1px solid {{ r.sev_color }};background:transparent">{{ r.severity }}</span>
+              <span style="font-size:11px;color:{{ r.status_color }};letter-spacing:0.1em">{{ r.status }}</span>
+              <button class="linkbtn" onclick="apoJump('{{ r.category_slug }}')">{{ r.category }} ↗</button>
+            </div>
+            <div class="ti-name">{{ r.check_name }}</div>
+            <div class="ti-fix"><b>Fix:</b> {{ r.remediation }}</div>
+          </div>
+        </div>
         {% endfor %}
-      </ul>
+      </div>
     </div>
     {% endif %}
-  </section>
 
-  {# ── CATEGORY BREAKDOWN ───────────────────────────────────────── #}
-  <section>
-    <h2 class="section-title">Category Breakdown</h2>
+    <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
+    <div class="toolbar panel">
+      <div class="filters">
+        <button class="fchip f-all"  data-on="true"  data-k="ALL">ALL <span class="fn">{{ total_checks }}</span></button>
+        <button class="fchip f-fail" data-on="false" data-k="FAIL">FAIL <span class="fn">{{ fail_count }}</span></button>
+        <button class="fchip f-warn" data-on="false" data-k="WARN">WARN <span class="fn">{{ warn_count }}</span></button>
+        <button class="fchip f-pass" data-on="false" data-k="PASS">PASS <span class="fn">{{ pass_count }}</span></button>
+        <button class="fchip f-info" data-on="false" data-k="INFO">INFO <span class="fn">{{ info_count }}</span></button>
+      </div>
+      <div class="search"><span class="pr">›</span><input id="apoSearch" placeholder="filter findings…" spellcheck="false"/></div>
+      <div class="tool-right">
+        <button class="linkbtn" id="apoExpand">expand all</button>
+        <button class="linkbtn" id="apoCollapse">collapse</button>
+        <span class="showing" id="apoShowing">{{ total_checks }} / {{ total_checks }} shown</span>
+      </div>
+    </div>
+
+    <!-- ── Category sections ───────────────────────────────────────────── -->
     {% for cat in category_data %}
-    <details class="cat-block"{% if cat.fail_count or cat.warn_count or cat.error_count %} open{% endif %}>
-      <summary class="cat-header">
+    <div class="cat-section" id="cat-{{ cat.slug }}">
+      <div class="cat-bar">
         <span class="cat-name">{{ cat.name }}</span>
         <span class="cat-meta">
-          {% if cat.fail_count %}<span class="badge badge-FAIL">{{ cat.fail_count }} failed</span>{% endif %}
-          {% if cat.warn_count %}<span class="badge badge-WARN">{{ cat.warn_count }} warn</span>{% endif %}
-          <span class="cat-score cat-score-{{ cat.grade }}">{{ cat.score }}/100 &nbsp;{{ cat.grade }}</span>
-          <span class="cat-chevron"></span>
+          <span class="cat-tally">
+            {% if cat.fail %}<span style="color:var(--red)">✗{{ cat.fail }}</span>{% endif %}
+            {% if cat.warn %}<span style="color:var(--amber)">!{{ cat.warn }}</span>{% endif %}
+            {% if cat.pass %}<span style="color:var(--green)">✓{{ cat.pass }}</span>{% endif %}
+            {% if cat.info %}<span style="color:var(--cyan)">i{{ cat.info }}</span>{% endif %}
+          </span>
+          <span class="cat-score" style="color:{{ cat.band }}">{{ cat.score }}/100 {{ cat.grade_letter }}</span>
         </span>
-      </summary>
-      <table class="cat-table">
-        <thead>
-          <tr>
-            <th style="width:6%">Status</th>
-            <th style="width:8%">Severity</th>
-            <th style="width:28%">Check</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in cat.results %}
-          <tr class="row-{{ r.status.value }}">
-            <td><span class="badge badge-{{ r.status.value }}">{{ r.status.value }}</span></td>
-            <td><span class="sev sev-{{ r.severity.value }}">{{ r.severity.value }}</span></td>
-            <td>
-              <div class="check-name">{{ r.check_name }}</div>
-              <div class="check-desc">{{ r.description }}</div>
-            </td>
-            <td>
-              <div class="details-text">{{ r.details }}</div>
-              {% if r.remediation %}
-              <details class="row-detail">
-                <summary>&#9656; Remediation</summary>
-                <div class="rem-block">{{ r.remediation }}</div>
-              </details>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </details>
-    {% endfor %}
-  </section>
-
-  {# ── DETAILED FINDINGS ────────────────────────────────────────── #}
-  {% if fail_warn_results %}
-  <section>
-    <h2 class="section-title">Detailed Findings</h2>
-    {% for r in fail_warn_results %}
-    <div class="finding finding-{{ r.status.value }}">
-      <div class="finding-header">
-        <span class="badge badge-{{ r.status.value }}">{{ r.status.value }}</span>
-        <span class="sev sev-{{ r.severity.value }}">{{ r.severity.value }}</span>
-        <span class="finding-title">{{ r.check_name }}{% if r.cis_reference %}<span class="cis-badge" title="CIS Benchmark reference">{{ r.cis_reference }}</span>{% endif %}</span>
-        <span class="finding-cat">{{ r.category }}</span>
       </div>
-      <div class="finding-body">
-        <div class="finding-field">
-          <dt>Description</dt>
-          <dd>{{ r.description }}</dd>
+      <div class="findings">
+        {% for f in cat.findings %}
+        <div class="frow" data-status="{{ f.status }}" data-text="{{ f.check_name|lower }} {{ f.category|lower }} {{ f.details|lower }} {{ f.cis|lower }}">
+          <button class="fhead">
+            <span class="ficon" style="color:{{ f.status_color }}">{{ f.status_glyph }}</span>
+            <span class="fsev" style="color:{{ f.sev_color }};border:1px solid {{ f.sev_color }};background:transparent">{{ f.severity }}</span>
+            <span class="fname">
+              <b>{{ f.check_name }}</b>
+              {% if f.snippet %}<div class="fsnip">{{ f.snippet }}</div>{% endif %}
+            </span>
+            <span class="fright">
+              {% if f.cis %}<span class="cis">{{ f.cis }}</span>{% endif %}
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">{{ f.description }}</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">{{ f.details }}</span></div>
+            {% if f.remediation %}
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="code">{{ f.remediation }}<button class="copy">copy</button></div></div>
+            {% endif %}
+            {% if f.cis %}<div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">{{ f.cis }}</span></span></div>{% endif %}
+          </div>
         </div>
-        <div class="finding-field">
-          <dt>Finding</dt>
-          <dd>{{ r.details }}</dd>
-        </div>
-        {% if r.remediation %}
-        <div class="finding-field full-width">
-          <dt>Remediation</dt>
-          <dd>{{ r.remediation }}</dd>
-        </div>
-        {% endif %}
+        {% endfor %}
       </div>
     </div>
     {% endfor %}
-  </section>
-  {% endif %}
 
-  {# ── APPENDIX A — SYSTEM INVENTORY ───────────────────────────── #}
-  {% if info_results %}
-  <section>
-    <h2 class="section-title">Appendix A &mdash; System Inventory</h2>
-    <table class="app-table">
-      <thead>
-        <tr>
-          <th>Category</th>
-          <th>Item</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in info_results | sort(attribute='category') %}
-        <tr>
-          <td>{{ r.category }}</td>
-          <td>{{ r.check_name }}</td>
-          <td style="white-space: pre-wrap; word-break: break-word;">{{ r.details }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </section>
-  {% endif %}
-
-  {# ── APPENDIX B — FULL CHECK LIST ─────────────────────────────── #}
-  <section>
-    <h2 class="section-title">Appendix B &mdash; Full Check List</h2>
-    <table class="app-table">
-      <thead>
-        <tr>
-          <th style="width:5%">Status</th>
-          <th style="width:8%">Severity</th>
-          <th style="width:16%">Category</th>
-          <th>Check Name</th>
-          <th style="width:10%">CIS Ref</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in report.results | sort(attribute='category') %}
-        <tr>
-          <td><span class="badge badge-{{ r.status.value }}">{{ r.status.value }}</span></td>
-          <td><span class="sev sev-{{ r.severity.value }}">{{ r.severity.value }}</span></td>
-          <td>{{ r.category }}</td>
-          <td>{{ r.check_name }}</td>
-          <td>{% if r.cis_reference %}<span class="cis-badge">{{ r.cis_reference }}</span>{% endif %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </section>
-
-  {# ── FOOTER ───────────────────────────────────────────────────── #}
-  <footer class="report-footer">
-    <div class="footer-brand">
-      Generated by <strong>Apotrope v{{ version }}</strong>
-      on {{ generated_at }}
+    <!-- ── Footer ──────────────────────────────────────────────────────── -->
+    <div class="foot">
+      <span class="auth">For authorized security assessment use only · <strong style="color:var(--green);font-weight:600;text-shadow:0 0 9px rgba(43,255,136,0.45)">No data left this machine</strong> · CIS Benchmark {{ cis_version }}</span>
+      <span>apotrope.sh · <a href="https://github.com/hexorcist404/apotrope">github.com/hexorcist404/apotrope</a> · MIT</span>
     </div>
-    <div class="footer-disclaimer">
-      This report is for informational purposes only. It does not constitute
-      a complete security assessment. Review all findings with a qualified
-      security professional before taking remediation actions.
-    </div>
-  </footer>
 
-</div>
+  </div>
+
+  <div class="crt-overlay"></div>
+  <div class="crt-vignette"></div>
+
+  <script>{% raw %}
+(function(){
+  var rows = [].slice.call(document.querySelectorAll('.frow'));
+  var chips = [].slice.call(document.querySelectorAll('.fchip'));
+  var search = document.getElementById('apoSearch');
+  var showing = document.getElementById('apoShowing');
+  var active = 'ALL';
+
+  function apply(){
+    var q = (search.value||'').trim().toLowerCase();
+    var shown = 0;
+    rows.forEach(function(row){
+      var okStatus = active === 'ALL' || row.dataset.status === active;
+      var okText = !q || (row.dataset.text||'').indexOf(q) > -1;
+      var vis = okStatus && okText;
+      row.style.display = vis ? '' : 'none';
+      if (vis) shown++;
+    });
+    document.querySelectorAll('.cat-section').forEach(function(sec){
+      var any = [].some.call(sec.querySelectorAll('.frow'), function(r){ return r.style.display !== 'none'; });
+      sec.style.display = any ? '' : 'none';
+    });
+    showing.textContent = shown + ' / ' + rows.length + ' shown';
+  }
+
+  chips.forEach(function(chip){
+    chip.addEventListener('click', function(){
+      active = chip.dataset.k;
+      chips.forEach(function(c){ c.dataset.on = String(c === chip); });
+      apply();
+    });
+  });
+  search.addEventListener('input', apply);
+
+  rows.forEach(function(row){
+    var head = row.querySelector('.fhead'), body = row.querySelector('.fbody');
+    head.addEventListener('click', function(e){
+      if (e.target.closest('.copy')) return;
+      var open = body.hasAttribute('hidden');
+      if (open){ body.removeAttribute('hidden'); head.classList.add('is-open'); }
+      else { body.setAttribute('hidden',''); head.classList.remove('is-open'); }
+    });
+  });
+  document.getElementById('apoExpand').addEventListener('click', function(){
+    rows.forEach(function(r){ if (r.style.display==='none') return;
+      r.querySelector('.fbody').removeAttribute('hidden'); r.querySelector('.fhead').classList.add('is-open'); });
+  });
+  document.getElementById('apoCollapse').addEventListener('click', function(){
+    rows.forEach(function(r){ r.querySelector('.fbody').setAttribute('hidden',''); r.querySelector('.fhead').classList.remove('is-open'); });
+  });
+
+  document.querySelectorAll('.code .copy').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var code = btn.parentNode.textContent.replace(/copy$/, '').trim();
+      if (navigator.clipboard) navigator.clipboard.writeText(code);
+      var t = btn.textContent; btn.textContent = 'copied'; setTimeout(function(){ btn.textContent = t; }, 1300);
+    });
+  });
+
+  window.apoJump = function(slug){
+    var el = document.getElementById('cat-' + slug);
+    if (!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
+  };
+})();
+{% endraw %}</script>
 </body>
 </html>

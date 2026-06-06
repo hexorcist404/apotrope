@@ -92,18 +92,28 @@ class TestGenerateHtmlReport:
         html = self._generate(_make_report())
         assert "1" in html   # 1 PASS, 1 FAIL, 1 WARN, 1 INFO
 
-    def test_category_breakdown_present(self):
+    def test_category_scores_present(self):
         html = self._generate(_make_report())
-        assert "Category Breakdown" in html
+        assert "Category Scores" in html
         assert "Firewall" in html
 
-    def test_detailed_findings_present(self):
+    def test_findings_rendered_server_side(self):
+        """Findings must be in the static HTML (readable with JS disabled)."""
         html = self._generate(_make_report())
-        assert "Detailed Findings" in html
+        assert 'class="findings"' in html
+        assert 'class="frow"' in html
+        # the FAIL finding's status is baked into a filterable data attribute
+        assert 'data-status="FAIL"' in html
 
-    def test_appendix_present(self):
+    def test_filter_toolbar_present(self):
         html = self._generate(_make_report())
-        assert "Appendix" in html
+        assert 'id="apoSearch"' in html
+        assert 'data-k="FAIL"' in html
+
+    def test_info_findings_rendered(self):
+        html = self._generate(_make_report())
+        assert 'data-status="INFO"' in html
+        assert "OS Version" in html  # the INFO check name
 
     def test_no_external_dependencies(self):
         html = self._generate(_make_report())
@@ -124,17 +134,10 @@ class TestGenerateHtmlReport:
         assert "Executive Summary" in html
         assert "TEST-PC" in html  # hostname in summary
 
-    def test_top_findings_callout_present_when_critical(self):
+    def test_top_issues_callout_present_when_critical(self):
         html = self._generate(_make_report())
-        assert "Critical" in html or "High Priority" in html
-
-    def test_info_appendix_present(self):
-        html = self._generate(_make_report())
-        assert "Appendix A" in html
-
-    def test_full_checklist_present(self):
-        html = self._generate(_make_report())
-        assert "Appendix B" in html
+        assert "Top Issues" in html
+        assert "CRITICAL" in html
 
     def test_html_special_chars_escaped(self):
         """Regression: autoescape=True must escape user-controlled fields.

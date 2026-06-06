@@ -102,6 +102,33 @@ def _grade_hex(score: int) -> str:
     return _RED         # F
 
 
+# Colour band shared by the HTML gauge, category bars, and scores.
+_band = _grade_hex
+
+# ── HTML report presentation maps (status glyph/colour, severity colour) ──────
+# Note: the HTML report colours LOW severity cyan (vs muted in the terminal);
+# this mirrors the report spec exactly.
+
+_HTML_STATUS: dict[Status, tuple[str, str]] = {
+    Status.PASS:  ("✓", _GREEN),
+    Status.FAIL:  ("✗", _RED),
+    Status.WARN:  ("!", _AMBER),
+    Status.INFO:  ("i", _CYAN),
+    Status.ERROR: ("?", _MUTED),
+}
+
+_HTML_SEVERITY: dict[Severity, str] = {
+    Severity.CRITICAL: _CRIT,
+    Severity.HIGH:     _RED,
+    Severity.MEDIUM:   _AMBER,
+    Severity.LOW:      _CYAN,
+    Severity.INFO:     _MUTED,
+}
+
+# CIS Benchmark edition the cis_map IDs are verified against (see cis_map.py).
+_CIS_VERSION = "v5.0.0"
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _console_is_unicode(console) -> bool:
@@ -378,11 +405,19 @@ class Reporter:
     # ── Internal rendering helpers ────────────────────────────────────────────
 
     def _build_template_context(self, report: AuditReport) -> dict:
-        """Build the full Jinja2 template variable dict for the HTML report."""
+        """Build the full Jinja2 template variable dict for the HTML report.
+
+        Everything the report needs is computed here (server-side): per-finding
+        presentation, category groupings, the gauge tick ring, the donut arcs,
+        and the prioritised top-issues list. The template only loops and prints.
+        """
+        import math
+        import re
         from collections import defaultdict
 
         letter, label = score_grade(report.score)
         cat_scores = calculate_category_scores(report.results)
+        total = len(report.results)
 
         _sev_ord: dict[Severity, int] = {
             Severity.CRITICAL: 0, Severity.HIGH: 1,
@@ -396,7 +431,31 @@ class Reporter:
         def _sort_key(r: CheckResult) -> tuple[int, int]:
             return (_sta_ord.get(r.status, 5), _sev_ord.get(r.severity, 5))
 
-        # Per-category data (sorted by category name, results by status/severity)
+        def _slug(name: str) -> str:
+            # Mirror the JS: collapse whitespace runs to '-'. Used for ids/anchors.
+            return re.sub(r"\s+", "-", name.strip())
+
+        def _finding_view(r: CheckResult) -> dict:
+            glyph, scolor = _HTML_STATUS.get(r.status, ("?", _MUTED))
+            snippet = ""
+            if r.status in (Status.FAIL, Status.WARN) and r.details:
+                snippet = r.details.split("\n")[0].split(". ")[0]
+            return {
+                "status":       r.status.value,
+                "status_glyph": glyph,
+                "status_color": scolor,
+                "severity":     r.severity.value,
+                "sev_color":    _HTML_SEVERITY.get(r.severity, _MUTED),
+                "category":     r.category,
+                "check_name":   r.check_name,
+                "description":  r.description,
+                "details":      r.details,
+                "remediation":  r.remediation,
+                "cis":          r.cis_reference,
+                "snippet":      snippet,
+            }
+
+        # ── Categories: alphabetical page order; results sorted within ────────
         by_cat: dict[str, list[CheckResult]] = defaultdict(list)
         for r in report.results:
             by_cat[r.category].append(r)
@@ -405,36 +464,81 @@ class Reporter:
         for cat_name in sorted(by_cat):
             cat_results = sorted(by_cat[cat_name], key=_sort_key)
             cs = cat_scores.get(cat_name, 100)
-            cl, clbl = score_grade(cs)
+            cl, _ = score_grade(cs)
             category_data.append({
-                "name":        cat_name,
-                "score":       cs,
-                "grade":       cl,
-                "grade_label": clbl,
-                "results":     cat_results,
-                "fail_count":  sum(1 for r in cat_results if r.status == Status.FAIL),
-                "warn_count":  sum(1 for r in cat_results if r.status == Status.WARN),
-                "pass_count":  sum(1 for r in cat_results if r.status == Status.PASS),
-                "error_count": sum(1 for r in cat_results if r.status == Status.ERROR),
+                "name":         cat_name,
+                "slug":         _slug(cat_name),
+                "score":        cs,
+                "band":         _band(cs),
+                "grade_letter": cl,
+                "fail":         sum(1 for r in cat_results if r.status == Status.FAIL),
+                "warn":         sum(1 for r in cat_results if r.status == Status.WARN),
+                "pass":         sum(1 for r in cat_results if r.status == Status.PASS),
+                "info":         sum(1 for r in cat_results if r.status == Status.INFO),
+                "findings":     [_finding_view(r) for r in cat_results],
             })
 
-        # Top findings: CRITICAL+HIGH FAIL/WARN, up to 5
-        issues = [r for r in report.results if r.status in (Status.FAIL, Status.WARN)]
-        issues.sort(key=lambda r: (_sev_ord.get(r.severity, 5),
-                                   0 if r.status == Status.FAIL else 1))
-        top_findings = [
-            r for r in issues
-            if r.severity in (Severity.CRITICAL, Severity.HIGH)
-        ][:5]
-
-        # All FAIL+WARN for detailed findings section
-        fail_warn_results = sorted(
-            [r for r in report.results if r.status in (Status.FAIL, Status.WARN)],
-            key=_sort_key,
+        # Category-score bars: worst score first.
+        category_bars = sorted(
+            ({"name": c["name"], "slug": c["slug"],
+              "score": c["score"], "band": c["band"]} for c in category_data),
+            key=lambda c: c["score"],
         )
 
-        # INFO results for appendix
-        info_results = [r for r in report.results if r.status == Status.INFO]
+        # ── Top issues: FAIL/WARN with remediation, CRITICAL/HIGH or any FAIL ─
+        candidates = [
+            r for r in report.results
+            if r.status in (Status.FAIL, Status.WARN) and r.remediation
+            and (r.severity in (Severity.CRITICAL, Severity.HIGH)
+                 or r.status == Status.FAIL)
+        ]
+        candidates.sort(key=lambda r: (_sev_ord.get(r.severity, 5),
+                                       0 if r.status == Status.FAIL else 1))
+        top_issues = [
+            {
+                "num":           f"{i + 1:02d}",
+                "severity":      r.severity.value,
+                "sev_color":     _HTML_SEVERITY.get(r.severity, _MUTED),
+                "status":        r.status.value,
+                "status_color":  _HTML_STATUS.get(r.status, ("", _MUTED))[1],
+                "category":      r.category,
+                "category_slug": _slug(r.category),
+                "check_name":    r.check_name,
+                "remediation":   r.remediation,
+            }
+            for i, r in enumerate(candidates[:5])
+        ]
+
+        # ── Score gauge: 40-tick ring + arc dash offset ───────────────────────
+        band = _band(report.score)
+        gauge_ticks = []
+        for i in range(40):
+            on  = (i / 40) <= (report.score / 100)
+            ang = math.radians(-90 + i * 9)
+            gauge_ticks.append({
+                "x1": round(115 + 103 * math.cos(ang), 2),
+                "y1": round(115 + 103 * math.sin(ang), 2),
+                "x2": round(115 + 112 * math.cos(ang), 2),
+                "y2": round(115 + 112 * math.sin(ang), 2),
+                "color":   band if on else "#16241d",
+                "opacity": 0.9 if on else 0.5,
+            })
+        gauge_dashoffset = round(603.2 * (1 - report.score / 100), 2)
+
+        # ── Result-distribution donut (r=52, C≈326.7) ─────────────────────────
+        circ = 2 * math.pi * 52
+        donut, accum = [], 0.0
+        for st, color in ((Status.PASS, _GREEN), (Status.FAIL, _RED),
+                          (Status.WARN, _AMBER), (Status.INFO, _CYAN)):
+            cnt = sum(1 for r in report.results if r.status == st)
+            seg = (cnt / total * circ) if total else 0.0
+            donut.append({
+                "color":  color,
+                "dash":   round(seg, 2),
+                "gap":    round(circ - seg, 2),
+                "offset": round(-accum, 2),
+            })
+            accum += seg
 
         ts = report.scan_timestamp
         generated_at = (
@@ -443,16 +547,32 @@ class Reporter:
         )
 
         return {
-            "report":            report,
-            "version":           __version__,
-            "score_grade":       letter,
-            "score_label":       label,
-            "executive_summary": self._build_executive_summary(report),
-            "category_data":     category_data,
-            "top_findings":      top_findings,
-            "fail_warn_results": fail_warn_results,
-            "info_results":      info_results,
-            "generated_at":      generated_at,
+            "report":             report,
+            "version":            __version__,
+            "hostname":           report.hostname,
+            "os_version":         report.os_version,
+            "scan_timestamp":     generated_at,
+            "scan_duration":      f"{report.scan_duration:.1f}",
+            "score":              report.score,
+            "grade_letter":       letter,
+            "grade_label":        label,
+            "band_color":         band,
+            "total_checks":       total,
+            "pass_count":         report.pass_count,
+            "fail_count":         report.fail_count,
+            "warn_count":         report.warn_count,
+            "info_count":         sum(1 for r in report.results if r.status == Status.INFO),
+            "error_count":        report.error_count,
+            "exec_summary_html":  self._build_executive_summary_html(report),
+            "gauge_ticks":        gauge_ticks,
+            "gauge_dashoffset":   gauge_dashoffset,
+            "donut":              donut,
+            "donut_center":       report.fail_count,
+            "category_data":      category_data,
+            "category_bars":      category_bars,
+            "n_cats":             len(category_data),
+            "top_issues":         top_issues,
+            "cis_version":        _CIS_VERSION,
         }
 
     def _build_executive_summary(self, report: AuditReport) -> str:
@@ -540,6 +660,95 @@ class Reporter:
             )
 
         return "  ".join(parts)
+
+    def _build_executive_summary_html(self, report: AuditReport):
+        """Executive summary as escaped HTML with semantic highlight spans.
+
+        Same narrative as :meth:`_build_executive_summary`, but emits `<b>` for
+        host/grade/areas and `.hl-crit` / `.hl-high` / `.hl-ok` spans. All
+        scan-derived text (the hostname) is HTML-escaped; the markup is ours.
+        """
+        from collections import Counter
+
+        from markupsafe import Markup, escape
+
+        letter, label = score_grade(report.score)
+        total = len(report.results)
+        host  = escape(report.hostname)
+
+        critical_fails = sum(
+            1 for r in report.results
+            if r.status == Status.FAIL and r.severity == Severity.CRITICAL
+        )
+        high_fails = sum(
+            1 for r in report.results
+            if r.status == Status.FAIL and r.severity == Severity.HIGH
+        )
+        issue_cats = Counter(
+            r.category for r in report.results
+            if r.status in (Status.FAIL, Status.WARN)
+        )
+
+        parts: list[str] = [
+            f"The security posture of <b>{host}</b> has been assessed as "
+            f"<b>{label}</b> with an overall score of "
+            f"<b>{report.score}/100 ({letter})</b> across {total} security checks."
+        ]
+
+        if report.fail_count == 0 and report.warn_count == 0:
+            parts.append(
+                '<span class="hl-ok">All checks passed with no failures or '
+                "warnings detected — the system is configured in line with "
+                "Windows security best practices.</span>"
+            )
+            return Markup(" ".join(parts))
+
+        if critical_fails > 0:
+            noun = "finding" if critical_fails == 1 else "findings"
+            verb = "requires" if critical_fails == 1 else "require"
+            parts.append(
+                f'<span class="hl-crit">{critical_fails} critical {noun} '
+                f"{verb} immediate remediation.</span>"
+            )
+        elif high_fails > 0:
+            noun = "finding" if high_fails == 1 else "findings"
+            parts.append(
+                f'<span class="hl-high">{high_fails} high-severity {noun} '
+                "should be addressed promptly.</span>"
+            )
+
+        detail_parts: list[str] = []
+        if report.fail_count > 0:
+            n = report.fail_count
+            detail_parts.append(f"{n} check{'s' if n != 1 else ''} failed")
+        if report.warn_count > 0:
+            n = report.warn_count
+            detail_parts.append(f"{n} check{'s' if n != 1 else ''} issued warnings")
+        if detail_parts:
+            parts.append(f"Of the checks performed, {' and '.join(detail_parts)}.")
+
+        if issue_cats:
+            top_cats = [escape(cat) for cat, _ in issue_cats.most_common(3)]
+            if len(top_cats) == 1:
+                parts.append(f"The primary area of concern is <b>{top_cats[0]}</b>.")
+            else:
+                joined = (", ".join(f"<b>{c}</b>" for c in top_cats[:-1])
+                          + f" and <b>{top_cats[-1]}</b>")
+                parts.append(f"The primary areas of concern are {joined}.")
+
+        parts.append(
+            "Remediation should be prioritized by severity, "
+            "addressing critical and high-severity findings first."
+        )
+
+        if report.error_count:
+            n = report.error_count
+            parts.append(
+                f"Note: {n} check{'s' if n != 1 else ''} could not complete "
+                "— run as Administrator for full results."
+            )
+
+        return Markup(" ".join(parts))
 
     def _make_console(self):
         from rich.console import Console
