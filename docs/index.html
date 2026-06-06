@@ -6,490 +6,533 @@
   <meta name="description" content="Apotrope — portable Windows security posture auditor. Single executable, no cloud, actionable remediation." />
   <meta name="google-site-verification" content="N68F_sJSRaPAUmW1m4vSVKj0BwJBtOEP6m9mwE1SAwA" />
   <title>Apotrope — Windows Security Posture Auditor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg:        #0d1117;
-      --surface:   #161b22;
-      --border:    #30363d;
-      --accent:    #58a6ff;
-      --accent2:   #3fb950;
-      --warn:      #d29922;
-      --danger:    #f85149;
-      --text:      #c9d1d9;
-      --muted:     #8b949e;
-      --heading:   #e6edf3;
-    }
+  :root {
+    --void:#03060a; --bg:#05090c; --panel:#080d11; --panel-2:#0b1218;
+    --line:rgba(0,255,102,0.10); --line-soft:rgba(120,200,170,0.07);
+    --green:#2bff88; --cyan:#44e0e6; --amber:#ffb23d; --red:#ff5147; --crit:#ff2d6b; --orange:#ff7a18;
+    --text:#c4d6cd; --bright:#e8fff2; --muted:#5d776c; --faint:#2f4138;
+    --accent:#2bff88;
+    --maxw:1140px; --r:3px;
+  }
+  html { scroll-behavior:smooth; }
+  body {
+    background:
+      radial-gradient(1100px 640px at 82% -6%, rgba(255,122,24,0.07), transparent 58%),
+      radial-gradient(900px 600px at -6% 2%, rgba(43,255,136,0.06), transparent 55%),
+      var(--bg);
+    color:var(--text); font-family:"IBM Plex Sans",system-ui,sans-serif; font-size:16px;
+    line-height:1.6; min-height:100vh; -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  .mono { font-family:"IBM Plex Mono",monospace; }
+  a { color:var(--accent); text-decoration:none; }
+  ::selection { background:var(--accent); color:#00120a; }
+  ::-webkit-scrollbar { width:11px; height:11px; }
+  ::-webkit-scrollbar-track { background:var(--void); }
+  ::-webkit-scrollbar-thumb { background:#16241d; border:2px solid var(--void); border-radius:6px; }
 
-    html { scroll-behavior: smooth; }
+  /* CRT overlays */
+  .crt-overlay { pointer-events:none; position:fixed; inset:0; z-index:9000;
+    background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0 2px, rgba(0,30,18,0.15) 3px 3px);
+    mix-blend-mode:multiply; }
+  .crt-vignette { pointer-events:none; position:fixed; inset:0; z-index:9001;
+    box-shadow:inset 0 0 240px 40px rgba(0,0,0,0.9); opacity:0.6; }
+  .bin-rain { pointer-events:none; position:fixed; inset:0; z-index:0; overflow:hidden; opacity:0.55; }
+  @keyframes rain { from { transform:translateY(0);} to { transform:translateY(170vh);} }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      font-size: 1rem;
-      line-height: 1.6;
-      min-height: 100vh;
-    }
+  .wrap { max-width:var(--maxw); margin:0 auto; padding:0 26px; position:relative; z-index:1; }
 
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
+  /* labels */
+  .kicker { font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:0.32em;
+            text-transform:uppercase; color:var(--accent); font-weight:600; }
+  .label { font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:0.22em;
+           text-transform:uppercase; color:var(--muted); font-weight:500; }
 
-    /* ── Layout ── */
-    .container { max-width: 860px; margin: 0 auto; padding: 0 1.5rem; }
+  /* cursor + glitch */
+  .cursor { display:inline-block; width:9px; height:1em; background:var(--accent); vertical-align:-1px;
+            margin-left:2px; animation:blink 1.05s steps(2) infinite; }
+  @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
+  .glitch { position:relative; }
+  .glitch[data-txt]::before, .glitch[data-txt]::after {
+    content:attr(data-txt); position:absolute; left:0; top:0; width:100%; pointer-events:none; }
+  .glitch[data-txt]::before { color:var(--cyan); clip-path:inset(0 0 55% 0); mix-blend-mode:screen; animation:gx 4.2s infinite steps(40); }
+  .glitch[data-txt]::after  { color:var(--red);  clip-path:inset(55% 0 0 0); mix-blend-mode:screen; animation:gx 3.1s infinite reverse steps(40); }
+  @keyframes gx { 0%,92%,100%{transform:translate(0,0);} 93%{transform:translate(-2px,1px);} 95%{transform:translate(2px,-1px);} 97%{transform:translate(-1px,0);} }
+  @media (prefers-reduced-motion:reduce){ .glitch::before,.glitch::after{animation:none;} }
 
-    /* ── Nav ── */
-    nav {
-      border-bottom: 1px solid var(--border);
-      padding: 0.9rem 0;
-      position: sticky;
-      top: 0;
-      background: rgba(13, 17, 23, 0.92);
-      backdrop-filter: blur(6px);
-      z-index: 100;
-    }
-    nav .container {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .nav-brand {
-      font-weight: 700;
-      font-size: 1.05rem;
-      color: var(--heading);
-      letter-spacing: 0.02em;
-    }
-    .nav-brand span { color: var(--accent); }
-    nav ul {
-      list-style: none;
-      display: flex;
-      gap: 1.5rem;
-    }
-    nav ul a {
-      color: var(--muted);
-      font-size: 0.9rem;
-      transition: color 0.15s;
-    }
-    nav ul a:hover { color: var(--heading); text-decoration: none; }
+  /* ── Nav ─────────────────────────────────────────────────────────────────── */
+  nav { position:sticky; top:0; z-index:200; border-bottom:1px solid var(--line);
+        background:rgba(5,9,12,0.82); backdrop-filter:blur(9px); }
+  nav .wrap { display:flex; align-items:center; justify-content:space-between; height:62px; }
+  .brand { display:flex; align-items:center; gap:11px; }
+  .brand .dia { color:var(--accent); font-size:18px; filter:drop-shadow(0 0 7px var(--accent)); }
+  .brand .nm { font-family:"IBM Plex Mono",monospace; font-weight:700; font-size:15px; letter-spacing:0.34em;
+               text-transform:uppercase; color:var(--bright); }
+  .nav-links { display:flex; align-items:center; gap:26px; }
+  .nav-links a { font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:0.12em; color:var(--muted);
+                 text-transform:uppercase; transition:color .15s; }
+  .nav-links a:hover, .nav-links a.active { color:var(--bright); }
+  .nav-links a.active { color:var(--accent); }
+  .nav-cta { font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:0.08em; font-weight:600;
+             color:var(--void); background:var(--accent); padding:8px 15px; border-radius:2px;
+             box-shadow:0 0 16px rgba(43,255,136,0.3); transition:transform .12s; white-space:nowrap; }
+  .nav-cta:hover { transform:translateY(-1px); }
+  @media (max-width:760px){ .nav-links { display:none; } }
 
-    /* ── Hero ── */
-    .hero {
-      padding: 5rem 0 4rem;
-      text-align: center;
-    }
-    .hero-badge {
-      display: inline-block;
-      background: rgba(88, 166, 255, 0.1);
-      border: 1px solid rgba(88, 166, 255, 0.3);
-      color: var(--accent);
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 0.3rem 0.8rem;
-      border-radius: 2rem;
-      margin-bottom: 1.4rem;
-    }
-    .hero h1 {
-      font-size: clamp(2.2rem, 5vw, 3.4rem);
-      font-weight: 800;
-      color: var(--heading);
-      letter-spacing: -0.02em;
-      line-height: 1.15;
-      margin-bottom: 1.1rem;
-    }
-    .hero h1 span { color: var(--accent); }
-    .hero p {
-      font-size: 1.15rem;
-      color: var(--muted);
-      max-width: 580px;
-      margin: 0 auto 2.2rem;
-    }
-    .btn-group { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.65rem 1.4rem;
-      border-radius: 6px;
-      font-size: 0.95rem;
-      font-weight: 600;
-      transition: opacity 0.15s, transform 0.1s;
-      cursor: pointer;
-      border: none;
-    }
-    .btn:hover { opacity: 0.85; transform: translateY(-1px); text-decoration: none; }
-    .btn-primary { background: var(--accent); color: #0d1117; }
-    .btn-secondary {
-      background: transparent;
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
+  /* ── Hero ────────────────────────────────────────────────────────────────── */
+  .hero { padding:74px 0 60px; display:grid; grid-template-columns:1fr 1fr; gap:54px; align-items:center; }
+  @media (max-width:920px){ .hero { grid-template-columns:1fr; gap:40px; padding:52px 0 44px; } }
+  .badge { display:inline-flex; align-items:center; gap:9px; font-family:"IBM Plex Mono",monospace;
+           font-size:10.5px; letter-spacing:0.16em; text-transform:uppercase; color:var(--cyan);
+           border:1px solid rgba(68,224,230,0.3); background:rgba(68,224,230,0.05); padding:6px 12px;
+           border-radius:2px; margin-bottom:24px; }
+  .badge .dot { width:6px; height:6px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+  h1 { font-family:"IBM Plex Sans",sans-serif; font-weight:700; font-size:clamp(2.3rem,4.6vw,3.5rem);
+       line-height:1.08; letter-spacing:-0.02em; color:var(--bright); margin-bottom:20px; }
+  h1 .g { color:var(--accent); text-shadow:0 0 26px rgba(43,255,136,0.35); }
+  .lead { font-size:1.06rem; color:var(--text); max-width:520px; margin-bottom:30px; }
+  .cta-row { display:flex; gap:13px; flex-wrap:wrap; align-items:center; }
+  .btn { display:inline-flex; align-items:center; gap:9px; font-family:"IBM Plex Mono",monospace;
+         font-size:13px; font-weight:600; letter-spacing:0.04em; padding:12px 20px; border-radius:2px;
+         transition:transform .12s, box-shadow .2s; cursor:pointer; }
+  .btn-primary { background:var(--accent); color:var(--void); box-shadow:0 0 20px rgba(43,255,136,0.28); }
+  .btn-primary:hover { transform:translateY(-2px); box-shadow:0 0 30px rgba(43,255,136,0.5); }
+  .btn-ghost { border:1px solid var(--line); color:var(--text); }
+  .btn-ghost:hover { border-color:var(--accent); color:var(--bright); }
+  .pip { font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--muted); margin-top:16px;
+         display:flex; align-items:center; gap:8px; }
+  .pip code { color:var(--green); background:var(--void); border:1px solid var(--line); padding:4px 9px; border-radius:2px; }
+  .pip .cp { cursor:pointer; color:var(--muted); border:1px solid var(--line); padding:3px 7px; border-radius:2px;
+             font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase; }
+  .pip .cp:hover { color:var(--accent); border-color:var(--accent); }
 
-    /* ── Score demo strip ── */
-    .score-strip {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.5rem 2rem;
-      margin: 3rem 0;
-      display: flex;
-      align-items: center;
-      gap: 2rem;
-      flex-wrap: wrap;
-    }
-    .score-block { text-align: center; min-width: 80px; }
-    .score-num {
-      font-size: 2.8rem;
-      font-weight: 800;
-      color: var(--accent2);
-      line-height: 1;
-    }
-    .score-label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.2rem; }
-    .score-bar-wrap { flex: 1; min-width: 200px; }
-    .score-bar-label { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; }
-    .score-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-    .score-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); border-radius: 4px; width: 76%; }
-    .score-pills { display: flex; gap: 0.6rem; flex-wrap: wrap; }
-    .pill {
-      font-size: 0.78rem;
-      font-weight: 600;
-      padding: 0.25rem 0.65rem;
-      border-radius: 1rem;
-    }
-    .pill-pass  { background: rgba(63,185,80,.15);  color: var(--accent2); }
-    .pill-fail  { background: rgba(248,81,73,.15);  color: var(--danger); }
-    .pill-warn  { background: rgba(210,153,34,.15); color: var(--warn); }
-    .pill-info  { background: rgba(88,166,255,.15); color: var(--accent); }
+  /* terminal window */
+  .term { background:linear-gradient(180deg, rgba(43,255,136,0.02), transparent 90px), #04080b;
+          border:1px solid var(--line); border-radius:6px; overflow:hidden; position:relative;
+          box-shadow:0 30px 80px -30px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,0,0,0.4); }
+  .term-bar { display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid var(--line);
+              background:rgba(0,0,0,0.3); }
+  .term-bar .tdot { width:11px; height:11px; border-radius:50%; }
+  .term-bar .t1 { background:#ff5f56; } .term-bar .t2 { background:#ffbd2e; } .term-bar .t3 { background:#27c93f; }
+  .term-bar .ttitle { margin-left:10px; font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--muted); letter-spacing:0.06em; }
+  .term-body { padding:16px 18px 18px; font-family:"IBM Plex Mono",monospace; font-size:12.5px; line-height:1.55;
+               white-space:pre; overflow-x:auto; }
+  .term-body .tl { display:block; }
+  .g-prompt { color:var(--cyan); } .g-cmd { color:var(--bright); }
+  .g-green { color:var(--green); } .g-red { color:var(--red); } .g-amber { color:var(--amber); }
+  .g-cyan { color:var(--cyan); } .g-dim { color:var(--muted); } .g-box { color:#16281f; }
+  .g-bigD { color:var(--amber); font-weight:700; }
+  .g-rail { color:var(--accent); } .g-kick { color:var(--accent); letter-spacing:0.12em; }
+  .g-faint { color:var(--faint); } .g-bright { color:var(--bright); }
 
-    /* ── Sections ── */
-    section { padding: 3.5rem 0; border-top: 1px solid var(--border); }
-    section h2 {
-      font-size: 1.6rem;
-      font-weight: 700;
-      color: var(--heading);
-      margin-bottom: 0.4rem;
-    }
-    .section-sub { color: var(--muted); margin-bottom: 2rem; font-size: 0.95rem; }
+  /* ── Trust strip ─────────────────────────────────────────────────────────── */
+  .trust { border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:rgba(0,0,0,0.25); }
+  .trust .wrap { display:flex; flex-wrap:wrap; gap:10px 30px; align-items:center; justify-content:center;
+                 padding:16px 26px; font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:0.06em; }
+  .trust span { color:var(--muted); display:inline-flex; align-items:center; gap:10px; }
+  .trust span::before { content:"◈"; color:var(--accent); font-size:10px; opacity:0.7; }
+  .trust b { color:var(--text); font-weight:500; }
 
-    /* ── Features grid ── */
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1rem;
-    }
-    .feature-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1.2rem 1.3rem;
-      transition: border-color 0.15s;
-    }
-    .feature-card:hover { border-color: var(--accent); }
-    .feature-icon { font-size: 1.4rem; margin-bottom: 0.6rem; }
-    .feature-card h3 { font-size: 0.95rem; font-weight: 600; color: var(--heading); margin-bottom: 0.3rem; }
-    .feature-card p  { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+  /* ── Sections ────────────────────────────────────────────────────────────── */
+  section { padding:84px 0; }
+  .sec-head { margin-bottom:42px; max-width:640px; }
+  .sec-head h2 { font-family:"IBM Plex Sans"; font-weight:700; font-size:clamp(1.7rem,3vw,2.3rem);
+                 color:var(--bright); letter-spacing:-0.01em; margin:12px 0 10px; }
+  .sec-head p { color:var(--muted); font-size:1rem; }
 
-    /* ── Getting started ── */
-    .steps { display: flex; flex-direction: column; gap: 1rem; }
-    .step {
-      display: flex;
-      gap: 1rem;
-      align-items: flex-start;
-    }
-    .step-num {
-      flex-shrink: 0;
-      width: 2rem;
-      height: 2rem;
-      border-radius: 50%;
-      background: rgba(88, 166, 255, 0.15);
-      border: 1px solid rgba(88, 166, 255, 0.3);
-      color: var(--accent);
-      font-weight: 700;
-      font-size: 0.85rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .step-body h3 { font-size: 0.95rem; font-weight: 600; color: var(--heading); margin-bottom: 0.25rem; }
-    .step-body p  { font-size: 0.88rem; color: var(--muted); }
-    pre, code {
-      font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
-    }
-    pre {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.9rem 1.1rem;
-      font-size: 0.87rem;
-      color: var(--accent2);
-      overflow-x: auto;
-      margin-top: 0.5rem;
-    }
+  /* reveal */
+  [data-reveal] { opacity:0; transform:translateY(16px); transition:opacity .6s, transform .6s; }
+  [data-reveal].in { opacity:1; transform:none; }
+  @media (prefers-reduced-motion:reduce){ [data-reveal]{ opacity:1; transform:none; } }
 
-    /* ── Checks table ── */
-    .modules-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-      gap: 0.5rem;
-    }
-    .module-tag {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 0.45rem 0.8rem;
-      font-size: 0.83rem;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-    .module-tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); flex-shrink: 0; }
+  /* features */
+  .feat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  @media (max-width:920px){ .feat-grid { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:560px){ .feat-grid { grid-template-columns:1fr; } }
+  .feat { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:20px 18px;
+          position:relative; transition:border-color .18s, transform .18s; overflow:hidden; }
+  .feat:hover { border-color:rgba(43,255,136,0.35); transform:translateY(-3px); }
+  .feat .idx { font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--accent); letter-spacing:0.1em; }
+  .feat h3 { font-family:"IBM Plex Sans"; font-size:0.98rem; font-weight:600; color:var(--bright); margin:14px 0 8px; }
+  .feat p { font-size:0.86rem; color:var(--muted); line-height:1.55; }
+  .feat::after { content:""; position:absolute; right:-1px; bottom:-1px; width:12px; height:12px;
+    border-right:1px solid var(--accent); border-bottom:1px solid var(--accent); opacity:0; transition:opacity .18s; }
+  .feat:hover::after { opacity:0.6; }
 
-    /* ── Footer ── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 2rem 0;
-      text-align: center;
-      font-size: 0.83rem;
-      color: var(--muted);
-    }
-    footer a { color: var(--muted); }
-    footer a:hover { color: var(--text); }
+  /* checks */
+  .checks-top { display:flex; align-items:baseline; gap:26px; flex-wrap:wrap; margin-bottom:30px; }
+  .bignum { font-family:"IBM Plex Mono",monospace; font-weight:700; font-size:3.4rem; color:var(--accent);
+            line-height:1; text-shadow:0 0 24px rgba(43,255,136,0.3); }
+  .bignum small { display:block; font-size:0.8rem; color:var(--muted); letter-spacing:0.2em; text-transform:uppercase; font-weight:500; margin-top:6px; }
+  .cat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  @media (max-width:880px){ .cat-grid { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:560px){ .cat-grid { grid-template-columns:1fr; } }
+  .cat-card { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:15px 16px;
+              transition:border-color .18s; }
+  .cat-card:hover { border-color:rgba(43,255,136,0.3); }
+  .cat-card .ch { display:flex; align-items:center; justify-content:space-between; margin-bottom:9px; }
+  .cat-card .cn { font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--bright); letter-spacing:0.06em; text-transform:uppercase; }
+  .cat-card .cc { font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--accent); }
+  .cat-card .cl { font-size:0.82rem; color:var(--muted); line-height:1.55; }
 
-    @media (max-width: 600px) {
-      .score-strip { flex-direction: column; align-items: flex-start; gap: 1rem; }
-      nav ul { gap: 1rem; }
-    }
+  /* scoring */
+  .score-wrap { display:grid; grid-template-columns:1.15fr 0.85fr; gap:24px; }
+  @media (max-width:880px){ .score-wrap { grid-template-columns:1fr; } }
+  .score-panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:22px 22px 8px; }
+  .score-panel h3 { font-family:"IBM Plex Mono"; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:16px; }
+  table.dt { width:100%; border-collapse:collapse; font-family:"IBM Plex Mono",monospace; font-size:12.5px; }
+  table.dt th { text-align:left; color:var(--faint); font-weight:500; letter-spacing:0.1em; text-transform:uppercase; font-size:10px; padding:0 0 10px; }
+  table.dt td { padding:8px 0; border-top:1px solid var(--line-soft); color:var(--text); }
+  table.dt td:last-child, table.dt th:last-child { text-align:right; }
+  .ded { font-weight:700; }
+  .grade-scale { display:flex; flex-direction:column; gap:9px; }
+  .grow { display:grid; grid-template-columns:30px 1fr auto; align-items:center; gap:14px;
+          background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:12px 16px; }
+  .gletter { font-family:"IBM Plex Mono"; font-weight:700; font-size:18px; text-align:center; }
+  .grange { font-family:"IBM Plex Mono"; font-size:13px; color:var(--bright); }
+  .glabel { font-family:"IBM Plex Mono"; font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); }
+
+  /* report teaser */
+  .report-cta { background:linear-gradient(180deg, rgba(43,255,136,0.04), transparent), var(--panel);
+                border:1px solid var(--line); border-radius:6px; padding:34px; display:grid;
+                grid-template-columns:1fr auto; gap:30px; align-items:center; position:relative; overflow:hidden; }
+  @media (max-width:760px){ .report-cta { grid-template-columns:1fr; } }
+  .report-cta h3 { font-family:"IBM Plex Sans"; font-size:1.4rem; font-weight:700; color:var(--bright); margin-bottom:10px; }
+  .report-cta p { color:var(--muted); max-width:460px; margin-bottom:18px; font-size:0.95rem; }
+  .mini-score { display:flex; align-items:center; gap:18px; }
+  .mini-ring { width:104px; height:104px; flex-shrink:0; }
+  .mini-meta .mt { font-family:"IBM Plex Mono"; font-size:11px; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; }
+  .mini-pills { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
+  .mp { font-family:"IBM Plex Mono"; font-size:11px; display:flex; gap:8px; }
+
+  /* get started */
+  .steps { display:flex; flex-direction:column; gap:16px; max-width:760px; }
+  .step { display:grid; grid-template-columns:38px 1fr; gap:18px; align-items:start; }
+  .step-n { width:38px; height:38px; border-radius:2px; border:1px solid rgba(43,255,136,0.3);
+            background:rgba(43,255,136,0.06); color:var(--accent); font-family:"IBM Plex Mono"; font-weight:700;
+            display:flex; align-items:center; justify-content:center; font-size:14px; }
+  .step h3 { font-family:"IBM Plex Sans"; font-size:1rem; font-weight:600; color:var(--bright); margin-bottom:5px; }
+  .step p { font-size:0.9rem; color:var(--muted); }
+  .code { font-family:"IBM Plex Mono"; font-size:12.5px; background:#02060a; border:1px solid var(--line);
+          border-left:2px solid var(--accent); border-radius:2px; padding:11px 13px; color:var(--green);
+          margin-top:9px; position:relative; white-space:pre-wrap; }
+  .code .cp { position:absolute; top:7px; right:8px; font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase;
+              color:var(--muted); border:1px solid var(--line); padding:3px 7px; border-radius:2px; background:var(--void); cursor:pointer; }
+  .code .cp:hover { color:var(--accent); border-color:var(--accent); }
+
+  /* footer */
+  footer { border-top:1px solid var(--line); padding:36px 0 48px; }
+  footer .wrap { display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap;
+                 font-family:"IBM Plex Mono"; font-size:12px; color:var(--muted); letter-spacing:0.04em; }
+  footer a { color:var(--muted); border-bottom:1px dashed transparent; }
+  footer a:hover { color:var(--accent); border-bottom-color:var(--accent); }
+  footer .nodata { color:var(--green); font-weight:600; text-shadow:0 0 9px rgba(43,255,136,0.45); }
+  .foot-auth { color:var(--faint); margin-top:10px; font-size:11px; }
   </style>
 </head>
 <body>
+  <div class="bin-rain" id="binRain"></div>
 
-<!-- ── Navigation ── -->
-<nav>
-  <div class="container">
-    <span class="nav-brand">Apo<span>trope</span></span>
-    <ul>
-      <li><a href="#features">Features</a></li>
-      <li><a href="#checks">Checks</a></li>
-      <li><a href="#start">Get Started</a></li>
-      <li><a href="https://github.com/hexorcist404/apotrope">GitHub</a></li>
-    </ul>
-  </div>
-</nav>
-
-<!-- ── Hero ── -->
-<header class="hero">
-  <div class="container">
-    <div class="hero-badge">Open Source &middot; Windows 10 / 11</div>
-    <h1>Security posture auditing<br/>for <span>Windows</span>, offline.</h1>
-    <p>
-      A single executable that scores your Windows security configuration against
-      CIS Benchmark controls and gives you plain-English remediation steps —
-      no cloud, no agent, no license.
-    </p>
-    <p style="font-size:0.9rem; color:var(--muted); margin-bottom:2rem;">
-      <em>apotrope</em> &middot; some charms ward off harm
-    </p>
-    <div class="btn-group">
-      <a class="btn btn-primary" href="https://github.com/hexorcist404/apotrope/releases/latest">
-        &#8659; Download apotrope.exe
+  <!-- ── Nav ─────────────────────────────────────────────────────────────── -->
+  <nav>
+    <div class="wrap">
+      <a class="brand" href="#top">
+        <span class="dia">◈</span>
+        <span class="nm glitch" data-txt="APOTROPE">APOTROPE</span>
       </a>
-      <a class="btn btn-secondary" href="https://github.com/hexorcist404/apotrope">
-        View on GitHub
-      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#checks">Checks</a>
+        <a href="#scoring">Scoring</a>
+        <a href="#report">Report</a>
+        <a href="#start">Get Started</a>
+        <a href="https://github.com/hexorcist404/apotrope">GitHub ↗</a>
+      </div>
+      <a class="nav-cta" href="https://github.com/hexorcist404/apotrope/releases/latest">↓ Download</a>
     </div>
-    <p style="font-size:0.85rem; color:var(--muted); margin-top:1rem;">
-      or, with Python 3.12+: <code>pip install apotrope</code>
-    </p>
+  </nav>
 
-    <!-- Score demo -->
-    <div class="score-strip">
-      <div class="score-block">
-        <div class="score-num">76</div>
-        <div class="score-label">/ 100 &nbsp; C&nbsp;&middot;&nbsp;Fair</div>
-      </div>
-      <div class="score-bar-wrap">
-        <div class="score-bar-label">
-          <span>Security Score</span>
-          <span>53 checks &middot; 22s</span>
+  <!-- ── Hero ────────────────────────────────────────────────────────────── -->
+  <header id="top">
+    <div class="wrap hero">
+      <div data-reveal>
+        <span class="badge"><span class="dot"></span>Open source · Windows 10/11 · Offline</span>
+        <h1>Security posture auditing for Windows, <span class="g">entirely offline.</span></h1>
+        <p class="lead">
+          A single executable that scores your Windows security configuration against
+          CIS Benchmark controls and gives you plain-English remediation steps —
+          no cloud, no agent, no license.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/hexorcist404/apotrope/releases/latest">↓ Download apotrope.exe</a>
+          <a class="btn btn-ghost" href="https://github.com/hexorcist404/apotrope">View on GitHub ↗</a>
         </div>
-        <div class="score-bar"><div class="score-bar-fill"></div></div>
-        <div class="score-pills" style="margin-top:0.7rem;">
-          <span class="pill pill-pass">&#10003; 35 passed</span>
-          <span class="pill pill-fail">&#215; 3 failed</span>
-          <span class="pill pill-warn">&#33; 2 warnings</span>
-          <span class="pill pill-info">i 13 info</span>
+        <div class="pip">
+          or with Python 3.12+: <code>pip install apotrope</code>
+          <button class="cp" data-copy="pip install apotrope">copy</button>
         </div>
       </div>
+
+      <div data-reveal>
+        <div class="term">
+    <div class="term-bar">
+      <span class="tdot t1"></span><span class="tdot t2"></span><span class="tdot t3"></span>
+      <span class="ttitle">Administrator: Windows Terminal</span>
+    </div>
+    <div class="term-body" id="scanTerm"><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="g-cmd">apotrope.exe --html report.html</span></span><span class="tl"> </span><span class="tl">  <span class="g-green">◈ APOTROPE</span>  <span class="g-dim">v0.1.5</span></span><span class="tl">  <span class="g-dim">Windows Security Posture Auditor</span></span><span class="tl"> </span><span class="tl" data-pause="650">  <span class="g-dim">scanning 56 controls </span><span class="g-cyan">[████████████████████]</span> <span class="g-dim">done · 21.7s</span></span><span class="tl"> </span><span class="tl">  <span class="g-rail">▌</span> <span class="g-kick">SECURITY SCORE</span>                <span class="g-dim">WORKSTATION-07</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-dim">Windows 11 Pro 23H2 · CORP.local</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl" data-pause="320">  <span class="g-rail">▌</span> <span class="g-bigD">69 / 100</span>   <span class="g-amber">D · POOR</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-amber">█████████████████</span><span class="g-box">░░░░░░░</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-green">✓ 35 pass</span>   <span class="g-red">✗ 3 fail</span>   <span class="g-amber">! 4 warn</span>   <span class="g-cyan">i 14 info</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-faint">56 checks evaluated</span></span><span class="tl"> </span><span class="tl" data-pause="280">  <span class="g-red">⚑ TOP FAILURES</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-red">HIGH </span>Public inbound = Allow     <span class="g-faint">CIS 9.3.2</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>SMB signing not required   <span class="g-faint">CIS 2.3.8.1</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>Script-block logging off   <span class="g-faint">CIS 18.9.95.1</span></span><span class="tl"> </span><span class="tl" data-pause="320">  <span class="g-green">→ report.html written</span> <span class="g-dim">· open to triage all 7 issues</span></span><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="cursor"></span></span></div>
+  </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Trust strip ─────────────────────────────────────────────────────── -->
+  <div class="trust">
+    <div class="wrap">
+      <span><b>No cloud</b></span>
+      <span><b>No agent</b></span>
+      <span><b>No telemetry</b></span>
+      <span><b>No license key</b></span>
+      <span><b>Single executable</b></span>
+      <span><b>Read-only</b></span>
     </div>
   </div>
-</header>
 
-<!-- ── Features ── -->
-<section id="features">
-  <div class="container">
-    <h2>Features</h2>
-    <p class="section-sub">Everything you need for a fast, credible security assessment.</p>
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">&#127959;</div>
-        <h3>Single Executable</h3>
-        <p>Drop <code>apotrope.exe</code> on a USB drive and run it on any Windows machine. No installation, no Python, no dependencies.</p>
+  <!-- ── Features ────────────────────────────────────────────────────────── -->
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <span class="kicker">// Features</span>
+        <h2>Everything you need for a fast, credible assessment.</h2>
+        <p>No setup, no accounts, no data leaving the machine — just an honest read on the box in front of you.</p>
       </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#128274;</div>
-        <h3>Fully Offline</h3>
-        <p>No data leaves the machine. No telemetry, no cloud APIs, no license servers — your audit data stays yours.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#128203;</div>
-        <h3>CIS Benchmark Mapping</h3>
-        <p>Every finding is annotated with the corresponding CIS Benchmark control ID — v5.0.0 for Windows 11, v4.0.0 for Windows 10 — detected automatically at scan time.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#128200;</div>
-        <h3>Scored &amp; Graded</h3>
-        <p>A 0–100 security score with letter grade gives you an at-a-glance picture of the system's risk posture.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#128196;</div>
-        <h3>HTML &amp; JSON Reports</h3>
-        <p>Export a self-contained HTML report for stakeholders or a structured JSON report for pipeline integration.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#128260;</div>
-        <h3>Comparative Scanning</h3>
-        <p>Save a baseline and diff against it later to track remediation progress over time with <code>--baseline</code> and <code>--compare</code>.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#9881;</div>
-        <h3>Custom Profiles</h3>
-        <p>A <code>apotrope.toml</code> config lets you disable checks, override severities, and tune thresholds for your environment.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#128295;</div>
-        <h3>Actionable Remediation</h3>
-        <p>Every failing check includes a concrete fix command or Group Policy path — not just a problem description.</p>
+      <div class="feat-grid">
+        <div class="feat" data-reveal>
+          <span class="idx">01</span>
+          <h3>Single Executable</h3>
+          <p>Drop <span class="mono">apotrope.exe</span> on a USB stick and run it on any Windows machine. No install, no Python, no dependencies.</p>
+        </div>
+        <div class="feat" data-reveal>
+          <span class="idx">02</span>
+          <h3>Fully Offline</h3>
+          <p>No data leaves the machine. No telemetry, no cloud APIs, no license servers — your audit data stays yours.</p>
+        </div>
+        <div class="feat" data-reveal>
+          <span class="idx">03</span>
+          <h3>CIS Benchmark Mapping</h3>
+          <p>Every finding is annotated with its CIS Benchmark control ID — v5.0.0 for Windows 11, v4.0.0 for Windows 10 — detected automatically at scan time.</p>
+        </div>
+        <div class="feat" data-reveal>
+          <span class="idx">04</span>
+          <h3>Scored &amp; Graded</h3>
+          <p>A 0–100 security score with an A–F letter grade gives you an at-a-glance read on the system's risk posture.</p>
+        </div>
+        <div class="feat" data-reveal>
+          <span class="idx">05</span>
+          <h3>HTML &amp; JSON Reports</h3>
+          <p>Export a self-contained HTML report for stakeholders or a structured JSON report for pipeline integration.</p>
+        </div>
+        <div class="feat" data-reveal>
+          <span class="idx">06</span>
+          <h3>Comparative Scanning</h3>
+          <p>Save a baseline and diff against it later to track remediation progress with <span class="mono">--baseline</span> and <span class="mono">--compare</span>.</p>
+        </div>
+        <div class="feat" data-reveal>
+          <span class="idx">07</span>
+          <h3>Custom Profiles</h3>
+          <p>An <span class="mono">apotrope.toml</span> profile lets you disable checks, override severities, and tune thresholds for your environment.</p>
+        </div>
+        <div class="feat" data-reveal>
+          <span class="idx">08</span>
+          <h3>Actionable Remediation</h3>
+          <p>Every failing check ships a concrete fix command or Group Policy path — not just a description of the problem.</p>
+        </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ── Check modules ── -->
-<section id="checks">
-  <div class="container">
-    <h2>14 Check Modules</h2>
-    <p class="section-sub">Covers the most impactful Windows security controls out of the box.</p>
-    <div class="modules-grid">
-      <div class="module-tag">Access Control (UAC)</div>
-      <div class="module-tag">Local Accounts</div>
-      <div class="module-tag">Password Policy</div>
-      <div class="module-tag">Windows Defender</div>
-      <div class="module-tag">Tamper Protection</div>
-      <div class="module-tag">BitLocker (per drive)</div>
-      <div class="module-tag">Firewall Profiles</div>
-      <div class="module-tag">SMB v1 / Signing</div>
-      <div class="module-tag">RDP &amp; NLA</div>
-      <div class="module-tag">Windows Updates</div>
-      <div class="module-tag">Startup Programs</div>
-      <div class="module-tag">Risky Services</div>
-      <div class="module-tag">PowerShell Logging</div>
-      <div class="module-tag">Network Hardening</div>
+  <!-- ── Checks ──────────────────────────────────────────────────────────── -->
+  <section id="checks">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <span class="kicker">// Checks</span>
+        <h2>One scan, the controls that actually move risk.</h2>
+        <p>Fourteen categories of Windows security posture, mapped to CIS and scored by severity.</p>
+      </div>
+      <div class="checks-top" data-reveal>
+        <div class="bignum">55+<small>Checks</small></div>
+        <div class="bignum">14<small>Categories</small></div>
+        <div class="bignum">~22s<small>Per scan</small></div>
+      </div>
+      <div class="cat-grid">
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Access Control</span><span class="cc">4 checks</span></div><div class="cl">UAC elevation prompts, admin approval mode, secure desktop.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Accounts</span><span class="cc">6 checks</span></div><div class="cl">Local accounts, guest status, password &amp; lockout policy.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Antivirus</span><span class="cc">4 checks</span></div><div class="cl">Defender real-time protection, signature age, tamper protection.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Encryption</span><span class="cc">2 checks</span></div><div class="cl">BitLocker drive encryption status, per volume.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">File Sharing</span><span class="cc">4 checks</span></div><div class="cl">SMB signing, legacy SMBv1, and exposed shares.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Firewall</span><span class="cc">6 checks</span></div><div class="cl">Domain, private &amp; public profile state and inbound posture.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Hardening</span><span class="cc">5 checks</span></div><div class="cl">LSA protection, autorun, and miscellaneous OS hardening.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Network</span><span class="cc">4 checks</span></div><div class="cl">Protocol hardening, discovery, and exposure reduction.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Patching</span><span class="cc">3 checks</span></div><div class="cl">Windows Update health, pending updates &amp; reboots.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Persistence</span><span class="cc">2 checks</span></div><div class="cl">Startup programs and autorun entries.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">PowerShell</span><span class="cc">5 checks</span></div><div class="cl">Script-block / module logging and execution policy.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Remote Access</span><span class="cc">3 checks</span></div><div class="cl">RDP exposure and Network Level Authentication.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Services</span><span class="cc">2 checks</span></div><div class="cl">Risky or unnecessary running services.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">System</span><span class="cc">6 checks</span></div><div class="cl">OS edition, build number, and support lifecycle.</div></div>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ── Getting started ── -->
-<section id="start">
-  <div class="container">
-    <h2>Get Started</h2>
-    <p class="section-sub">Up and running in under a minute.</p>
-
-    <p style="text-align:center; font-size:0.95rem; color:var(--muted); margin-bottom:2rem;">
-      Have Python 3.12+? Install from PyPI instead &mdash;
-      <code>pip install apotrope</code>, then run <code>apotrope</code>.
-      The steps below are for the standalone <code>apotrope.exe</code> (no Python required).
-    </p>
-
-    <div class="steps">
-
-      <div class="step">
-        <div class="step-num">1</div>
-        <div class="step-body">
-          <h3>Download the executable</h3>
-          <p>Grab <code>apotrope.exe</code> from the <a href="https://github.com/hexorcist404/apotrope/releases/latest">latest release</a> and save it somewhere easy to find — your Desktop or Downloads folder works fine.</p>
+  <!-- ── Scoring ─────────────────────────────────────────────────────────── -->
+  <section id="scoring">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <span class="kicker">// Scoring</span>
+        <h2>A transparent score you can reason about.</h2>
+        <p>Start at 100. Each failing or warning check deducts points weighted by severity. The total maps to a letter grade.</p>
+      </div>
+      <div class="score-wrap">
+        <div class="score-panel" data-reveal>
+          <h3>Point deductions</h3>
+          <table class="dt">
+            <thead><tr><th>Severity</th><th>Fail</th><th>Warn</th></tr></thead>
+            <tbody>
+              <tr><td style="color:var(--crit)">Critical</td><td class="ded" style="color:var(--red)">−15</td><td class="ded" style="color:var(--amber)">−7</td></tr>
+              <tr><td style="color:var(--red)">High</td><td class="ded" style="color:var(--red)">−10</td><td class="ded" style="color:var(--amber)">−5</td></tr>
+              <tr><td style="color:var(--amber)">Medium</td><td class="ded" style="color:var(--red)">−5</td><td class="ded" style="color:var(--amber)">−2</td></tr>
+              <tr><td style="color:var(--cyan)">Low</td><td class="ded" style="color:var(--red)">−2</td><td class="ded" style="color:var(--amber)">−1</td></tr>
+              <tr><td style="color:var(--muted)">Info</td><td class="ded" style="color:var(--muted)">0</td><td class="ded" style="color:var(--muted)">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="grade-scale" data-reveal>
+          <div class="grow"><span class="gletter" style="color:var(--green)">A</span><span class="grange">90 – 100</span><span class="glabel">Excellent</span></div>
+          <div class="grow"><span class="gletter" style="color:var(--green)">B</span><span class="grange">80 – 89</span><span class="glabel">Good</span></div>
+          <div class="grow"><span class="gletter" style="color:var(--amber)">C</span><span class="grange">70 – 79</span><span class="glabel">Fair</span></div>
+          <div class="grow"><span class="gletter" style="color:var(--amber)">D</span><span class="grange">60 – 69</span><span class="glabel">Poor</span></div>
+          <div class="grow"><span class="gletter" style="color:var(--red)">F</span><span class="grange">0 – 59</span><span class="glabel">Critical</span></div>
         </div>
       </div>
+    </div>
+  </section>
 
-      <div class="step">
-        <div class="step-num">2</div>
-        <div class="step-body">
-          <h3>Open an Administrator terminal</h3>
-          <p>Right-click Command Prompt or PowerShell &rarr; <em>Run as administrator</em>. Some checks (BitLocker, local accounts, services) require elevation for full results.</p>
+  <!-- ── Report teaser ───────────────────────────────────────────────────── -->
+  <section id="report">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <span class="kicker">// Report</span>
+        <h2>A report you can email to someone who wasn't in the room.</h2>
+        <p>One self-contained HTML file — gauge, prioritised findings, CIS mappings, remediation — that opens in any browser with no server and no network.</p>
+      </div>
+      <div class="report-cta" data-reveal>
+        <div>
+          <h3>See the full sample report.</h3>
+          <p>Filterable findings, copy-ready fixes, and a score you can defend. Generated entirely on the audited machine.</p>
+          <a class="btn btn-primary" href="report.html">Open live sample report →</a>
+        </div>
+        <div class="mini-score">
+          <svg class="mini-ring" viewBox="0 0 104 104">
+            <circle cx="52" cy="52" r="46" fill="none" stroke="#0c1610" stroke-width="7"/>
+            <circle cx="52" cy="52" r="46" fill="none" stroke="var(--amber)" stroke-width="7" stroke-linecap="round"
+              stroke-dasharray="289.0" stroke-dashoffset="89.6" transform="rotate(-90 52 52)"
+              style="filter:drop-shadow(0 0 6px var(--amber))"/>
+            <text x="52" y="50" text-anchor="middle" fill="var(--amber)" font-family="IBM Plex Mono,monospace" font-size="26" font-weight="700">69</text>
+            <text x="52" y="66" text-anchor="middle" fill="var(--muted)" font-family="IBM Plex Mono,monospace" font-size="9" letter-spacing="1.4">D · POOR</text>
+          </svg>
+          <div class="mini-meta">
+            <div class="mt">Result mix</div>
+            <div class="mini-pills">
+              <span class="mp" style="color:var(--green)">✓ 35 pass</span>
+              <span class="mp" style="color:var(--red)">✗ 3 fail</span>
+              <span class="mp" style="color:var(--amber)">! 4 warn</span>
+              <span class="mp" style="color:var(--cyan)">i 14 info</span>
+            </div>
+          </div>
         </div>
       </div>
+    </div>
+  </section>
 
-      <div class="step">
-        <div class="step-num">3</div>
-        <div class="step-body">
-          <h3>Navigate to the folder where you saved the file</h3>
-          <p>For example, if you saved it in Downloads:</p>
-          <pre>cd %USERPROFILE%\Downloads</pre>
-          <p style="margin-top:0.4rem; font-size:0.85rem; color:var(--muted);">Tip: in File Explorer, navigate to the folder, then type <code>cmd</code> in the address bar and press Enter to open a terminal there directly.</p>
-        </div>
+  <!-- ── Get started ─────────────────────────────────────────────────────── -->
+  <section id="start">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <span class="kicker">// Get Started</span>
+        <h2>Up and running in under a minute.</h2>
+        <p>Standalone <span class="mono">apotrope.exe</span> below — no Python required. Have Python 3.12+? <span class="mono">pip install apotrope</span> and run <span class="mono">apotrope</span> instead.</p>
       </div>
-
-      <div class="step">
-        <div class="step-num">4</div>
-        <div class="step-body">
-          <h3>Run a scan</h3>
-          <pre>apotrope.exe</pre>
+      <div class="steps">
+        <div class="step" data-reveal>
+          <div class="step-n">1</div>
+          <div>
+            <h3>Download the executable</h3>
+            <p>Grab <span class="mono">apotrope.exe</span> from the <a href="https://github.com/hexorcist404/apotrope/releases/latest">latest release</a> and save it somewhere easy to find — Desktop or Downloads works fine.</p>
+          </div>
         </div>
-      </div>
-
-      <div class="step">
-        <div class="step-num">5</div>
-        <div class="step-body">
-          <h3>Generate an HTML report (optional)</h3>
-          <pre>apotrope.exe --html report.html --verbose</pre>
-          <p style="margin-top:0.4rem; font-size:0.85rem; color:var(--muted);">Opens as a standalone file in any browser — no server required.</p>
+        <div class="step" data-reveal>
+          <div class="step-n">2</div>
+          <div>
+            <h3>Open an Administrator terminal</h3>
+            <p>Right-click PowerShell or Command Prompt → <em>Run as administrator</em>. Some checks (BitLocker, local accounts, services) need elevation for full results.</p>
+          </div>
         </div>
-      </div>
-
-      <div class="step">
-        <div class="step-num">6</div>
-        <div class="step-body">
-          <h3>Track changes over time</h3>
-          <pre>apotrope.exe --baseline before.json
+        <div class="step" data-reveal>
+          <div class="step-n">3</div>
+          <div>
+            <h3>Go to the folder you saved it in</h3>
+            <div class="code">cd %USERPROFILE%\Downloads<button class="cp" data-copy="cd %USERPROFILE%\Downloads">copy</button></div>
+          </div>
+        </div>
+        <div class="step" data-reveal>
+          <div class="step-n">4</div>
+          <div>
+            <h3>Run a scan</h3>
+            <div class="code">apotrope.exe<button class="cp" data-copy="apotrope.exe">copy</button></div>
+          </div>
+        </div>
+        <div class="step" data-reveal>
+          <div class="step-n">5</div>
+          <div>
+            <h3>Generate an HTML report</h3>
+            <div class="code">apotrope.exe --html report.html --verbose<button class="cp" data-copy="apotrope.exe --html report.html --verbose">copy</button></div>
+            <p style="margin-top:8px">Opens as a standalone file in any browser — no server required.</p>
+          </div>
+        </div>
+        <div class="step" data-reveal>
+          <div class="step-n">6</div>
+          <div>
+            <h3>Track changes over time</h3>
+            <div class="code">apotrope.exe --baseline before.json
 # ... remediate findings ...
-apotrope.exe --compare before.json</pre>
+apotrope.exe --compare before.json<button class="cp" data-copy="apotrope.exe --baseline before.json">copy</button></div>
+          </div>
         </div>
       </div>
-
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ── Footer ── -->
-<footer>
-  <div class="container">
-    <p>
-      Apotrope is open source software released under the
-      <a href="https://github.com/hexorcist404/apotrope/blob/main/LICENSE">MIT License</a>.
-      &nbsp;&middot;&nbsp;
-      <a href="https://github.com/hexorcist404/apotrope">GitHub</a>
-      &nbsp;&middot;&nbsp;
-      <a href="https://github.com/hexorcist404/apotrope/releases">Releases</a>
-      &nbsp;&middot;&nbsp;
-      <a href="https://github.com/hexorcist404/apotrope/issues">Issues</a>
-    </p>
-    <p style="margin-top:0.5rem; color:#484f58;">
-      For authorized security assessment use only.
-    </p>
-  </div>
-</footer>
+  <!-- ── Footer ──────────────────────────────────────────────────────────── -->
+  <footer>
+    <div class="wrap">
+      <div>
+        <div>
+          Released under the <a href="https://github.com/hexorcist404/apotrope/blob/main/LICENSE">MIT License</a>
+          · <a href="https://github.com/hexorcist404/apotrope">GitHub</a>
+          · <a href="https://github.com/hexorcist404/apotrope/releases">Releases</a>
+          · <a href="https://github.com/hexorcist404/apotrope/issues">Issues</a>
+        </div>
+        <div class="foot-auth">For authorized security assessment use only · <span class="nodata">No data left this machine</span></div>
+      </div>
+      <div>◈ apotrope.sh</div>
+    </div>
+  </footer>
 
+  <div class="crt-overlay"></div>
+  <div class="crt-vignette"></div>
+  <script src="site.js"></script>
 </body>
 </html>

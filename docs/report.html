@@ -1,0 +1,2155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Apotrope — Security Posture Report · WORKSTATION-07</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    /* near-black, faint blue-green */
+    --void:      #03060a;
+    --bg:        #05090c;
+    --panel:     #080d11;
+    --panel-2:   #0b1218;
+    --line:      rgba(0, 255, 102, 0.10);
+    --line-soft: rgba(120, 200, 170, 0.07);
+
+    /* status / semantic */
+    --green:  #2bff88;   /* PASS / good     */
+    --cyan:   #44e0e6;   /* INFO            */
+    --amber:  #ffb23d;   /* WARN / fair     */
+    --red:    #ff5147;   /* FAIL            */
+    --crit:   #ff2d6b;   /* CRITICAL        */
+    --orange: #ff7a18;   /* decorative glow */
+
+    --text:   #c4d6cd;
+    --bright: #e8fff2;
+    --muted:  #5d776c;
+    --faint:  #2f4138;
+
+    /* accent (tweakable) — defaults to terminal green */
+    --accent: #2bff88;
+    --accent-dim: rgba(43, 255, 136, 0.14);
+
+    /* offline font stacks — no Google Fonts, no embedding required */
+    --mono: "IBM Plex Mono","Cascadia Code","Consolas",ui-monospace,monospace;
+    --sans: "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+
+    --r: 3px;
+    --gap: 22px;
+    --pad: 22px;
+    --maxw: 1180px;
+
+    --glitch: 1;       /* 0..1 scanline/glow intensity */
+    --row-pad: 13px;   /* density */
+    --fs: 15px;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(255, 122, 24, 0.07), transparent 60%),
+      radial-gradient(900px 600px at -5% 4%, rgba(43, 255, 136, 0.05), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: var(--fs);
+    line-height: 1.55;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ── CRT / scanline overlay ────────────────────────────────────────────── */
+  .crt-overlay {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 9000;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0, 30, 18, calc(0.16 * var(--glitch))) 3px,
+      rgba(0, 30, 18, calc(0.16 * var(--glitch))) 3px
+    );
+    mix-blend-mode: multiply;
+    opacity: var(--glitch);
+  }
+  .crt-vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 9001;
+    box-shadow: inset 0 0 240px 40px rgba(0,0,0,0.9);
+    opacity: calc(0.7 * var(--glitch));
+  }
+  .crt-flicker {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 8999;
+    background: rgba(43,255,136,0.012);
+    animation: flicker 7s infinite steps(60);
+    opacity: var(--glitch);
+  }
+  @keyframes flicker {
+    0%,100%{opacity:calc(0.5*var(--glitch));} 3%{opacity:calc(0.2*var(--glitch));}
+    6%{opacity:calc(0.6*var(--glitch));} 9%{opacity:calc(0.3*var(--glitch));}
+    50%{opacity:calc(0.55*var(--glitch));} 53%{opacity:calc(0.25*var(--glitch));}
+  }
+  @media (prefers-reduced-motion: reduce) { .crt-flicker { animation: none; } }
+
+  /* faint binary rain behind everything */
+  .bin-rain {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 0;
+    overflow: hidden;
+    opacity: calc(0.5 * var(--glitch));
+  }
+
+  /* ── Layout ─────────────────────────────────────────────────────────────── */
+  .wrap { position: relative; z-index: 1; max-width: var(--maxw); margin: 0 auto; padding: 0 24px 120px; }
+
+  ::selection { background: var(--accent); color: #00120a; }
+
+  a { color: var(--accent); text-decoration: none; }
+
+  /* ── Scrollbar ──────────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: var(--void); }
+  ::-webkit-scrollbar-thumb { background: #16241d; border: 2px solid var(--void); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: #1d3329; }
+
+  /* ── Panel primitive ────────────────────────────────────────────────────── */
+  .panel {
+    background:
+      linear-gradient(180deg, rgba(43,255,136,0.018), transparent 120px),
+      var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    position: relative;
+  }
+  .panel::before {
+    /* corner ticks */
+    content: "";
+    position: absolute; top: -1px; left: -1px;
+    width: 12px; height: 12px;
+    border-top: 1px solid var(--accent); border-left: 1px solid var(--accent);
+    opacity: 0.55;
+  }
+  .panel::after {
+    content: "";
+    position: absolute; bottom: -1px; right: -1px;
+    width: 12px; height: 12px;
+    border-bottom: 1px solid var(--accent); border-right: 1px solid var(--accent);
+    opacity: 0.55;
+  }
+
+  .mono { font-family: var(--mono); }
+  .sans { font-family: var(--sans); }
+
+  .label {
+    font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500;
+  }
+  .kicker {
+    font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600;
+  }
+
+  /* blinking cursor */
+  .cursor { display:inline-block; width:9px; height:1.05em; background: var(--accent);
+            vertical-align: -2px; margin-left: 3px; animation: blink 1.05s steps(2) infinite; }
+  @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
+
+  /* focus rings */
+  button, input, select { font-family: inherit; color: inherit; }
+  button { cursor: pointer; background: none; border: none; }
+  input:focus-visible, button:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+
+  /* ── Header ─────────────────────────────────────────────────────────────── */
+  .topbar { display:flex; align-items:center; justify-content:space-between; gap:24px;
+            padding:20px 0 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .brand { display:flex; align-items:center; gap:13px; }
+  .brand .diamond { color:var(--accent); font-size:22px; filter:drop-shadow(0 0 7px var(--accent)); }
+  .brand .name { font-size:19px; font-weight:700; letter-spacing:0.42em; color:var(--bright);
+                 text-transform:uppercase; }
+  .brand .ver { font-size:10.5px; color:var(--muted); letter-spacing:0.12em; align-self:flex-end; padding-bottom:3px; }
+  .topbar-meta { display:flex; gap:26px; flex-wrap:wrap; align-items:center; }
+  .meta-item { display:flex; flex-direction:column; gap:2px; }
+  .meta-item .v { color:var(--text); font-size:13px; }
+  .meta-item .v b { color:var(--bright); font-weight:600; }
+  .ro-tag { display:inline-flex; align-items:center; gap:7px; font-size:10px; letter-spacing:0.18em;
+            text-transform:uppercase; color:var(--cyan); border:1px solid rgba(68,224,230,0.3);
+            background:rgba(68,224,230,0.06); padding:5px 10px; border-radius:2px; white-space:nowrap; }
+  .ro-tag .dot { width:6px; height:6px; border-radius:50%; background:var(--cyan); box-shadow:0 0 7px var(--cyan); }
+
+  /* hero grid */
+  .hero { display:grid; grid-template-columns: 320px 1fr; gap:var(--gap); margin-top:var(--gap); align-items:start; }
+  @media (max-width: 880px){ .hero { grid-template-columns: 1fr; } }
+
+  .gauge-panel { padding:26px 20px 22px; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .gauge-wrap { position:relative; width:230px; height:230px; }
+  .gauge-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .gauge-score { font-size:64px; font-weight:700; line-height:0.9; letter-spacing:-0.02em; }
+  .gauge-of { font-size:12px; color:var(--muted); letter-spacing:0.18em; margin-top:4px; }
+  .gauge-grade { margin-top:9px; display:flex; align-items:center; gap:8px; }
+  .grade-chip { font-size:15px; font-weight:700; padding:2px 10px; border-radius:2px; letter-spacing:0.05em; }
+  .grade-label { font-size:11px; letter-spacing:0.24em; text-transform:uppercase; color:var(--muted); }
+  .gauge-cat { font-size:10.5px; color:var(--faint); letter-spacing:0.2em; text-transform:uppercase; margin-top:6px; }
+
+  /* right column */
+  .hero-right { display:flex; flex-direction:column; gap:var(--gap); }
+  .summary-panel { padding:18px 20px 20px; flex:1; }
+  .summary-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .summary-body { font-size:13.5px; line-height:1.72; color:var(--text); }
+  .summary-body .hl-crit { color:var(--crit); font-weight:600; }
+  .summary-body .hl-high { color:var(--red); font-weight:600; }
+  .summary-body .hl-ok { color:var(--green); font-weight:600; }
+
+  .stat-strip { display:grid; grid-template-columns: 1.1fr 1fr; gap:var(--gap); }
+  @media (max-width: 560px){ .stat-strip { grid-template-columns:1fr; } }
+  .donut-panel, .bars-panel { padding:16px 18px 18px; }
+  .panel-h { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+
+  /* count pills */
+  .pills { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:500;
+          padding:5px 11px; border-radius:2px; border:1px solid transparent; letter-spacing:0.02em; }
+  .pill .n { font-weight:700; font-variant-numeric: tabular-nums; }
+  .pill-pass { color:var(--green); border-color:rgba(43,255,136,0.28); background:rgba(43,255,136,0.06); }
+  .pill-fail { color:var(--red);   border-color:rgba(255,81,71,0.3);  background:rgba(255,81,71,0.07); }
+  .pill-warn { color:var(--amber); border-color:rgba(255,178,61,0.3); background:rgba(255,178,61,0.06); }
+  .pill-info { color:var(--cyan);  border-color:rgba(68,224,230,0.28);background:rgba(68,224,230,0.05); }
+
+  /* donut */
+  .donut-row { display:flex; align-items:center; gap:18px; }
+  .donut-legend { display:flex; flex-direction:column; gap:7px; flex:1; }
+  .leg { display:flex; align-items:center; gap:9px; font-size:12px; }
+  .leg .sw { width:9px; height:9px; border-radius:1px; flex-shrink:0; }
+  .leg .lk { color:var(--muted); flex:1; letter-spacing:0.08em; }
+  .leg .lv { color:var(--bright); font-weight:600; font-variant-numeric:tabular-nums; }
+
+  /* category bars */
+  .cbar { display:grid; grid-template-columns: 116px 1fr 42px; align-items:center; gap:11px;
+          padding:6px 0; cursor:pointer; border:none; width:100%; text-align:left; }
+  .cbar:hover .cbar-name { color:var(--bright); }
+  .cbar:hover .cbar-track { box-shadow: inset 0 0 0 1px var(--line); }
+  .cbar-name { font-size:11.5px; color:var(--text); letter-spacing:0.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cbar-track { height:13px; background:#0a130d; border:1px solid rgba(43,255,136,0.12); border-radius:2px; overflow:hidden; position:relative; }
+  .cbar-fill { height:100%; border-radius:0; transition:width .6s cubic-bezier(.2,.7,.2,1); }
+  /* HP-bar segmentation: 20 cells, score maps to filled cells */
+  .cbar-track::after { content:""; position:absolute; inset:0; pointer-events:none; z-index:2;
+     background: repeating-linear-gradient(90deg, transparent 0 calc(5% - 2px), var(--panel) calc(5% - 2px) 5%); }
+  .cbar-val { font-size:11.5px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+  .cbar.flagged .cbar-name::before { content:"› "; color:var(--accent); }
+
+  /* toolbar */
+  .toolbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:var(--gap) 0 14px;
+             padding:13px 16px; }
+  .filters { display:flex; gap:7px; flex-wrap:wrap; }
+  .fchip { display:inline-flex; align-items:center; gap:8px; font-size:11.5px; letter-spacing:0.08em;
+           padding:6px 12px; border:1px solid var(--line); border-radius:2px; color:var(--muted);
+           text-transform:uppercase; transition:all .15s; }
+  .fchip:hover { color:var(--text); border-color:rgba(120,200,170,0.25); }
+  .fchip[data-on="true"] { color:var(--void); font-weight:700; }
+  .fchip .fn { font-variant-numeric:tabular-nums; font-weight:700; opacity:0.9; }
+  .fchip.f-all[data-on="true"]  { background:var(--accent); border-color:var(--accent); }
+  .fchip.f-fail[data-on="true"] { background:var(--red);   border-color:var(--red); }
+  .fchip.f-warn[data-on="true"] { background:var(--amber); border-color:var(--amber); }
+  .fchip.f-pass[data-on="true"] { background:var(--green); border-color:var(--green); }
+  .fchip.f-info[data-on="true"] { background:var(--cyan);  border-color:var(--cyan); }
+
+  .search { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:2px;
+            padding:6px 11px; min-width:210px; flex:1; max-width:340px; }
+  .search:focus-within { border-color:var(--accent); }
+  .search input { background:none; border:none; outline:none; width:100%; font-size:13px; color:var(--bright); }
+  .search input::placeholder { color:var(--faint); }
+  .search .pr { color:var(--accent); font-size:13px; }
+  .tool-right { display:flex; align-items:center; gap:14px; margin-left:auto; }
+  .linkbtn { font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); border-bottom:1px dashed transparent; }
+  .linkbtn:hover { color:var(--accent); border-bottom-color:var(--accent); }
+  .showing { font-size:11px; color:var(--faint); letter-spacing:0.06em; white-space:nowrap; }
+
+  /* top issues */
+  .top-issues { margin:var(--gap) 0; padding:18px 20px 20px; border-color:rgba(255,81,71,0.22)!important; }
+  .top-issues::before, .top-issues::after { border-color:var(--red)!important; }
+  .ti-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .ti-flag { color:var(--red); font-size:14px; letter-spacing:0.2em; text-transform:uppercase; font-weight:700; }
+  .ti-list { display:flex; flex-direction:column; gap:10px; }
+  .ti-item { display:grid; grid-template-columns: 26px 1fr; gap:12px; padding:11px 13px;
+             background:rgba(255,81,71,0.035); border:1px solid rgba(255,81,71,0.14); border-radius:2px; }
+  .ti-num { font-size:13px; font-weight:700; color:var(--red); }
+  .ti-name { font-size:13.5px; color:var(--bright); font-weight:600; margin-bottom:3px; }
+  .ti-tags { display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
+  .ti-fix { font-size:12px; color:var(--muted); line-height:1.6; }
+  .ti-fix b { color:var(--text); font-weight:500; }
+
+  /* category section */
+  .cat-section { margin-top:var(--gap); }
+  .cat-bar { display:flex; align-items:center; gap:14px; padding:11px 16px;
+             border:1px solid var(--line); border-top-left-radius:var(--r); border-top-right-radius:var(--r);
+             background:var(--panel-2); position:sticky; top:0; z-index:5; }
+  .cat-name { font-size:13.5px; font-weight:600; letter-spacing:0.08em; color:var(--bright); text-transform:uppercase; }
+  .cat-meta { display:flex; align-items:center; gap:10px; margin-left:auto; }
+  .cat-score { font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .cat-tally { display:flex; gap:9px; font-size:11px; }
+  .cat-tally span { font-variant-numeric:tabular-nums; }
+
+  /* finding rows */
+  .findings { border:1px solid var(--line); border-top:none;
+              border-bottom-left-radius:var(--r); border-bottom-right-radius:var(--r); overflow:hidden; }
+  .frow { border-top:1px solid var(--line-soft); }
+  .frow:first-child { border-top:none; }
+  .fhead { display:grid; grid-template-columns: 30px 86px 1fr auto; align-items:center; gap:13px;
+           padding:var(--row-pad) 16px; width:100%; text-align:left; transition:background .12s; }
+  .fhead:hover { background:rgba(43,255,136,0.025); }
+  .fhead.is-open { background:rgba(43,255,136,0.03); }
+  .ficon { font-size:14px; text-align:center; font-weight:700; }
+  .fsev { font-size:10px; letter-spacing:0.1em; font-weight:600; text-transform:uppercase;
+          padding:3px 7px; border-radius:2px; text-align:center; white-space:nowrap; }
+  .fname { font-size:13.5px; color:var(--text); }
+  .fname .fcat { color:var(--faint); font-size:11px; margin-right:8px; letter-spacing:0.06em; }
+  .fname .fsnip { color:var(--muted); font-size:12px; margin-top:2px; }
+  .fname b { color:var(--bright); font-weight:500; }
+  .fright { display:flex; align-items:center; gap:12px; }
+  .chev { color:var(--muted); font-size:11px; transition:transform .2s; }
+  .fhead.is-open .chev { transform:rotate(90deg); color:var(--accent); }
+
+  .fbody { padding:2px 16px 18px 59px; display:grid; gap:13px;
+           border-top:1px solid var(--line-soft); background:rgba(0,0,0,0.18); }
+  .fbody .fld { display:grid; grid-template-columns: 82px 1fr; gap:14px; align-items:start; }
+  .fbody .fld .k { font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--faint); padding-top:2px; }
+  .fbody .fld .vv { font-size:13px; color:var(--text); line-height:1.65; }
+  .code { font-size:12.5px; background:#02060a; border:1px solid var(--line); border-left:2px solid var(--accent);
+          border-radius:2px; padding:11px 13px; color:var(--green); white-space:pre-wrap; word-break:break-word;
+          position:relative; }
+  .code .copy { position:absolute; top:7px; right:8px; font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase;
+                color:var(--muted); border:1px solid var(--line); padding:3px 7px; border-radius:2px; background:var(--void); }
+  .code .copy:hover { color:var(--accent); border-color:var(--accent); }
+  .cis { display:inline-flex; align-items:center; gap:6px; font-size:11px; letter-spacing:0.06em;
+         color:var(--cyan); border:1px solid rgba(68,224,230,0.28); background:rgba(68,224,230,0.05);
+         padding:3px 9px; border-radius:2px; }
+
+  .empty { padding:46px 20px; text-align:center; color:var(--faint); font-size:13px; letter-spacing:0.08em; }
+
+  /* footer */
+  .foot { margin-top:46px; padding-top:22px; border-top:1px solid var(--line);
+          display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap;
+          font-size:11.5px; color:var(--muted); letter-spacing:0.05em; }
+  .foot .auth { color:var(--faint); }
+  .foot a { color:var(--muted); border-bottom:1px dashed transparent; }
+  .foot a:hover { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* fade-in */
+  .rise { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes rise { from { transform: translateY(10px); } to { transform:none; } }
+  @media (prefers-reduced-motion: reduce){ .rise { animation:none; } }
+
+  /* ── Print: drop the CRT atmosphere, expand every finding, ink-friendly ─── */
+  @media print {
+    .crt-overlay, .crt-vignette, .crt-flicker, .bin-rain { display:none !important; }
+    html, body { background:#fff !important; color:#111 !important; }
+    .wrap { padding-bottom:0; }
+    .panel { background:#fff !important; border-color:#bbb !important; }
+    .panel::before, .panel::after { display:none; }
+    .toolbar, .tool-right, .search, .filters { display:none !important; }
+    .cat-bar { position:static; background:#f2f2f2 !important; }
+    .cat-name, .brand .name, .ti-name, .fname b, .meta-item .v b { color:#111 !important; }
+    .fbody[hidden] { display:grid !important; }   /* show all details on paper */
+    .code { background:#f6f6f6 !important; color:#111 !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="bin-rain" id="binRain"></div>
+  <div class="crt-flicker"></div>
+
+  <div class="wrap">
+
+    <!-- ── Header ──────────────────────────────────────────────────────── -->
+    <div class="topbar">
+      <div class="brand">
+        <span class="diamond">◈</span>
+        <span class="name">APOTROPE</span>
+        <span class="ver">v0.1.5</span>
+      </div>
+      <div class="topbar-meta">
+        <div class="meta-item"><span class="label">Host</span><span class="v"><b>WORKSTATION-07</b></span></div>
+        <div class="meta-item"><span class="label">System</span><span class="v">Windows 11 Pro 10.0.22631</span></div>
+        <div class="meta-item"><span class="label">Scan</span><span class="v">2026-06-06 14:30 UTC <span style="color:var(--faint)">· 21.7s</span></span></div>
+        <span class="ro-tag"><span class="dot"></span>Read-only audit</span>
+      </div>
+    </div>
+
+    <!-- ── Hero: score gauge + executive summary + stat strip ──────────── -->
+    <div class="hero">
+      <div class="gauge-panel panel rise">
+        <div class="kicker" style="align-self:flex-start">Security Score</div>
+        <div class="gauge-wrap">
+          <svg width="230" height="230" viewBox="0 0 230 230" style="position:absolute;inset:0">
+            <defs><filter id="gl"><feGaussianBlur stdDeviation="3.2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+            <line x1="115.0" y1="12.0" x2="115.0" y2="3.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="131.11" y1="13.27" x2="132.52" y2="4.38" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="146.83" y1="17.04" x2="149.61" y2="8.48" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="161.76" y1="23.23" x2="165.85" y2="15.21" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="175.54" y1="31.67" x2="180.83" y2="24.39" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="187.83" y1="42.17" x2="194.2" y2="35.8" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="198.33" y1="54.46" x2="205.61" y2="49.17" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="206.77" y1="68.24" x2="214.79" y2="64.15" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="212.96" y1="83.17" x2="221.52" y2="80.39" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="216.73" y1="98.89" x2="225.62" y2="97.48" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="218.0" y1="115.0" x2="227.0" y2="115.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="216.73" y1="131.11" x2="225.62" y2="132.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="212.96" y1="146.83" x2="221.52" y2="149.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="206.77" y1="161.76" x2="214.79" y2="165.85" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="198.33" y1="175.54" x2="205.61" y2="180.83" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="187.83" y1="187.83" x2="194.2" y2="194.2" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="175.54" y1="198.33" x2="180.83" y2="205.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="161.76" y1="206.77" x2="165.85" y2="214.79" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="146.83" y1="212.96" x2="149.61" y2="221.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="131.11" y1="216.73" x2="132.52" y2="225.62" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="115.0" y1="218.0" x2="115.0" y2="227.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="98.89" y1="216.73" x2="97.48" y2="225.62" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="83.17" y1="212.96" x2="80.39" y2="221.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="68.24" y1="206.77" x2="64.15" y2="214.79" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="54.46" y1="198.33" x2="49.17" y2="205.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="42.17" y1="187.83" x2="35.8" y2="194.2" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="31.67" y1="175.54" x2="24.39" y2="180.83" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="23.23" y1="161.76" x2="15.21" y2="165.85" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="17.04" y1="146.83" x2="8.48" y2="149.61" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="13.27" y1="131.11" x2="4.38" y2="132.52" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="12.0" y1="115.0" x2="3.0" y2="115.0" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="13.27" y1="98.89" x2="4.38" y2="97.48" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="17.04" y1="83.17" x2="8.48" y2="80.39" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="23.23" y1="68.24" x2="15.21" y2="64.15" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="31.67" y1="54.46" x2="24.39" y2="49.17" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="42.17" y1="42.17" x2="35.8" y2="35.8" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="54.46" y1="31.67" x2="49.17" y2="24.39" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="68.24" y1="23.23" x2="64.15" y2="15.21" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="83.17" y1="17.04" x2="80.39" y2="8.48" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="98.89" y1="13.27" x2="97.48" y2="4.38" stroke="#16241d" stroke-width="2" opacity="0.5"/>
+            <circle cx="115" cy="115" r="96" fill="none" stroke="#0c1610" stroke-width="9"/>
+            <circle cx="115" cy="115" r="96" fill="none" stroke="#ffb23d" stroke-width="9"
+              stroke-linecap="round" stroke-dasharray="603.2" stroke-dashoffset="186.99"
+              transform="rotate(-90 115 115)" filter="url(#gl)"/>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-score" style="color:#ffb23d;text-shadow:0 0 22px #ffb23d">69</div>
+            <div class="gauge-of">/ 100</div>
+            <div class="gauge-grade">
+              <span class="grade-chip" style="color:var(--void);background:#ffb23d">D</span>
+              <span class="grade-label">Poor</span>
+            </div>
+          </div>
+        </div>
+        <div class="gauge-cat">56 checks evaluated</div>
+      </div>
+
+      <div class="hero-right">
+        <div class="summary-panel panel rise">
+          <div class="summary-head">
+            <span class="kicker">Executive Summary</span>
+            <div class="pills">
+              <span class="pill pill-pass"><span class="n">35</span> passed</span>
+              <span class="pill pill-fail"><span class="n">3</span> failed</span>
+              <span class="pill pill-warn"><span class="n">4</span> warnings</span>
+              <span class="pill pill-info"><span class="n">14</span> info</span>
+            </div>
+          </div>
+          <div class="summary-body">The security posture of <b>WORKSTATION-07</b> has been assessed as <b>Poor</b> with an overall score of <b>69/100 (D)</b> across 56 security checks. <span class="hl-high">1 high-severity finding should be addressed promptly.</span> Of the checks performed, 3 checks failed and 4 checks issued warnings. The primary areas of concern are <b>Firewall</b>, <b>File Sharing</b> and <b>PowerShell</b>. Remediation should be prioritized by severity, addressing critical and high-severity findings first.</div>
+        </div>
+
+        <div class="stat-strip">
+          <div class="donut-panel panel rise">
+            <div class="panel-h"><span class="label">Result Distribution</span><span class="label">56</span></div>
+            <div class="donut-row">
+              <svg width="128" height="128" viewBox="0 0 128 128">
+                <circle cx="64" cy="64" r="52" fill="none" stroke="#0c1610" stroke-width="13"/>
+                <circle cx="64" cy="64" r="52" fill="none" stroke="#2bff88" stroke-width="13"
+                  stroke-dasharray="204.2 122.52" stroke-dashoffset="-0.0"
+                  transform="rotate(-90 64 64)"/><circle cx="64" cy="64" r="52" fill="none" stroke="#ff5147" stroke-width="13"
+                  stroke-dasharray="17.5 309.22" stroke-dashoffset="-204.2"
+                  transform="rotate(-90 64 64)"/><circle cx="64" cy="64" r="52" fill="none" stroke="#ffb23d" stroke-width="13"
+                  stroke-dasharray="23.34 303.39" stroke-dashoffset="-221.71"
+                  transform="rotate(-90 64 64)"/><circle cx="64" cy="64" r="52" fill="none" stroke="#44e0e6" stroke-width="13"
+                  stroke-dasharray="81.68 245.04" stroke-dashoffset="-245.04"
+                  transform="rotate(-90 64 64)"/>
+                <text x="64" y="60" text-anchor="middle" fill="var(--red)" font-size="22" font-weight="700">3</text>
+                <text x="64" y="77" text-anchor="middle" fill="var(--muted)" font-size="8.5" letter-spacing="1.4">FAILED</text>
+              </svg>
+              <div class="donut-legend">
+                <div class="leg"><span class="sw" style="background:var(--green)"></span><span class="lk">PASS</span><span class="lv">35</span></div>
+                <div class="leg"><span class="sw" style="background:var(--red)"></span><span class="lk">FAIL</span><span class="lv">3</span></div>
+                <div class="leg"><span class="sw" style="background:var(--amber)"></span><span class="lk">WARN</span><span class="lv">4</span></div>
+                <div class="leg"><span class="sw" style="background:var(--cyan)"></span><span class="lk">INFO</span><span class="lv">14</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bars-panel panel rise">
+            <div class="panel-h"><span class="label">Category Scores</span><span class="label">14 areas</span></div>
+            
+            <button class="cbar" onclick="apoJump('Firewall')">
+              <span class="cbar-name">Firewall</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:90%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">90</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('File-Sharing')">
+              <span class="cbar-name">File Sharing</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:95%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">95</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('PowerShell')">
+              <span class="cbar-name">PowerShell</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:95%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">95</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Remote-Access')">
+              <span class="cbar-name">Remote Access</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:95%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">95</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Access-Control')">
+              <span class="cbar-name">Access Control</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:98%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">98</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Accounts')">
+              <span class="cbar-name">Accounts</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:98%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">98</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Patching')">
+              <span class="cbar-name">Patching</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:98%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">98</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Antivirus')">
+              <span class="cbar-name">Antivirus</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Encryption')">
+              <span class="cbar-name">Encryption</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Hardening')">
+              <span class="cbar-name">Hardening</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Network')">
+              <span class="cbar-name">Network</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Persistence')">
+              <span class="cbar-name">Persistence</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Services')">
+              <span class="cbar-name">Services</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('System')">
+              <span class="cbar-name">System</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
+            </button>
+            
+          </div>
+        </div>
+      </div>
+    </div>
+
+    
+    <!-- ── Top issues ──────────────────────────────────────────────────── -->
+    <div class="top-issues panel">
+      <div class="ti-head">
+        <span class="ti-flag">⚑ Top Issues</span>
+        <span class="label">Prioritized remediation · 4</span>
+      </div>
+      <div class="ti-list">
+        
+        <div class="ti-item">
+          <span class="ti-num">01</span>
+          <div>
+            <div class="ti-tags">
+              <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+              <span style="font-size:11px;color:#ff5147;letter-spacing:0.1em">FAIL</span>
+              <button class="linkbtn" onclick="apoJump('Firewall')">Firewall ↗</button>
+            </div>
+            <div class="ti-name">Public Profile Inbound</div>
+            <div class="ti-fix"><b>Fix:</b> Set the Public profile default inbound action to Block.</div>
+          </div>
+        </div>
+        
+        <div class="ti-item">
+          <span class="ti-num">02</span>
+          <div>
+            <div class="ti-tags">
+              <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+              <span style="font-size:11px;color:#ffb23d;letter-spacing:0.1em">WARN</span>
+              <button class="linkbtn" onclick="apoJump('Remote-Access')">Remote Access ↗</button>
+            </div>
+            <div class="ti-name">RDP Network Level Authentication</div>
+            <div class="ti-fix"><b>Fix:</b> Require NLA for all RDP connections.</div>
+          </div>
+        </div>
+        
+        <div class="ti-item">
+          <span class="ti-num">03</span>
+          <div>
+            <div class="ti-tags">
+              <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+              <span style="font-size:11px;color:#ff5147;letter-spacing:0.1em">FAIL</span>
+              <button class="linkbtn" onclick="apoJump('File-Sharing')">File Sharing ↗</button>
+            </div>
+            <div class="ti-name">SMB Signing Required</div>
+            <div class="ti-fix"><b>Fix:</b> Enable &#39;Microsoft network server: Digitally sign communications (always)&#39;.</div>
+          </div>
+        </div>
+        
+        <div class="ti-item">
+          <span class="ti-num">04</span>
+          <div>
+            <div class="ti-tags">
+              <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+              <span style="font-size:11px;color:#ff5147;letter-spacing:0.1em">FAIL</span>
+              <button class="linkbtn" onclick="apoJump('PowerShell')">PowerShell ↗</button>
+            </div>
+            <div class="ti-name">Script Block Logging</div>
+            <div class="ti-fix"><b>Fix:</b> Enable Script Block Logging via Administrative Templates.</div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+
+    <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
+    <div class="toolbar panel">
+      <div class="filters">
+        <button class="fchip f-all"  data-on="true"  data-k="ALL">ALL <span class="fn">56</span></button>
+        <button class="fchip f-fail" data-on="false" data-k="FAIL">FAIL <span class="fn">3</span></button>
+        <button class="fchip f-warn" data-on="false" data-k="WARN">WARN <span class="fn">4</span></button>
+        <button class="fchip f-pass" data-on="false" data-k="PASS">PASS <span class="fn">35</span></button>
+        <button class="fchip f-info" data-on="false" data-k="INFO">INFO <span class="fn">14</span></button>
+      </div>
+      <div class="search"><span class="pr">›</span><input id="apoSearch" placeholder="filter findings…" spellcheck="false"/></div>
+      <div class="tool-right">
+        <button class="linkbtn" id="apoExpand">expand all</button>
+        <button class="linkbtn" id="apoCollapse">collapse</button>
+        <span class="showing" id="apoShowing">56 / 56 shown</span>
+      </div>
+    </div>
+
+    <!-- ── Category sections ───────────────────────────────────────────── -->
+    
+    <div class="cat-section" id="cat-Access-Control">
+      <div class="cat-bar">
+        <span class="cat-name">Access Control</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            <span style="color:var(--amber)">!1</span>
+            <span style="color:var(--green)">✓3</span>
+            
+          </span>
+          <span class="cat-score" style="color:#2bff88">98/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="WARN" data-text="uac secure desktop prompt access control admin approval mode is on, but elevation prompts on the secure desktop are relaxed. cis 2.3.17.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#ffb23d">!</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>UAC Secure Desktop Prompt</b>
+              <div class="fsnip">Admin Approval Mode is on, but elevation prompts on the secure desktop are relaxed.</div>
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.17.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies uac secure desktop prompt.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Admin Approval Mode is on, but elevation prompts on the secure desktop are relaxed.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="code">Set elevation prompt to &#39;Prompt for consent on the secure desktop&#39;.<button class="copy">copy</button></div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="uac enabled access control configured as expected. cis 2.3.17.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>UAC Enabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.17.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies uac enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="admin token filtering access control configured as expected. cis 2.3.17.2">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Admin Token Filtering</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.17.2</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies admin token filtering.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="detect application installs access control configured as expected. cis 2.3.17.5">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Detect Application Installs</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.17.5</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies detect application installs.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.5</span></span></div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Accounts">
+      <div class="cat-bar">
+        <span class="cat-name">Accounts</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            <span style="color:var(--amber)">!1</span>
+            <span style="color:var(--green)">✓4</span>
+            <span style="color:var(--cyan)">i1</span>
+          </span>
+          <span class="cat-score" style="color:#2bff88">98/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="WARN" data-text="guest account accounts the built-in guest account is present and should be confirmed disabled. cis 2.3.1.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#ffb23d">!</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>Guest Account</b>
+              <div class="fsnip">The built-in Guest account is present and should be confirmed disabled.</div>
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.1.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies guest account.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">The built-in Guest account is present and should be confirmed disabled.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="code">Disable the Guest account.<button class="copy">copy</button></div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.1.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="password length policy accounts configured as expected. cis 1.1.4">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Password Length Policy</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 1.1.4</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies password length policy.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 1.1.4</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="account lockout threshold accounts configured as expected. cis 1.2.2">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Account Lockout Threshold</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 1.2.2</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies account lockout threshold.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 1.2.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="blank password use restricted accounts configured as expected. cis 2.3.1.2">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Blank Password Use Restricted</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.1.2</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies blank password use restricted.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.1.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="administrator account renamed accounts configured as expected. cis 2.3.1.5">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Administrator Account Renamed</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.1.5</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies administrator account renamed.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.1.5</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="local administrator count accounts 2 local administrators ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>Local Administrator Count</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies local administrator count.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">2 local administrators</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Antivirus">
+      <div class="cat-bar">
+        <span class="cat-name">Antivirus</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            
+            <span style="color:var(--green)">✓3</span>
+            <span style="color:var(--cyan)">i1</span>
+          </span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="PASS" data-text="defender real-time protection antivirus configured as expected. cis 18.10.43.10.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Defender Real-Time Protection</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.10.43.10.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies defender real-time protection.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.43.10.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="defender signatures current antivirus configured as expected. cis 18.10.43.14">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Defender Signatures Current</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.10.43.14</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies defender signatures current.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.43.14</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="tamper protection enabled antivirus configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Tamper Protection Enabled</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies tamper protection enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="defender engine version antivirus 1.1.24050.5 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>Defender Engine Version</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies defender engine version.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">1.1.24050.5</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Encryption">
+      <div class="cat-bar">
+        <span class="cat-name">Encryption</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            
+            <span style="color:var(--green)">✓1</span>
+            
+          </span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="PASS" data-text="bitlocker — c: encryption configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>BitLocker — C:</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies bitlocker — c:.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-File-Sharing">
+      <div class="cat-bar">
+        <span class="cat-name">File Sharing</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            <span style="color:var(--red)">✗1</span>
+            
+            <span style="color:var(--green)">✓2</span>
+            
+          </span>
+          <span class="cat-score" style="color:#2bff88">95/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="FAIL" data-text="smb signing required file sharing the server does not require smb packet signing, allowing tampering and relay. cis 2.3.8.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#ff5147">✗</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>SMB Signing Required</b>
+              <div class="fsnip">The server does not require SMB packet signing, allowing tampering and relay.</div>
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.8.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies smb signing required.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">The server does not require SMB packet signing, allowing tampering and relay.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="code">Enable &#39;Microsoft network server: Digitally sign communications (always)&#39;.<button class="copy">copy</button></div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.8.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="smbv1 disabled file sharing configured as expected. cis 18.4.2">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>SMBv1 Disabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.4.2</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies smbv1 disabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.4.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="anonymous share enumeration off file sharing configured as expected. cis 2.3.10.5">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Anonymous Share Enumeration Off</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.10.5</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies anonymous share enumeration off.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.10.5</span></span></div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Firewall">
+      <div class="cat-bar">
+        <span class="cat-name">Firewall</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            <span style="color:var(--red)">✗1</span>
+            
+            <span style="color:var(--green)">✓5</span>
+            
+          </span>
+          <span class="cat-score" style="color:#2bff88">90/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="FAIL" data-text="public profile inbound firewall default inbound action is allow on the public profile, exposing listening services to untrusted networks. cis 9.3.2">
+          <button class="fhead">
+            <span class="ficon" style="color:#ff5147">✗</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="fname">
+              <b>Public Profile Inbound</b>
+              <div class="fsnip">Default inbound action is Allow on the Public profile, exposing listening services to untrusted networks.</div>
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 9.3.2</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies public profile inbound.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Default inbound action is Allow on the Public profile, exposing listening services to untrusted networks.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="code">Set the Public profile default inbound action to Block.<button class="copy">copy</button></div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.3.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="domain profile enabled firewall configured as expected. cis 9.1.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Domain Profile Enabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 9.1.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies domain profile enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.1.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="private profile enabled firewall configured as expected. cis 9.2.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Private Profile Enabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 9.2.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies private profile enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.2.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="public profile enabled firewall configured as expected. cis 9.3.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Public Profile Enabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 9.3.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies public profile enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.3.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="inbound connection logging firewall configured as expected. cis 9.3.5">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Inbound Connection Logging</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 9.3.5</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies inbound connection logging.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.3.5</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="firewall service running firewall configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Firewall Service Running</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies firewall service running.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Hardening">
+      <div class="cat-bar">
+        <span class="cat-name">Hardening</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            
+            <span style="color:var(--green)">✓4</span>
+            <span style="color:var(--cyan)">i1</span>
+          </span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="PASS" data-text="lsa protection (runasppl) hardening configured as expected. cis 18.9.4">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>LSA Protection (RunAsPPL)</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.9.4</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies lsa protection (runasppl).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.9.4</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="autorun disabled hardening configured as expected. cis 18.9.8.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>AutoRun Disabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.9.8.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies autorun disabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.9.8.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="wdigest cleartext disabled hardening configured as expected. cis 18.3.4">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>WDigest Cleartext Disabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.3.4</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies wdigest cleartext disabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.3.4</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="cached logon count limited hardening configured as expected. cis 2.3.7.4">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Cached Logon Count Limited</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.7.4</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies cached logon count limited.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.7.4</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="powershell transcription hardening not configured ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>PowerShell Transcription</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies powershell transcription.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Not configured</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Network">
+      <div class="cat-bar">
+        <span class="cat-name">Network</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            
+            <span style="color:var(--green)">✓3</span>
+            <span style="color:var(--cyan)">i2</span>
+          </span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="PASS" data-text="llmnr disabled network configured as expected. cis 18.5.4.2">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>LLMNR Disabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.5.4.2</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies llmnr disabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.5.4.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="netbios over tcp/ip off network configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>NetBIOS Over TCP/IP Off</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies netbios over tcp/ip off.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="ipv6 source routing off network configured as expected. cis 18.5.20.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>IPv6 Source Routing Off</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.5.20.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies ipv6 source routing off.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.5.20.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="primary ip address network 10.4.12.37 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>Primary IP Address</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies primary ip address.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">10.4.12.37</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="configured dns servers network 10.4.0.1, 10.4.0.2 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>Configured DNS Servers</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies configured dns servers.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">10.4.0.1, 10.4.0.2</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Patching">
+      <div class="cat-bar">
+        <span class="cat-name">Patching</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            <span style="color:var(--amber)">!1</span>
+            <span style="color:var(--green)">✓1</span>
+            <span style="color:var(--cyan)">i1</span>
+          </span>
+          <span class="cat-score" style="color:#2bff88">98/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="WARN" data-text="pending reboot patching updates are installed but a reboot is pending to finish applying them. cis 18.1.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#ffb23d">!</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>Pending Reboot</b>
+              <div class="fsnip">Updates are installed but a reboot is pending to finish applying them.</div>
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.1.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies pending reboot.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Updates are installed but a reboot is pending to finish applying them.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="code">Reboot the machine to complete pending updates.<button class="copy">copy</button></div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.1.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="automatic updates enabled patching configured as expected. cis 18.10.93.2.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Automatic Updates Enabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.10.93.2.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies automatic updates enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.93.2.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="last update installed patching 2026-05-28 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>Last Update Installed</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies last update installed.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">2026-05-28</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Persistence">
+      <div class="cat-bar">
+        <span class="cat-name">Persistence</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            
+            <span style="color:var(--green)">✓1</span>
+            <span style="color:var(--cyan)">i1</span>
+          </span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="PASS" data-text="no unsigned startup items persistence configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>No Unsigned Startup Items</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies no unsigned startup items.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="startup item count persistence 11 startup entries ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>Startup Item Count</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies startup item count.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">11 startup entries</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-PowerShell">
+      <div class="cat-bar">
+        <span class="cat-name">PowerShell</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            <span style="color:var(--red)">✗1</span>
+            
+            <span style="color:var(--green)">✓4</span>
+            
+          </span>
+          <span class="cat-score" style="color:#2bff88">95/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="FAIL" data-text="script block logging powershell powershell script-block logging is disabled, reducing visibility into malicious scripts. cis 18.9.95.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#ff5147">✗</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>Script Block Logging</b>
+              <div class="fsnip">PowerShell script-block logging is disabled, reducing visibility into malicious scripts.</div>
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.9.95.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies script block logging.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">PowerShell script-block logging is disabled, reducing visibility into malicious scripts.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="code">Enable Script Block Logging via Administrative Templates.<button class="copy">copy</button></div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.9.95.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="module logging powershell configured as expected. cis 18.9.95.2">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Module Logging</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.9.95.2</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies module logging.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.9.95.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="execution policy remotesigned powershell configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Execution Policy RemoteSigned</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies execution policy remotesigned.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="powershell v2 disabled powershell configured as expected. cis 18.10.43">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>PowerShell v2 Disabled</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.10.43</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies powershell v2 disabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.43</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="constrained language mode powershell configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Constrained Language Mode</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies constrained language mode.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Remote-Access">
+      <div class="cat-bar">
+        <span class="cat-name">Remote Access</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            <span style="color:var(--amber)">!1</span>
+            
+            <span style="color:var(--cyan)">i1</span>
+          </span>
+          <span class="cat-score" style="color:#2bff88">95/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="WARN" data-text="rdp network level authentication remote access remote desktop is enabled but network level authentication is not enforced. cis 9.5.1">
+          <button class="fhead">
+            <span class="ficon" style="color:#ffb23d">!</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="fname">
+              <b>RDP Network Level Authentication</b>
+              <div class="fsnip">Remote Desktop is enabled but Network Level Authentication is not enforced.</div>
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 9.5.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies rdp network level authentication.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Remote Desktop is enabled but Network Level Authentication is not enforced.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="code">Require NLA for all RDP connections.<button class="copy">copy</button></div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.5.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="rdp listener port remote access 3389 (default) ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>RDP Listener Port</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies rdp listener port.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">3389 (default)</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-Services">
+      <div class="cat-bar">
+        <span class="cat-name">Services</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            
+            <span style="color:var(--green)">✓2</span>
+            
+          </span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="PASS" data-text="no unquoted service paths services configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>No Unquoted Service Paths</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies no unquoted service paths.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="telnet service absent services configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Telnet Service Absent</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies telnet service absent.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <div class="cat-section" id="cat-System">
+      <div class="cat-bar">
+        <span class="cat-name">System</span>
+        <span class="cat-meta">
+          <span class="cat-tally">
+            
+            
+            <span style="color:var(--green)">✓2</span>
+            <span style="color:var(--cyan)">i6</span>
+          </span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+        </span>
+      </div>
+      <div class="findings">
+        
+        <div class="frow" data-status="PASS" data-text="supported os build system configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Supported OS Build</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies supported os build.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="latest cumulative update installed system configured as expected. ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>Latest Cumulative Update Installed</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies latest cumulative update installed.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="os edition system windows 11 pro ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>OS Edition</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies os edition.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Windows 11 Pro</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="os build number system 22631.4317 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>OS Build Number</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies os build number.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">22631.4317</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="secure boot state system enabled ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>Secure Boot State</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies secure boot state.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Enabled</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="tpm presence system tpm 2.0 present and ready ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>TPM Presence</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies tpm presence.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">TPM 2.0 present and ready</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="firmware mode system uefi ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>Firmware Mode</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies firmware mode.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">UEFI</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="system uptime system 3 days, 4 hours ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>System Uptime</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies system uptime.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">3 days, 4 hours</span></div>
+            
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+
+    <!-- ── Footer ──────────────────────────────────────────────────────── -->
+    <div class="foot">
+      <span class="auth">For authorized security assessment use only · <strong style="color:var(--green);font-weight:600;text-shadow:0 0 9px rgba(43,255,136,0.45)">No data left this machine</strong> · CIS Benchmark v5.0.0</span>
+      <span>apotrope.sh · <a href="https://github.com/hexorcist404/apotrope">github.com/hexorcist404/apotrope</a> · MIT</span>
+    </div>
+
+  </div>
+
+  <div class="crt-overlay"></div>
+  <div class="crt-vignette"></div>
+
+  <script>
+(function(){
+  var rows = [].slice.call(document.querySelectorAll('.frow'));
+  var chips = [].slice.call(document.querySelectorAll('.fchip'));
+  var search = document.getElementById('apoSearch');
+  var showing = document.getElementById('apoShowing');
+  var active = 'ALL';
+
+  function apply(){
+    var q = (search.value||'').trim().toLowerCase();
+    var shown = 0;
+    rows.forEach(function(row){
+      var okStatus = active === 'ALL' || row.dataset.status === active;
+      var okText = !q || (row.dataset.text||'').indexOf(q) > -1;
+      var vis = okStatus && okText;
+      row.style.display = vis ? '' : 'none';
+      if (vis) shown++;
+    });
+    document.querySelectorAll('.cat-section').forEach(function(sec){
+      var any = [].some.call(sec.querySelectorAll('.frow'), function(r){ return r.style.display !== 'none'; });
+      sec.style.display = any ? '' : 'none';
+    });
+    showing.textContent = shown + ' / ' + rows.length + ' shown';
+  }
+
+  chips.forEach(function(chip){
+    chip.addEventListener('click', function(){
+      active = chip.dataset.k;
+      chips.forEach(function(c){ c.dataset.on = String(c === chip); });
+      apply();
+    });
+  });
+  search.addEventListener('input', apply);
+
+  rows.forEach(function(row){
+    var head = row.querySelector('.fhead'), body = row.querySelector('.fbody');
+    head.addEventListener('click', function(e){
+      if (e.target.closest('.copy')) return;
+      var open = body.hasAttribute('hidden');
+      if (open){ body.removeAttribute('hidden'); head.classList.add('is-open'); }
+      else { body.setAttribute('hidden',''); head.classList.remove('is-open'); }
+    });
+  });
+  document.getElementById('apoExpand').addEventListener('click', function(){
+    rows.forEach(function(r){ if (r.style.display==='none') return;
+      r.querySelector('.fbody').removeAttribute('hidden'); r.querySelector('.fhead').classList.add('is-open'); });
+  });
+  document.getElementById('apoCollapse').addEventListener('click', function(){
+    rows.forEach(function(r){ r.querySelector('.fbody').setAttribute('hidden',''); r.querySelector('.fhead').classList.remove('is-open'); });
+  });
+
+  document.querySelectorAll('.code .copy').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var code = btn.parentNode.textContent.replace(/copy$/, '').trim();
+      if (navigator.clipboard) navigator.clipboard.writeText(code);
+      var t = btn.textContent; btn.textContent = 'copied'; setTimeout(function(){ btn.textContent = t; }, 1300);
+    });
+  });
+
+  window.apoJump = function(slug){
+    var el = document.getElementById('cat-' + slug);
+    if (!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
+  };
+})();
+</script>
+</body>
+</html>
