@@ -72,6 +72,7 @@ class AuditReport:
     results: list[CheckResult] = field(default_factory=list)
     score: int = 0
     is_admin: bool = False
+    cis_version: str = ""  # CIS Benchmark edition used (e.g. "v5.0.0" / "v4.0.0")
 
     # ------------------------------------------------------------------
     # Convenience helpers

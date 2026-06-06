@@ -125,8 +125,24 @@ _HTML_SEVERITY: dict[Severity, str] = {
     Severity.INFO:     _MUTED,
 }
 
-# CIS Benchmark edition the cis_map IDs are verified against (see cis_map.py).
-_CIS_VERSION = "v5.0.0"
+def _cis_version_for(report: AuditReport) -> str:
+    """CIS Benchmark edition to display for *report*.
+
+    Prefers the value the scanner stamped on the report (authoritative — it's
+    derived from the same Win10/Win11 detection used to pick the CIS IDs). Falls
+    back to parsing the build number out of os_version for reports constructed
+    directly (API/tests) without a cis_version.
+    """
+    import re
+
+    from apotrope import cis_map
+
+    if report.cis_version:
+        return report.cis_version
+    m = re.search(r"(\d{3,})\s*$", (report.os_version or "").strip())
+    build = int(m.group(1)) if m else 0
+    # Match scanner.run's test, but treat an unparseable build as current (Win11).
+    return cis_map.benchmark_version(is_win10=bool(build) and build < 22000)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -572,7 +588,7 @@ class Reporter:
             "category_bars":      category_bars,
             "n_cats":             len(category_data),
             "top_issues":         top_issues,
-            "cis_version":        _CIS_VERSION,
+            "cis_version":        _cis_version_for(report),
         }
 
     def _build_executive_summary(self, report: AuditReport) -> str:

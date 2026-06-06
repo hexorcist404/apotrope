@@ -105,6 +105,9 @@ class Scanner:
         is_win10 = build < 22000
         self._apply_cis_references(results, is_win10=is_win10)
 
+        from apotrope import cis_map
+        cis_version = cis_map.benchmark_version(is_win10=is_win10)
+
         # Apply profile transforms (disabled checks, severity overrides)
         if self.profile:
             results = self._apply_profile(results)
@@ -127,6 +130,7 @@ class Scanner:
             results=results,
             score=score,
             is_admin=self.is_admin,
+            cis_version=cis_version,
         )
         log.info(
             "Scan complete: %d results, score=%d, duration=%.2fs",
