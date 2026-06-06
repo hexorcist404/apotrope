@@ -24,16 +24,49 @@ from apotrope.scoring import calculate_category_scores, score_grade
 
 log = logging.getLogger(__name__)
 
-# ── Status display config ─────────────────────────────────────────────────────
+# ── Palette (truecolor hex — identical to the HTML report) ─────────────────────
+# Rich emits these as 24-bit ANSI on capable terminals and silently degrades /
+# strips them when no_color, NO_COLOR, or a non-tty stdout is detected.
 
-_STATUS_COLOR: dict[Status, str] = {
-    Status.PASS:  "green",
-    Status.FAIL:  "red",
-    Status.WARN:  "yellow",
-    Status.INFO:  "cyan",
-    Status.ERROR: "dim",
+_GREEN  = "#2bff88"   # PASS · A–B grade · rail · done
+_CYAN   = "#44e0e6"   # INFO · progress bar
+_AMBER  = "#ffb23d"   # WARN · C–D grade · MEDIUM
+_RED    = "#ff5147"   # FAIL · F grade · HIGH
+_CRIT   = "#ff2d6b"   # CRITICAL severity
+_TEXT   = "#c4d6cd"   # default body text
+_BRIGHT = "#e8fff2"   # command echo · emphasis
+_MUTED  = "#5d776c"   # labels · meta · secondary
+_FAINT  = "#2f4138"   # footnotes · CIS tags · "evaluated"
+_BAR0   = "#16281f"   # unfilled bar cells
+
+# ── Status / severity display config ──────────────────────────────────────────
+
+_STATUS_HEX: dict[Status, str] = {
+    Status.PASS:  _GREEN,
+    Status.FAIL:  _RED,
+    Status.WARN:  _AMBER,
+    Status.INFO:  _CYAN,
+    Status.ERROR: _MUTED,
 }
 
+_SEVERITY_HEX: dict[Severity, str] = {
+    Severity.CRITICAL: _CRIT,
+    Severity.HIGH:     _RED,
+    Severity.MEDIUM:   _AMBER,
+    Severity.LOW:      _MUTED,
+    Severity.INFO:     _MUTED,
+}
+
+# Compact severity labels so the top-findings column stays width-5.
+_SEVERITY_ABBR: dict[Severity, str] = {
+    Severity.CRITICAL: "CRIT",
+    Severity.HIGH:     "HIGH",
+    Severity.MEDIUM:   "MED",
+    Severity.LOW:      "LOW",
+    Severity.INFO:     "INFO",
+}
+
+# Plain-text fallback icons (used only by _print_plain when Rich is absent).
 _STATUS_ICON: dict[Status, str] = {
     Status.PASS:  "✓",
     Status.FAIL:  "✗",
@@ -42,24 +75,7 @@ _STATUS_ICON: dict[Status, str] = {
     Status.ERROR: "?",
 }
 
-_SEVERITY_COLOR: dict[Severity, str] = {
-    Severity.CRITICAL: "bold red",
-    Severity.HIGH:     "red",
-    Severity.MEDIUM:   "yellow",
-    Severity.LOW:      "blue",
-    Severity.INFO:     "dim",
-}
-
-# Letter grade → Rich color
-_GRADE_COLOR: dict[str, str] = {
-    "A": "bold green",
-    "B": "green",
-    "C": "yellow",
-    "D": "dark_orange",
-    "F": "bold red",
-}
-
-# Severity sort key for top-issues ranking
+# Severity sort key for top-findings ranking (CRITICAL first).
 _SEV_ORDER: dict[Severity, int] = {
     Severity.CRITICAL: 0,
     Severity.HIGH:     1,
@@ -68,10 +84,65 @@ _SEV_ORDER: dict[Severity, int] = {
     Severity.INFO:     4,
 }
 
-_TOP_ISSUES_COUNT  = 5
-_SCORE_BAR_WIDTH   = 34
-_DETAIL_INLINE_MAX = 60
-_REM_WRAP_WIDTH    = 72
+_TOP_N        = 5    # cap on rows in TOP FAILURES / TOP WARNINGS
+_BAR_CELLS    = 24   # score-panel bar width (spec)
+_PROG_CELLS   = 20   # banner progress bar width
+_SEV_WIDTH    = 5    # severity column width in top findings (spec)
+_DESC_WIDTH   = 27   # description column width in top findings (spec)
+_PANEL_WIDTH  = 56   # inner width for right-aligned hostname / grade
+_REM_WRAP_WIDTH = 72  # detail / remediation wrap width (verbose)
+
+
+def _grade_hex(score: int) -> str:
+    """Grade colour for a 0–100 score (number + badge share it)."""
+    if score >= 80:
+        return _GREEN   # A, B
+    if score >= 60:
+        return _AMBER   # C, D
+    return _RED         # F
+
+
+# Colour band shared by the HTML gauge, category bars, and scores.
+_band = _grade_hex
+
+# ── HTML report presentation maps (status glyph/colour, severity colour) ──────
+# Note: the HTML report colours LOW severity cyan (vs muted in the terminal);
+# this mirrors the report spec exactly.
+
+_HTML_STATUS: dict[Status, tuple[str, str]] = {
+    Status.PASS:  ("✓", _GREEN),
+    Status.FAIL:  ("✗", _RED),
+    Status.WARN:  ("!", _AMBER),
+    Status.INFO:  ("i", _CYAN),
+    Status.ERROR: ("?", _MUTED),
+}
+
+_HTML_SEVERITY: dict[Severity, str] = {
+    Severity.CRITICAL: _CRIT,
+    Severity.HIGH:     _RED,
+    Severity.MEDIUM:   _AMBER,
+    Severity.LOW:      _CYAN,
+    Severity.INFO:     _MUTED,
+}
+
+def _cis_version_for(report: AuditReport) -> str:
+    """CIS Benchmark edition to display for *report*.
+
+    Prefers the value the scanner stamped on the report (authoritative — it's
+    derived from the same Win10/Win11 detection used to pick the CIS IDs). Falls
+    back to parsing the build number out of os_version for reports constructed
+    directly (API/tests) without a cis_version.
+    """
+    import re
+
+    from apotrope import cis_map
+
+    if report.cis_version:
+        return report.cis_version
+    m = re.search(r"(\d{3,})\s*$", (report.os_version or "").strip())
+    build = int(m.group(1)) if m else 0
+    # Match scanner.run's test, but treat an unparseable build as current (Win11).
+    return cis_map.benchmark_version(is_win10=bool(build) and build < 22000)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -87,10 +158,37 @@ def _u(console, unicode_char: str, ascii_char: str) -> str:
     return unicode_char if _console_is_unicode(console) else ascii_char
 
 
-def _score_bar(score: int, filled_char: str = "=", empty_char: str = "-") -> str:
-    """Return a filled/empty progress bar string for *score* (0–100)."""
-    filled = round(score / 100 * _SCORE_BAR_WIDTH)
-    return filled_char * filled + empty_char * (_SCORE_BAR_WIDTH - filled)
+def _glyphs(console) -> dict[str, str]:
+    """Resolve the glyph set for *console*, falling back to ASCII when needed."""
+    if _console_is_unicode(console):
+        return {
+            "brand": "◈", "rail": "▌", "bar_full": "█", "bar_empty": "░",
+            "pass": "✓", "fail": "✗", "warn": "!", "info": "i", "error": "·",
+            "flag": "⚑", "arrow": "→", "sep": "·",
+        }
+    return {
+        "brand": "*", "rail": "|", "bar_full": "#", "bar_empty": "-",
+        "pass": "[+]", "fail": "[x]", "warn": "[!]", "info": "[i]", "error": "[.]",
+        "flag": "", "arrow": "->", "sep": "-",
+    }
+
+
+def _text(*segments):
+    """Build a Rich Text from (str) or (str, style) segments.
+
+    User-supplied strings (check names, CIS tags) are appended as data, never
+    parsed as markup — so a `[` in a check name can't corrupt the line.
+    """
+    from rich.text import Text
+
+    t = Text()
+    for seg in segments:
+        if isinstance(seg, tuple):
+            chunk, style = seg
+            t.append(chunk, style=style)
+        else:
+            t.append(seg)
+    return t
 
 
 def _truncate(text: str, maxlen: int) -> str:
@@ -127,19 +225,12 @@ class Reporter:
             Completed :class:`~apotrope.models.AuditReport`.
         """
         try:
-            from rich.progress import (
-                BarColumn,
-                MofNCompleteColumn,
-                Progress,
-                SpinnerColumn,
-                TextColumn,
-                TimeElapsedColumn,
-                TimeRemainingColumn,
-            )
+            from rich.progress import BarColumn, Progress, TextColumn
         except ImportError:
             return scanner.run()
 
         console = self._make_console()
+        g       = _glyphs(console)
         modules = scanner.discover_modules()
         total   = len(modules)
 
@@ -149,25 +240,31 @@ class Reporter:
             self._print_non_admin_warning(console)
         console.print()
 
+        # A single inline bar — no spinner, no stacked columns. It tracks module
+        # completion live, then is erased and replaced by the static "done" line.
         with Progress(
-            SpinnerColumn(style="cyan"),
-            TextColumn("[cyan]{task.description:<24}[/cyan]"),
-            BarColumn(bar_width=28, style="dim blue", complete_style="cyan"),
-            MofNCompleteColumn(),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
+            TextColumn(f"  [{_MUTED}]scanning controls[/]"),
+            BarColumn(bar_width=_PROG_CELLS, style=_BAR0,
+                      complete_style=_CYAN, finished_style=_CYAN),
+            TextColumn(f"[{_MUTED}]{{task.completed}}/{{task.total}}[/]"),
             console=console,
-            transient=False,
+            transient=True,
         ) as progress:
-            task = progress.add_task("Initializing…", total=total)
+            task = progress.add_task("scan", total=total)
 
             def _on_module(module) -> None:
-                cat = getattr(module, "CATEGORY", module.__name__)
-                progress.update(task, description=cat, advance=1)
+                progress.update(task, advance=1)
 
             report = scanner.run(modules=modules, on_module_start=_on_module)
-            progress.update(task, description="Scan complete")
 
+        # Static completion line (mirrors the site's terminal demo).
+        bar = g["bar_full"] * _PROG_CELLS
+        console.print(_text(
+            "  ",
+            (f"scanning {len(report.results)} controls ", _MUTED),
+            (f"[{bar}]", _CYAN),
+            (f" done {g['sep']} {report.scan_duration:.1f}s", _MUTED),
+        ))
         console.print()
         return report
 
@@ -193,8 +290,13 @@ class Reporter:
 
         console = self._make_console()
         self._print_score_panel(console, report)
-        self._print_category_panels(console, report)
-        self._print_top_issues(console, report)
+        if self.verbose:
+            # Full per-category detail lives here (and in the HTML report).
+            self._print_category_detail(console, report)
+        else:
+            # Default view stays concise: prioritised failures, then warnings.
+            self._print_top_findings(console, report, Status.FAIL)
+            self._print_top_findings(console, report, Status.WARN)
         self._print_footer(console, report, html_path, json_path)
 
     def generate_html_report(self, report: AuditReport, path: str) -> None:
@@ -319,11 +421,19 @@ class Reporter:
     # ── Internal rendering helpers ────────────────────────────────────────────
 
     def _build_template_context(self, report: AuditReport) -> dict:
-        """Build the full Jinja2 template variable dict for the HTML report."""
+        """Build the full Jinja2 template variable dict for the HTML report.
+
+        Everything the report needs is computed here (server-side): per-finding
+        presentation, category groupings, the gauge tick ring, the donut arcs,
+        and the prioritised top-issues list. The template only loops and prints.
+        """
+        import math
+        import re
         from collections import defaultdict
 
         letter, label = score_grade(report.score)
         cat_scores = calculate_category_scores(report.results)
+        total = len(report.results)
 
         _sev_ord: dict[Severity, int] = {
             Severity.CRITICAL: 0, Severity.HIGH: 1,
@@ -337,7 +447,31 @@ class Reporter:
         def _sort_key(r: CheckResult) -> tuple[int, int]:
             return (_sta_ord.get(r.status, 5), _sev_ord.get(r.severity, 5))
 
-        # Per-category data (sorted by category name, results by status/severity)
+        def _slug(name: str) -> str:
+            # Mirror the JS: collapse whitespace runs to '-'. Used for ids/anchors.
+            return re.sub(r"\s+", "-", name.strip())
+
+        def _finding_view(r: CheckResult) -> dict:
+            glyph, scolor = _HTML_STATUS.get(r.status, ("?", _MUTED))
+            snippet = ""
+            if r.status in (Status.FAIL, Status.WARN) and r.details:
+                snippet = r.details.split("\n")[0].split(". ")[0]
+            return {
+                "status":       r.status.value,
+                "status_glyph": glyph,
+                "status_color": scolor,
+                "severity":     r.severity.value,
+                "sev_color":    _HTML_SEVERITY.get(r.severity, _MUTED),
+                "category":     r.category,
+                "check_name":   r.check_name,
+                "description":  r.description,
+                "details":      r.details,
+                "remediation":  r.remediation,
+                "cis":          r.cis_reference,
+                "snippet":      snippet,
+            }
+
+        # ── Categories: alphabetical page order; results sorted within ────────
         by_cat: dict[str, list[CheckResult]] = defaultdict(list)
         for r in report.results:
             by_cat[r.category].append(r)
@@ -346,36 +480,81 @@ class Reporter:
         for cat_name in sorted(by_cat):
             cat_results = sorted(by_cat[cat_name], key=_sort_key)
             cs = cat_scores.get(cat_name, 100)
-            cl, clbl = score_grade(cs)
+            cl, _ = score_grade(cs)
             category_data.append({
-                "name":        cat_name,
-                "score":       cs,
-                "grade":       cl,
-                "grade_label": clbl,
-                "results":     cat_results,
-                "fail_count":  sum(1 for r in cat_results if r.status == Status.FAIL),
-                "warn_count":  sum(1 for r in cat_results if r.status == Status.WARN),
-                "pass_count":  sum(1 for r in cat_results if r.status == Status.PASS),
-                "error_count": sum(1 for r in cat_results if r.status == Status.ERROR),
+                "name":         cat_name,
+                "slug":         _slug(cat_name),
+                "score":        cs,
+                "band":         _band(cs),
+                "grade_letter": cl,
+                "fail":         sum(1 for r in cat_results if r.status == Status.FAIL),
+                "warn":         sum(1 for r in cat_results if r.status == Status.WARN),
+                "pass":         sum(1 for r in cat_results if r.status == Status.PASS),
+                "info":         sum(1 for r in cat_results if r.status == Status.INFO),
+                "findings":     [_finding_view(r) for r in cat_results],
             })
 
-        # Top findings: CRITICAL+HIGH FAIL/WARN, up to 5
-        issues = [r for r in report.results if r.status in (Status.FAIL, Status.WARN)]
-        issues.sort(key=lambda r: (_sev_ord.get(r.severity, 5),
-                                   0 if r.status == Status.FAIL else 1))
-        top_findings = [
-            r for r in issues
-            if r.severity in (Severity.CRITICAL, Severity.HIGH)
-        ][:5]
-
-        # All FAIL+WARN for detailed findings section
-        fail_warn_results = sorted(
-            [r for r in report.results if r.status in (Status.FAIL, Status.WARN)],
-            key=_sort_key,
+        # Category-score bars: worst score first.
+        category_bars = sorted(
+            ({"name": c["name"], "slug": c["slug"],
+              "score": c["score"], "band": c["band"]} for c in category_data),
+            key=lambda c: c["score"],
         )
 
-        # INFO results for appendix
-        info_results = [r for r in report.results if r.status == Status.INFO]
+        # ── Top issues: FAIL/WARN with remediation, CRITICAL/HIGH or any FAIL ─
+        candidates = [
+            r for r in report.results
+            if r.status in (Status.FAIL, Status.WARN) and r.remediation
+            and (r.severity in (Severity.CRITICAL, Severity.HIGH)
+                 or r.status == Status.FAIL)
+        ]
+        candidates.sort(key=lambda r: (_sev_ord.get(r.severity, 5),
+                                       0 if r.status == Status.FAIL else 1))
+        top_issues = [
+            {
+                "num":           f"{i + 1:02d}",
+                "severity":      r.severity.value,
+                "sev_color":     _HTML_SEVERITY.get(r.severity, _MUTED),
+                "status":        r.status.value,
+                "status_color":  _HTML_STATUS.get(r.status, ("", _MUTED))[1],
+                "category":      r.category,
+                "category_slug": _slug(r.category),
+                "check_name":    r.check_name,
+                "remediation":   r.remediation,
+            }
+            for i, r in enumerate(candidates[:5])
+        ]
+
+        # ── Score gauge: 40-tick ring + arc dash offset ───────────────────────
+        band = _band(report.score)
+        gauge_ticks = []
+        for i in range(40):
+            on  = (i / 40) <= (report.score / 100)
+            ang = math.radians(-90 + i * 9)
+            gauge_ticks.append({
+                "x1": round(115 + 103 * math.cos(ang), 2),
+                "y1": round(115 + 103 * math.sin(ang), 2),
+                "x2": round(115 + 112 * math.cos(ang), 2),
+                "y2": round(115 + 112 * math.sin(ang), 2),
+                "color":   band if on else "#16241d",
+                "opacity": 0.9 if on else 0.5,
+            })
+        gauge_dashoffset = round(603.2 * (1 - report.score / 100), 2)
+
+        # ── Result-distribution donut (r=52, C≈326.7) ─────────────────────────
+        circ = 2 * math.pi * 52
+        donut, accum = [], 0.0
+        for st, color in ((Status.PASS, _GREEN), (Status.FAIL, _RED),
+                          (Status.WARN, _AMBER), (Status.INFO, _CYAN)):
+            cnt = sum(1 for r in report.results if r.status == st)
+            seg = (cnt / total * circ) if total else 0.0
+            donut.append({
+                "color":  color,
+                "dash":   round(seg, 2),
+                "gap":    round(circ - seg, 2),
+                "offset": round(-accum, 2),
+            })
+            accum += seg
 
         ts = report.scan_timestamp
         generated_at = (
@@ -384,16 +563,32 @@ class Reporter:
         )
 
         return {
-            "report":            report,
-            "version":           __version__,
-            "score_grade":       letter,
-            "score_label":       label,
-            "executive_summary": self._build_executive_summary(report),
-            "category_data":     category_data,
-            "top_findings":      top_findings,
-            "fail_warn_results": fail_warn_results,
-            "info_results":      info_results,
-            "generated_at":      generated_at,
+            "report":             report,
+            "version":            __version__,
+            "hostname":           report.hostname,
+            "os_version":         report.os_version,
+            "scan_timestamp":     generated_at,
+            "scan_duration":      f"{report.scan_duration:.1f}",
+            "score":              report.score,
+            "grade_letter":       letter,
+            "grade_label":        label,
+            "band_color":         band,
+            "total_checks":       total,
+            "pass_count":         report.pass_count,
+            "fail_count":         report.fail_count,
+            "warn_count":         report.warn_count,
+            "info_count":         sum(1 for r in report.results if r.status == Status.INFO),
+            "error_count":        report.error_count,
+            "exec_summary_html":  self._build_executive_summary_html(report),
+            "gauge_ticks":        gauge_ticks,
+            "gauge_dashoffset":   gauge_dashoffset,
+            "donut":              donut,
+            "donut_center":       report.fail_count,
+            "category_data":      category_data,
+            "category_bars":      category_bars,
+            "n_cats":             len(category_data),
+            "top_issues":         top_issues,
+            "cis_version":        _cis_version_for(report),
         }
 
     def _build_executive_summary(self, report: AuditReport) -> str:
@@ -482,207 +677,275 @@ class Reporter:
 
         return "  ".join(parts)
 
+    def _build_executive_summary_html(self, report: AuditReport):
+        """Executive summary as escaped HTML with semantic highlight spans.
+
+        Same narrative as :meth:`_build_executive_summary`, but emits `<b>` for
+        host/grade/areas and `.hl-crit` / `.hl-high` / `.hl-ok` spans. All
+        scan-derived text (the hostname) is HTML-escaped; the markup is ours.
+        """
+        from collections import Counter
+
+        from markupsafe import Markup, escape
+
+        letter, label = score_grade(report.score)
+        total = len(report.results)
+        host  = escape(report.hostname)
+
+        critical_fails = sum(
+            1 for r in report.results
+            if r.status == Status.FAIL and r.severity == Severity.CRITICAL
+        )
+        high_fails = sum(
+            1 for r in report.results
+            if r.status == Status.FAIL and r.severity == Severity.HIGH
+        )
+        issue_cats = Counter(
+            r.category for r in report.results
+            if r.status in (Status.FAIL, Status.WARN)
+        )
+
+        parts: list[str] = [
+            f"The security posture of <b>{host}</b> has been assessed as "
+            f"<b>{label}</b> with an overall score of "
+            f"<b>{report.score}/100 ({letter})</b> across {total} security checks."
+        ]
+
+        if report.fail_count == 0 and report.warn_count == 0:
+            parts.append(
+                '<span class="hl-ok">All checks passed with no failures or '
+                "warnings detected — the system is configured in line with "
+                "Windows security best practices.</span>"
+            )
+            return Markup(" ".join(parts))
+
+        if critical_fails > 0:
+            noun = "finding" if critical_fails == 1 else "findings"
+            verb = "requires" if critical_fails == 1 else "require"
+            parts.append(
+                f'<span class="hl-crit">{critical_fails} critical {noun} '
+                f"{verb} immediate remediation.</span>"
+            )
+        elif high_fails > 0:
+            noun = "finding" if high_fails == 1 else "findings"
+            parts.append(
+                f'<span class="hl-high">{high_fails} high-severity {noun} '
+                "should be addressed promptly.</span>"
+            )
+
+        detail_parts: list[str] = []
+        if report.fail_count > 0:
+            n = report.fail_count
+            detail_parts.append(f"{n} check{'s' if n != 1 else ''} failed")
+        if report.warn_count > 0:
+            n = report.warn_count
+            detail_parts.append(f"{n} check{'s' if n != 1 else ''} issued warnings")
+        if detail_parts:
+            parts.append(f"Of the checks performed, {' and '.join(detail_parts)}.")
+
+        if issue_cats:
+            top_cats = [escape(cat) for cat, _ in issue_cats.most_common(3)]
+            if len(top_cats) == 1:
+                parts.append(f"The primary area of concern is <b>{top_cats[0]}</b>.")
+            else:
+                joined = (", ".join(f"<b>{c}</b>" for c in top_cats[:-1])
+                          + f" and <b>{top_cats[-1]}</b>")
+                parts.append(f"The primary areas of concern are {joined}.")
+
+        parts.append(
+            "Remediation should be prioritized by severity, "
+            "addressing critical and high-severity findings first."
+        )
+
+        if report.error_count:
+            n = report.error_count
+            parts.append(
+                f"Note: {n} check{'s' if n != 1 else ''} could not complete "
+                "— run as Administrator for full results."
+            )
+
+        return Markup(" ".join(parts))
+
     def _make_console(self):
         from rich.console import Console
         return Console(no_color=self.no_color, highlight=False)
 
     def _print_non_admin_warning(self, console) -> None:
-        """Print a warning panel when the scan is running without elevation."""
-        from rich.panel import Panel
-        warn = _u(console, "⚠  ", "! ")
-        console.print(Panel(
-            f"  {warn}[yellow bold]Running without administrator privileges.[/yellow bold]\n"
-            "  Some checks (BitLocker, SMB configuration) will be skipped.\n"
-            "  For a complete audit, right-click and [bold]Run as Administrator[/bold].",
-            border_style="yellow",
-            padding=(0, 1),
+        """Note (no box) that the scan is running without elevation."""
+        g = _glyphs(console)
+        console.print(_text(
+            "  ",
+            (f"{g['warn']} running without administrator privileges", _AMBER),
+        ))
+        console.print(_text(
+            "    ",
+            ("some checks (BitLocker, SMB) will be skipped — "
+             "run elevated for a full audit", _MUTED),
         ))
 
     def _print_banner(self, console) -> None:
-        """Print the Apotrope logo panel."""
-        from rich.align import Align
-        from rich.panel import Panel
-        from rich.text import Text
+        """Print the Apotrope wordmark — two lines, no frame."""
+        g = _glyphs(console)
+        console.print(_text(
+            "  ",
+            (f"{g['brand']} APOTROPE", f"bold {_GREEN}"),
+            (f"  v{__version__}", _MUTED),
+        ))
+        console.print(_text(
+            "  ",
+            ("Windows Security Posture Auditor", _MUTED),
+        ))
 
-        diamond = _u(console, "◈", "*")
-        logo = Text(f"{diamond}  A P O T R O P E  {diamond}", style="bold blue")
-        sub  = Text(f"Windows Security Posture Auditor  {_u(console, '·', '-')}  v{__version__}", style="dim")
-        # Build two-line content; Text.append returns self so we can chain
-        content = logo.copy()
-        content.append("\n")
-        content.append(sub)
-        console.print(Align.center(Panel(
-            Align.center(content),
-            border_style="blue",
-            padding=(1, 6),
-        )))
+    def _rail(self, console, body) -> None:
+        """Print *body* (a Rich Text) prefixed by the green ▌ accent rail."""
+        g = _glyphs(console)
+        line = _text("  ", (g["rail"] + " ", _GREEN))
+        line.append_text(body)
+        console.print(line)
 
     def _print_score_panel(self, console, report: AuditReport) -> None:
-        """Print the prominent security-score panel."""
-        from rich.panel import Panel
-
+        """Print the security-score block, accented by the ▌ rail."""
+        g = _glyphs(console)
         letter, label = score_grade(report.score)
-        gc  = _GRADE_COLOR.get(letter, "white")
-        bar = _score_bar(
-            report.score,
-            filled_char=_u(console, "█", "="),
-            empty_char=_u(console, "░", "-"),
-        )
+        gc = _grade_hex(report.score)
 
-        ts     = report.scan_timestamp
-        ts_str = ts.strftime("%Y-%m-%d %H:%M UTC") if ts.tzinfo else ts.strftime("%Y-%m-%d %H:%M")
-        total  = len(report.results)
-        errors = sum(1 for r in report.results if r.status == Status.ERROR)
+        total      = len(report.results)
+        info_count = sum(1 for r in report.results if r.status == Status.INFO)
 
-        meta = (
-            f"  [dim]Host:[/dim]  [bold]{report.hostname}[/bold]"
-            f"   [dim]OS:[/dim] {report.os_version}\n"
-            f"  [dim]Scan:[/dim] {ts_str}"
-            f"   [dim]Duration:[/dim] {report.scan_duration:.1f}s"
-            f"   [dim]Total checks:[/dim] {total}"
-        )
-
-        score_line = f"\n  [{gc}]{report.score:>3} / 100    {letter}  {label}[/{gc}]\n"
-        bar_line   = f"  [{gc}]{bar}[/{gc}]\n"
-
-        ck = _u(console, "✓", "+")
-        xk = _u(console, "✗", "x")
-        counts = (
-            f"  [green]{ck}  {report.pass_count:>3} passed[/green]"
-            f"   [red]{xk}  {report.fail_count:>3} failed[/red]"
-            f"   [yellow]!  {report.warn_count:>3} warnings[/yellow]"
-        )
-        if errors:
-            counts += f"   [dim]?  {errors} error(s)[/dim]"
-
-        console.print(Panel(
-            meta + score_line + bar_line + counts,
-            title="[bold]Security Score[/bold]",
-            border_style=gc.replace("bold ", ""),
-            padding=(0, 1),
+        # Header: SECURITY SCORE .......... HOSTNAME (right-aligned)
+        host = report.hostname
+        pad  = max(2, _PANEL_WIDTH - len("SECURITY SCORE") - len(host))
+        self._rail(console, _text(
+            ("SECURITY SCORE", f"bold {_GREEN}"),
+            (" " * pad, None),
+            (host, _MUTED),
         ))
+        self._rail(console, _text((report.os_version, _MUTED)))
+        self._rail(console, _text(" "))
+
+        # Score number + grade badge (share the grade colour).
+        self._rail(console, _text(
+            (f"{report.score} / 100", f"bold {gc}"),
+            ("   ", None),
+            (f"{letter} {g['sep']} {label.upper()}", gc),
+        ))
+
+        # Score bar: 24 cells, filled in grade colour, empty in bar0.
+        filled = round(report.score / 100 * _BAR_CELLS)
+        self._rail(console, _text(
+            (g["bar_full"] * filled, gc),
+            (g["bar_empty"] * (_BAR_CELLS - filled), _BAR0),
+        ))
+        self._rail(console, _text(" "))
+
+        # Distribution — each count in its status colour.
+        dist = _text(
+            (f"{g['pass']} {report.pass_count} pass", _GREEN),
+            ("   ", None),
+            (f"{g['fail']} {report.fail_count} fail", _RED),
+            ("   ", None),
+            (f"{g['warn']} {report.warn_count} warn", _AMBER),
+            ("   ", None),
+            (f"{g['info']} {info_count} info", _CYAN),
+        )
+        if report.error_count:
+            dist.append(f"   {g['sep']} {report.error_count} error", style=_MUTED)
+        self._rail(console, dist)
+        self._rail(console, _text((f"{total} checks evaluated", _FAINT)))
         console.print()
 
-    def _print_category_panels(self, console, report: AuditReport) -> None:
-        """Print one Rich Panel per check category."""
-        from rich.panel import Panel
-
-        cat_scores = calculate_category_scores(report.results)
-        categories = sorted({r.category for r in report.results})
-
-        for category in categories:
-            results    = [r for r in report.results if r.category == category]
-            cat_score  = cat_scores.get(category, 100)
-            letter, _  = score_grade(cat_score)
-            score_color = _GRADE_COLOR.get(letter, "white")
-
-            _icon: dict[Status, str] = {
-                Status.PASS:  _u(console, "✓", "+"),
-                Status.FAIL:  _u(console, "✗", "x"),
-                Status.WARN:  "!",
-                Status.INFO:  "i",
-                Status.ERROR: "?",
-            }
-            lines: list[str] = []
-            for result in results:
-                sc   = _STATUS_COLOR[result.status]
-                icon = _icon[result.status]
-
-                # Bold red icon for CRITICAL failures
-                if result.status == Status.FAIL and result.severity == Severity.CRITICAL:
-                    icon_markup = f"[bold red]{icon}[/bold red]"
-                else:
-                    icon_markup = f"[{sc}]{icon}[/{sc}]"
-
-                name_markup = f"[{sc}]{result.check_name}[/{sc}]"
-
-                # One-line detail snippet for FAIL/WARN in normal mode
-                inline = ""
-                if not self.verbose and result.details and result.status in (
-                    Status.FAIL, Status.WARN
-                ):
-                    snippet = result.details.split("\n")[0]
-                    for sep in (".", ";", " - ", " -- "):
-                        if sep in snippet:
-                            snippet = snippet.split(sep)[0]
-                            break
-                    inline = f"  [dim]{_truncate(snippet, _DETAIL_INLINE_MAX)}[/dim]"
-
-                lines.append(f"  {icon_markup}  {name_markup}{inline}")
-
-                if self.verbose:
-                    sev_c = _SEVERITY_COLOR.get(result.severity, "white")
-                    lines.append(
-                        f"     [dim]Severity:[/dim]  [{sev_c}]{result.severity.value}[/{sev_c}]"
-                    )
-                    if result.details:
-                        wrapped = textwrap.wrap(result.details, 72)
-                        lines.append(f"     [dim]Details:[/dim]   {wrapped[0]}")
-                        for cont in wrapped[1:]:
-                            lines.append(f"               {cont}")
-                    if result.remediation:
-                        wrapped = textwrap.wrap(result.remediation, 72)
-                        lines.append(
-                            f"     [dim]Fix:[/dim]       [italic]{wrapped[0]}[/italic]"
-                        )
-                        for cont in wrapped[1:]:
-                            lines.append(f"               [italic]{cont}[/italic]")
-                    lines.append("")
-
-            title = (
-                f"[bold]{category}[/bold]"
-                f"   [{score_color}]{cat_score}/100  {letter}[/{score_color}]"
-            )
-            console.print(Panel(
-                "\n".join(lines),
-                title=title,
-                border_style="blue",
-                padding=(0, 1),
-            ))
-            console.print()
-
-    def _print_top_issues(self, console, report: AuditReport) -> None:
-        """Print the top-N highest-severity findings with remediation guidance."""
-        from rich.panel import Panel
-
-        issues = [
-            r for r in report.results
-            if r.status in (Status.FAIL, Status.WARN) and r.remediation
-        ]
-        issues.sort(key=lambda r: (
-            _SEV_ORDER.get(r.severity, 5),
-            0 if r.status == Status.FAIL else 1,
-        ))
-        top = issues[:_TOP_ISSUES_COUNT]
-
-        if not top:
+    def _print_top_findings(
+        self, console, report: AuditReport, status: Status
+    ) -> None:
+        """Print a prioritised FAIL or WARN block (severity-sorted, capped)."""
+        g = _glyphs(console)
+        rows = sorted(
+            (r for r in report.results if r.status == status),
+            key=lambda r: _SEV_ORDER.get(r.severity, 5),
+        )[:_TOP_N]
+        if not rows:
             return
 
-        lines: list[str] = []
-        for i, result in enumerate(top, 1):
-            sc  = _STATUS_COLOR[result.status]
-            svc = _SEVERITY_COLOR.get(result.severity, "white")
-
-            lines.append(
-                f"  [bold]{i}.[/bold]  "
-                f"[{sc}]{result.status.value}[/{sc}]"
-                f" / [{svc}]{result.severity.value}[/{svc}]"
-                f"   [bold]{result.check_name}[/bold]"
+        if status == Status.FAIL:
+            head_glyph, head_text, accent, row_glyph = (
+                g["flag"], "TOP FAILURES", _RED, g["fail"]
             )
-            for rline in textwrap.wrap(result.remediation, _REM_WRAP_WIDTH):
-                lines.append(f"       [italic dim]{rline}[/italic dim]")
+        else:
+            head_glyph, head_text, accent, row_glyph = (
+                g["warn"], "TOP WARNINGS", _AMBER, g["warn"]
+            )
 
-            if i < len(top):
-                lines.append("")
+        prefix = f"{head_glyph} " if head_glyph else ""
+        console.print(_text("  ", (f"{prefix}{head_text}", f"bold {accent}")))
 
-        flag = _u(console, "⚑  ", "")
-        console.print(Panel(
-            "\n".join(lines),
-            title=f"[bold red]{flag}Top Issues[/bold red]",
-            border_style="red",
-            padding=(1, 1),
-        ))
+        for r in rows:
+            sev  = _SEVERITY_ABBR.get(r.severity, "?").ljust(_SEV_WIDTH)
+            desc = _truncate(r.check_name, _DESC_WIDTH).ljust(_DESC_WIDTH)
+            line = _text(
+                "  ",
+                (row_glyph + " ", accent),
+                (sev + " ", _SEVERITY_HEX.get(r.severity, _TEXT)),
+                (desc, _TEXT),
+            )
+            if r.cis_reference:
+                line.append(" " + r.cis_reference, style=_FAINT)
+            console.print(line)
         console.print()
+
+    def _print_category_detail(self, console, report: AuditReport) -> None:
+        """Verbose view: every check, grouped by category, in the rail language."""
+        g = _glyphs(console)
+        glyph_for = {
+            Status.PASS:  g["pass"],  Status.FAIL: g["fail"], Status.WARN: g["warn"],
+            Status.INFO:  g["info"],  Status.ERROR: g["error"],
+        }
+        cat_scores = calculate_category_scores(report.results)
+
+        for category in sorted({r.category for r in report.results}):
+            results   = [r for r in report.results if r.category == category]
+            cat_score = cat_scores.get(category, 100)
+            letter, _ = score_grade(cat_score)
+            gc        = _grade_hex(cat_score)
+
+            badge = f"{cat_score}/100  {letter}"
+            pad   = max(2, _PANEL_WIDTH - len(category) - len(badge))
+            self._rail(console, _text(
+                (category, f"bold {_GREEN}"),
+                (" " * pad, None),
+                (badge, gc),
+            ))
+
+            for r in results:
+                sc = _STATUS_HEX[r.status]
+                # CRITICAL failures get the critical-pink glyph.
+                glyph_color = (
+                    _CRIT if (r.status == Status.FAIL
+                              and r.severity == Severity.CRITICAL)
+                    else sc
+                )
+                line = _text(
+                    "  ",
+                    (glyph_for[r.status] + " ", glyph_color),
+                    (r.check_name, sc),
+                )
+                if r.cis_reference:
+                    line.append("  " + r.cis_reference, style=_FAINT)
+                console.print(line)
+
+                sev_c = _SEVERITY_HEX.get(r.severity, _TEXT)
+                console.print(_text(
+                    "       ", ("severity  ", _MUTED), (r.severity.value, sev_c),
+                ))
+                if r.details:
+                    for i, ln in enumerate(textwrap.wrap(r.details, _REM_WRAP_WIDTH)):
+                        label = "details   " if i == 0 else "          "
+                        console.print(_text("       ", (label, _MUTED), (ln, _TEXT)))
+                if r.remediation:
+                    for i, ln in enumerate(textwrap.wrap(r.remediation, _REM_WRAP_WIDTH)):
+                        label = "fix       " if i == 0 else "          "
+                        console.print(_text("       ", (label, _MUTED), (ln, _TEXT)))
+                console.print()
+            console.print()
 
     def _print_footer(
         self,
@@ -691,40 +954,47 @@ class Reporter:
         html_path: str | None,
         json_path: str | None,
     ) -> None:
-        """Print the scan summary footer."""
-        if _console_is_unicode(console):
-            from rich.rule import Rule
-            console.print(Rule(style="dim"))
-        else:
-            console.print("[dim]" + "-" * 79 + "[/dim]")
-        console.print(
-            f"  [dim]Scan completed in[/dim] [bold]{report.scan_duration:.1f}s[/bold]"
-        )
+        """Print the single-arrow summary footer (plus any caveats, muted)."""
+        g = _glyphs(console)
+        issues = report.fail_count + report.warn_count
+        plural = "s" if issues != 1 else ""
+
         if html_path:
-            console.print(
-                f"  [dim]HTML report saved to:[/dim] [bold cyan]{html_path}[/bold cyan]"
-            )
+            tail = (f" {g['sep']} open to triage all {issues} issue{plural}"
+                    if issues else f" {g['sep']} clean — no issues to triage")
+            console.print(_text(
+                "  ",
+                (f"{g['arrow']} {html_path} written", _GREEN),
+                (tail, _MUTED),
+            ))
+        elif issues:
+            console.print(_text(
+                "  ",
+                (f"{g['arrow']} {issues} issue{plural} to triage", _AMBER),
+                (f" {g['sep']} run with --html report.html for the full report", _MUTED),
+            ))
+        else:
+            console.print(_text("  ", (f"{g['arrow']} clean — no issues found", _GREEN)))
+
         if json_path:
-            console.print(
-                f"  [dim]JSON report saved to:[/dim] [bold cyan]{json_path}[/bold cyan]"
-            )
-        error_count = report.error_count
-        if error_count:
-            console.print(
-                f"  [yellow]![/yellow]  [yellow bold]{error_count} check(s) could not "
-                f"complete.[/yellow bold]  "
-                "[dim]Run as Administrator for full results.[/dim]"
-            )
+            console.print(_text("  ", (f"{g['sep']} {json_path} written", _MUTED)))
+        if report.error_count:
+            n = report.error_count
+            console.print(_text(
+                "  ",
+                (f"{n} check{'s' if n != 1 else ''} could not complete", _AMBER),
+                (" — run as Administrator for full results", _MUTED),
+            ))
         if not report.is_admin:
-            console.print(
-                "  [dim]Note:[/dim] Some checks were skipped — "
-                "[bold]run as Administrator[/bold] for complete results."
-            )
+            console.print(_text(
+                "  ",
+                ("note: some checks skipped — run as Administrator for complete results",
+                 _MUTED),
+            ))
         if not self.verbose:
-            console.print(
-                "  [dim]Tip:[/dim] Run with [bold]--verbose[/bold] "
-                "for full details and remediation steps"
-            )
+            console.print(_text(
+                "  ", ("run with --verbose for per-check detail", _MUTED),
+            ))
         console.print()
 
     # ── Plain-text fallback ───────────────────────────────────────────────────

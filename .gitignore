@@ -54,8 +54,11 @@ $RECYCLE.BIN/
 *.html
 *.json
 !docs/index.html
+# committed sample report served by the marketing site
+!docs/report.html
 apotrope_report_*
 
 # Design review scaffolding
 gen_sample_report.py
 sample_report.html
+.gstack/

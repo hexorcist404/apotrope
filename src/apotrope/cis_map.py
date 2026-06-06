@@ -68,6 +68,25 @@ NEEDS MANUAL REVIEW (no direct CIS admin template control in v5.0.0):
 
 from __future__ import annotations
 
+# CIS Benchmark editions these IDs are verified against, by OS family.
+# Windows 11 uses the v5.0.0 benchmark; Windows 10 / Server 2019 uses v4.0.0.
+CIS_VERSION_WIN11 = "v5.0.0"
+CIS_VERSION_WIN10 = "v4.0.0"
+
+
+def benchmark_version(is_win10: bool = False) -> str:
+    """Return the CIS Benchmark edition string for the audited OS family.
+
+    Args:
+        is_win10: ``True`` for Windows 10 / Server 2019 hosts (build < 22000),
+                  ``False`` for Windows 11.
+
+    Returns:
+        ``"v4.0.0"`` for Windows 10, ``"v5.0.0"`` for Windows 11.
+    """
+    return CIS_VERSION_WIN10 if is_win10 else CIS_VERSION_WIN11
+
+
 # Win10 v4.0.0 IDs that differ from the Win11 v5.0.0 base map.
 # Section offsets that changed: Defender (42→43), PowerShell (88→87),
 # WinRM (90→89), Windows Update (94→93).  SMB Encryption (18.6.8.7)
