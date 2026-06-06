@@ -84,7 +84,11 @@ def _check_guest_account() -> list[CheckResult]:
         details=f"Built-in Guest account is {'enabled' if enabled else 'disabled'}.",
         remediation=(
             "" if not enabled else
-            "Disable the Guest account: Disable-LocalUser -Name 'Guest'"
+            "Disable the built-in Guest account."
+        ),
+        command=(
+            "" if not enabled else
+            "Disable-LocalUser -Name 'Guest'"
         ),
     )]
 
@@ -118,22 +122,25 @@ def _check_builtin_admin() -> list[CheckResult]:
         status, sev = Status.FAIL, Severity.MEDIUM
         details = "Built-in Administrator account is enabled with the default name."
         remediation = (
-            "Rename and/or disable the built-in Administrator account. "
-            "Rename: Rename-LocalUser -Name 'Administrator' -NewName '<new_name>'. "
-            "Disable: Disable-LocalUser -Name 'Administrator'"
+            "Rename the built-in Administrator account and disable it if it is not in active use."
+        )
+        command = (
+            "Rename-LocalUser -Name 'Administrator' -NewName '<new_name>'\n"
+            "Disable-LocalUser -Name 'Administrator'"
         )
     elif enabled:
         status, sev = Status.WARN, Severity.LOW
         details = f"Built-in Administrator account is enabled (renamed to '{name}')."
         remediation = (
-            "Consider disabling the built-in Administrator account if it is not in active use: "
-            f"Disable-LocalUser -Name '{name}'"
+            "Consider disabling the built-in Administrator account if it is not in active use."
         )
+        command = f"Disable-LocalUser -Name '{name}'"
     else:
         status, sev = Status.PASS, Severity.MEDIUM
         rename_note = f" (renamed to '{name}')" if not is_default_name else ""
         details = f"Built-in Administrator account is disabled{rename_note}."
         remediation = ""
+        command = ""
 
     return [CheckResult(
         category=CATEGORY,
@@ -143,6 +150,7 @@ def _check_builtin_admin() -> list[CheckResult]:
         description="Checks if the built-in Administrator account is enabled and not renamed.",
         details=details,
         remediation=remediation,
+        command=command,
     )]
 
 
@@ -168,9 +176,16 @@ def _check_admin_count() -> list[CheckResult]:
         details=f"{count} administrator(s): {', '.join(names) if names else 'none'}",
         remediation=(
             "" if not over_threshold else
-            f"Review and reduce the {count} local administrator accounts. "
-            "Remove unnecessary members: "
-            "Remove-LocalGroupMember -Group 'Administrators' -Member '<username>'"
+            "Review who holds local admin rights and remove standing admin from service "
+            "and helpdesk accounts; use just-in-time elevation (LAPS / PIM) instead."
+        ),
+        command=(
+            "" if not over_threshold else
+            "# List current local administrators\n"
+            "Get-LocalGroupMember -Group 'Administrators'\n"
+            "\n"
+            "# Remove a standing admin (replace with the account to remove)\n"
+            "Remove-LocalGroupMember -Group 'Administrators' -Member 'CORP\\svc_backup'"
         ),
     )]
 
@@ -202,7 +217,8 @@ def _check_password_policy() -> list[CheckResult]:
             severity=Severity.HIGH,
             description=f"Minimum password length must be ≥{_MIN_PW_FAIL} (WARN if <{_MIN_PW_WARN}).",
             details=f"Minimum password length: {min_len} characters.",
-            remediation=f"Increase minimum password length: net accounts /minpwlen:{_MIN_PW_WARN}",
+            remediation="Require a minimum password length of 14 characters.",
+            command="net accounts /minpwlen:14",
         ))
     elif min_len < _MIN_PW_WARN:
         results.append(CheckResult(
@@ -212,7 +228,8 @@ def _check_password_policy() -> list[CheckResult]:
             severity=Severity.MEDIUM,
             description=f"Minimum password length must be ≥{_MIN_PW_FAIL} (WARN if <{_MIN_PW_WARN}).",
             details=f"Minimum password length: {min_len} characters (recommended: {_MIN_PW_WARN}+).",
-            remediation=f"Increase minimum password length: net accounts /minpwlen:{_MIN_PW_WARN}",
+            remediation="Require a minimum password length of 14 characters.",
+            command="net accounts /minpwlen:14",
         ))
     else:
         results.append(CheckResult(
@@ -242,7 +259,11 @@ def _check_password_policy() -> list[CheckResult]:
         ),
         remediation=(
             "" if not lockout_disabled else
-            "Enable account lockout: net accounts /lockoutthreshold:5 /lockoutduration:30"
+            "Enable account lockout so accounts are locked after repeated failed logins."
+        ),
+        command=(
+            "" if not lockout_disabled else
+            "net accounts /lockoutthreshold:5 /lockoutduration:30"
         ),
     ))
 
@@ -274,9 +295,16 @@ def _check_password_policy() -> list[CheckResult]:
             details=f"Password complexity requirement: {'enabled' if enabled else 'disabled'}.",
             remediation=(
                 "" if enabled else
-                "Enable password complexity: "
-                "secpol.msc → Account Policies → Password Policy → "
-                "Password must meet complexity requirements → Enabled"
+                "Enable the password complexity requirement so passwords must mix "
+                "character types."
+            ),
+            command=(
+                "" if enabled else
+                "# Set via Local Security Policy: secpol.msc -> Account Policies ->\n"
+                "# Password Policy -> Password must meet complexity requirements -> Enabled.\n"
+                "# Verify the current setting:\n"
+                "secedit /export /cfg \"$env:TEMP\\secpol.cfg\" | Out-Null; "
+                "Select-String -Path \"$env:TEMP\\secpol.cfg\" -Pattern 'PasswordComplexity'"
             ),
         ))
 

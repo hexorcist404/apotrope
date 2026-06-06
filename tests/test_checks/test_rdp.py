@@ -41,7 +41,7 @@ class TestCheckRdpEnabled:
 
     def test_rdp_enabled_has_remediation(self):
         results, _ = rdp._check_rdp_enabled(_data(deny=0))
-        assert "fDenyTSConnections" in results[0].remediation
+        assert "fDenyTSConnections" in results[0].command
 
     def test_key_absent_treated_as_disabled(self):
         results, enabled = rdp._check_rdp_enabled({})
@@ -72,11 +72,11 @@ class TestCheckRdpNla:
     def test_nla_absent_is_warn(self):
         r = rdp._check_rdp_nla({})[0]
         assert r.status == Status.WARN
-        assert "UserAuthentication" in r.remediation
+        assert "UserAuthentication" in r.command
 
     def test_nla_fail_includes_remediation(self):
         r = rdp._check_rdp_nla(_data(nla=0))[0]
-        assert "UserAuthentication" in r.remediation
+        assert "UserAuthentication" in r.command
 
 
 # ---------------------------------------------------------------------------

@@ -34,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  apotrope --category firewall,encryption  Specific categories only\n"
             "  apotrope --dry-run                   List checks without running\n"
             "  apotrope --verbose                   Show details for every check\n"
+            "  apotrope --fix                       Print paste-ready PowerShell fixes\n"
             "\n"
             "NOTICE: Apotrope is a READ-ONLY tool for AUTHORISED auditing only.\n"
             "It makes no changes to the system.  Do not run on systems you do\n"
@@ -89,6 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show detailed output for every check",
     )
     parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Print copy-paste-ready PowerShell remediation for each failing/warning check",
+    )
+    parser.add_argument(
         "--no-color",
         action="store_true",
         help="Disable Rich color formatting",
@@ -127,7 +133,7 @@ def main() -> None:
 
     admin    = is_admin()
     scanner  = Scanner(categories=categories, is_admin=admin, profile=profile)
-    reporter = Reporter(verbose=args.verbose, no_color=args.no_color)
+    reporter = Reporter(verbose=args.verbose, no_color=args.no_color, fix=args.fix)
 
     # --dry-run: list modules and exit without scanning
     if args.dry_run:

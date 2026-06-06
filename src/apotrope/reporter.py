@@ -203,11 +203,16 @@ class Reporter:
     Args:
         verbose:  Show details and remediation for every check result.
         no_color: Disable Rich color markup (produces plain, no-ANSI output).
+        fix:      Print a copy-paste-ready "TOP FIXES" block with the exact
+                  PowerShell command for each failing/warning check.
     """
 
-    def __init__(self, verbose: bool = False, no_color: bool = False) -> None:
+    def __init__(
+        self, verbose: bool = False, no_color: bool = False, fix: bool = False
+    ) -> None:
         self.verbose = verbose
         self.no_color = no_color
+        self.fix = fix
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -297,6 +302,9 @@ class Reporter:
             # Default view stays concise: prioritised failures, then warnings.
             self._print_top_findings(console, report, Status.FAIL)
             self._print_top_findings(console, report, Status.WARN)
+            # --fix: append a copy-paste-ready block of exact PowerShell commands.
+            if self.fix:
+                self._print_top_fixes(console, report)
         self._print_footer(console, report, html_path, json_path)
 
     def generate_html_report(self, report: AuditReport, path: str) -> None:
@@ -467,6 +475,7 @@ class Reporter:
                 "description":  r.description,
                 "details":      r.details,
                 "remediation":  r.remediation,
+                "command":      r.command,
                 "cis":          r.cis_reference,
                 "snippet":      snippet,
             }
@@ -892,6 +901,59 @@ class Reporter:
             console.print(line)
         console.print()
 
+    def _fix_candidates(self, report: AuditReport) -> list[CheckResult]:
+        """FAIL/WARN findings that carry a command, ordered for the fixes block.
+
+        Severity-sorted (CRITICAL→LOW), FAIL before WARN — same priority the
+        HTML top-issues panel uses.
+        """
+        rows = [
+            r for r in report.results
+            if r.status in (Status.FAIL, Status.WARN) and r.command
+        ]
+        rows.sort(key=lambda r: (
+            _SEV_ORDER.get(r.severity, 5),
+            0 if r.status == Status.FAIL else 1,
+        ))
+        return rows
+
+    def _print_top_fixes(self, console, report: AuditReport) -> None:
+        """Print copy-paste-ready PowerShell for the top failing/warning checks.
+
+        Each finding gets a header line (glyph/severity/name/CIS) followed by its
+        exact command on indented bare lines — no glyph, rail, or prompt — so a
+        user can select and paste straight into an elevated PowerShell.
+        """
+        rows = self._fix_candidates(report)[:_TOP_N]
+        if not rows:
+            return
+
+        g = _glyphs(console)
+        flag = f"{g['flag']} " if g["flag"] else ""
+        console.print(_text(
+            "  ",
+            (f"{flag}TOP FIXES", f"bold {_RED}"),
+            ("   copy-paste into an elevated PowerShell", _MUTED),
+        ))
+        console.print()
+
+        for r in rows:
+            sev  = _SEVERITY_ABBR.get(r.severity, "?").ljust(_SEV_WIDTH)
+            desc = _truncate(r.check_name, _DESC_WIDTH).ljust(_DESC_WIDTH)
+            line = _text(
+                "  ",
+                (g["fail"] + " ", _RED),
+                (sev + " ", _SEVERITY_HEX.get(r.severity, _TEXT)),
+                (desc, _TEXT),
+            )
+            if r.cis_reference:
+                line.append(" " + r.cis_reference, style=_FAINT)
+            console.print(line)
+            # Bare command lines — nothing but the command, indented 6 spaces.
+            for cmd_line in r.command.split("\n"):
+                console.print(_text("      ", (cmd_line, _GREEN)))
+            console.print()
+
     def _print_category_detail(self, console, report: AuditReport) -> None:
         """Verbose view: every check, grouped by category, in the rail language."""
         g = _glyphs(console)
@@ -944,6 +1006,11 @@ class Reporter:
                     for i, ln in enumerate(textwrap.wrap(r.remediation, _REM_WRAP_WIDTH)):
                         label = "fix       " if i == 0 else "          "
                         console.print(_text("       ", (label, _MUTED), (ln, _TEXT)))
+                if r.command:
+                    # Verbatim (un-wrapped) so each line stays copy-paste-valid.
+                    for i, ln in enumerate(r.command.split("\n")):
+                        label = "run       " if i == 0 else "          "
+                        console.print(_text("       ", (label, _MUTED), (ln, _GREEN)))
                 console.print()
             console.print()
 
@@ -991,9 +1058,24 @@ class Reporter:
                 ("note: some checks skipped — run as Administrator for complete results",
                  _MUTED),
             ))
-        if not self.verbose:
+        if self.fix and not self.verbose:
+            total_fixes = len(self._fix_candidates(report))
+            shown = min(total_fixes, _TOP_N)
+            if total_fixes > shown:
+                console.print(_text(
+                    "  ",
+                    (f"{shown} of {total_fixes} fixes shown", _MUTED),
+                    (" — run --verbose for every fix", _MUTED),
+                ))
+            else:
+                console.print(_text(
+                    "  ", ("run with --verbose for per-check detail", _MUTED),
+                ))
+        elif not self.verbose:
             console.print(_text(
-                "  ", ("run with --verbose for per-check detail", _MUTED),
+                "  ",
+                ("run with --verbose for per-check detail "
+                 f"{g['sep']} --fix for paste-ready commands", _MUTED),
             ))
         console.print()
 
@@ -1015,7 +1097,10 @@ class Reporter:
         for r in report.results:
             icon = _STATUS_ICON.get(r.status, "?")
             print(f"[{icon}] [{r.severity.value:8}] {r.category}: {r.check_name}")
-            if self.verbose and r.details:
+            if (self.verbose or self.fix) and r.details:
                 print(f"       {r.details}")
-            if self.verbose and r.remediation:
+            if (self.verbose or self.fix) and r.remediation:
                 print(f"       Fix: {r.remediation}")
+            if (self.verbose or self.fix) and r.command:
+                for ln in r.command.split("\n"):
+                    print(f"       {ln}")

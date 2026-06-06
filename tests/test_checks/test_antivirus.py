@@ -60,7 +60,7 @@ class TestCheckDefender:
         sig = next(r for r in results if "Signature" in r.check_name)
         assert sig.status == Status.WARN
         assert sig.severity == Severity.HIGH
-        assert "Update-MpSignature" in sig.remediation
+        assert "Update-MpSignature" in sig.command
 
     def test_signatures_at_threshold_returns_warn(self):
         with patch("apotrope.checks.antivirus.run_powershell_json",

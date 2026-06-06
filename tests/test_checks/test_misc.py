@@ -38,7 +38,7 @@ class TestCheckAutoplay:
 
     def test_warn_has_remediation(self):
         r = self._run("NOTSET")[0]
-        assert "NoDriveTypeAutoRun" in r.remediation
+        assert "NoDriveTypeAutoRun" in r.command
 
     def test_error_returns_error(self):
         with patch("apotrope.checks.misc.run_powershell",
@@ -111,7 +111,7 @@ class TestCheckSpectre:
 
     def test_disabled_has_remediation(self):
         r = self._run({"Override": 3, "Mask": 3})[0]
-        assert "FeatureSettingsOverride" in r.remediation
+        assert "FeatureSettingsOverride" in r.command
 
     def test_error_returns_error(self):
         with patch("apotrope.checks.misc.run_powershell_json",
@@ -155,7 +155,7 @@ class TestCheckAuditPolicy:
 
     def test_warn_has_remediation(self):
         r = self._run([self._entry("Logon", "No Auditing")])[0]
-        assert "auditpol" in r.remediation
+        assert "auditpol" in r.command
 
     def test_error_returns_error(self):
         with patch("apotrope.checks.misc.run_powershell_json",

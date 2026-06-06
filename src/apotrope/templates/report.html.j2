@@ -319,12 +319,20 @@
   .fbody .fld { display:grid; grid-template-columns: 82px 1fr; gap:14px; align-items:start; }
   .fbody .fld .k { font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--faint); padding-top:2px; }
   .fbody .fld .vv { font-size:13px; color:var(--text); line-height:1.65; }
-  .code { font-size:12.5px; background:#02060a; border:1px solid var(--line); border-left:2px solid var(--accent);
-          border-radius:2px; padding:11px 13px; color:var(--green); white-space:pre-wrap; word-break:break-word;
-          position:relative; }
-  .code .copy { position:absolute; top:7px; right:8px; font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase;
-                color:var(--muted); border:1px solid var(--line); padding:3px 7px; border-radius:2px; background:var(--void); }
+  .rem { display:grid; gap:11px; }
+  .rem-note { font-size:13px; color:var(--text); line-height:1.65; }
+  .code { font-size:12.5px; background:#02060a; border:1px solid var(--line);
+          border-left:2px solid var(--accent); border-radius:2px; overflow:hidden; }
+  .code-bar { display:flex; align-items:center; justify-content:space-between; gap:12px;
+              padding:6px 8px 6px 11px; background:rgba(43,255,136,0.05);
+              border-bottom:1px solid var(--line); }
+  .code-tag { font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); }
+  .code .copy { font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase; flex-shrink:0;
+                color:var(--muted); border:1px solid var(--line); padding:3px 9px; border-radius:2px;
+                background:var(--void); cursor:pointer; }
   .code .copy:hover { color:var(--accent); border-color:var(--accent); }
+  .code-cmd { font-family:"IBM Plex Mono","Cascadia Code","Consolas",monospace; font-size:12.5px;
+              color:var(--green); white-space:pre-wrap; word-break:break-word; padding:11px 13px; margin:0; }
   .cis { display:inline-flex; align-items:center; gap:6px; font-size:11px; letter-spacing:0.06em;
          color:var(--cyan); border:1px solid rgba(68,224,230,0.28); background:rgba(68,224,230,0.05);
          padding:3px 9px; border-radius:2px; }
@@ -355,7 +363,10 @@
     .cat-bar { position:static; background:#f2f2f2 !important; }
     .cat-name, .brand .name, .ti-name, .fname b, .meta-item .v b { color:#111 !important; }
     .fbody[hidden] { display:grid !important; }   /* show all details on paper */
-    .code { background:#f6f6f6 !important; color:#111 !important; }
+    .code { background:#f6f6f6 !important; }
+    .code-bar { background:#ececec !important; border-bottom-color:#ccc !important; }
+    .code-tag { color:#444 !important; }
+    .code-cmd { color:#111 !important; }
   }
 {% endraw %}</style>
 </head>
@@ -531,9 +542,20 @@
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">{{ f.description }}</span></div>
             <div class="fld"><span class="k">Found</span><span class="vv">{{ f.details }}</span></div>
-            {% if f.remediation %}
+            {% if f.remediation or f.command %}
             <div class="fld"><span class="k">Remediation</span>
-              <div class="code">{{ f.remediation }}<button class="copy">copy</button></div></div>
+              <div class="rem">
+                {% if f.remediation %}<div class="rem-note">{{ f.remediation }}</div>{% endif %}
+                {% if f.command %}
+                <div class="code">
+                  <div class="code-bar">
+                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">copy</button>
+                  </div>
+                  <pre class="code-cmd">{{ f.command }}</pre>
+                </div>
+                {% endif %}
+              </div></div>
             {% endif %}
             {% if f.cis %}<div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">{{ f.cis }}</span></span></div>{% endif %}
           </div>
@@ -608,7 +630,9 @@
   document.querySelectorAll('.code .copy').forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
-      var code = btn.parentNode.textContent.replace(/copy$/, '').trim();
+      // Copy ONLY the command text, not the label bar or button.
+      var pre = btn.closest('.code').querySelector('.code-cmd');
+      var code = pre ? pre.textContent.replace(/\s+$/, '') : '';
       if (navigator.clipboard) navigator.clipboard.writeText(code);
       var t = btn.textContent; btn.textContent = 'copied'; setTimeout(function(){ btn.textContent = t; }, 1300);
     });

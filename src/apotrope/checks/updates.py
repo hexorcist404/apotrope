@@ -87,8 +87,15 @@ def _check_last_update() -> list[CheckResult]:
             description="Checks when the most recent Windows Update was installed.",
             details="No hotfixes with a valid install date were found in the hotfix log.",
             remediation=(
-                "Run Windows Update manually: "
-                "Settings → Windows Update → Check for updates."
+                "Install all pending quality and security updates. "
+                "Schedule a maintenance window if reboots are deferred."
+            ),
+            command=(
+                "# Install the PSWindowsUpdate helper module (first time only)\n"
+                "Install-Module PSWindowsUpdate -Force -Scope CurrentUser\n"
+                "\n"
+                "# Download and install everything available, rebooting if required\n"
+                "Install-WindowsUpdate -AcceptAll -AutoReboot"
             ),
         )]
 
@@ -113,8 +120,15 @@ def _check_last_update() -> list[CheckResult]:
                 f"System is {age_days - _FAIL_DAYS} days past the {_FAIL_DAYS}-day threshold."
             ),
             remediation=(
-                "Install all pending Windows Updates immediately. "
-                "Open: Start-Process ms-settings:windowsupdate"
+                "Install all pending quality and security updates. "
+                "Schedule a maintenance window if reboots are deferred."
+            ),
+            command=(
+                "# Install the PSWindowsUpdate helper module (first time only)\n"
+                "Install-Module PSWindowsUpdate -Force -Scope CurrentUser\n"
+                "\n"
+                "# Download and install everything available, rebooting if required\n"
+                "Install-WindowsUpdate -AcceptAll -AutoReboot"
             ),
         )]
 
@@ -130,8 +144,15 @@ def _check_last_update() -> list[CheckResult]:
                 f"({last_update.strftime('%Y-%m-%d')})."
             ),
             remediation=(
-                "Check for and install pending Windows Updates: "
-                "Start-Process ms-settings:windowsupdate"
+                "Install all pending quality and security updates. "
+                "Schedule a maintenance window if reboots are deferred."
+            ),
+            command=(
+                "# Install the PSWindowsUpdate helper module (first time only)\n"
+                "Install-Module PSWindowsUpdate -Force -Scope CurrentUser\n"
+                "\n"
+                "# Download and install everything available, rebooting if required\n"
+                "Install-WindowsUpdate -AcceptAll -AutoReboot"
             ),
         )]
 
@@ -177,8 +198,12 @@ def _check_wu_service() -> list[CheckResult]:
         details=f"Windows Update service status: {output}.",
         remediation=(
             "" if running else
-            "Start the Windows Update service: Start-Service -Name wuauserv. "
-            "If disabled, change startup type: "
+            "Start the Windows Update service, and set it to start automatically "
+            "if it has been disabled."
+        ),
+        command=(
+            "" if running else
+            "Start-Service -Name wuauserv\n"
             "Set-Service -Name wuauserv -StartupType Automatic"
         ),
     )]
@@ -239,10 +264,10 @@ def _check_pending_updates() -> list[CheckResult]:
         description="Counts Windows Updates that are available but not yet installed.",
         details=f"{count} pending Windows Update(s) are available but not installed.",
         remediation=(
-            f"Install {count} pending update(s): "
-            "Settings → Windows Update → Install now, or: "
-            "Install-WindowsUpdate -AcceptAll (requires PSWindowsUpdate module)"
+            f"Install the {count} pending update(s) now (requires the "
+            "PSWindowsUpdate module)."
         ),
+        command="Install-WindowsUpdate -AcceptAll",
     )]
 
 

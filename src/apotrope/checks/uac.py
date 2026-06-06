@@ -89,11 +89,10 @@ def _check_uac_enabled(data: dict) -> list[CheckResult]:
             severity=Severity.CRITICAL,
             description="Checks whether User Account Control (UAC) is enabled.",
             details="Could not read UAC EnableLUA registry value.",
-            remediation=(
-                "Verify UAC status: "
-                f"Get-ItemProperty '{_REG_KEY}' | Select EnableLUA. "
-                "Enable UAC: Set-ItemProperty -Path "
-                f"'{_REG_KEY}' -Name EnableLUA -Value 1"
+            remediation="Verify UAC status manually, then re-enable User Account Control if it is off.",
+            command=(
+                f"Get-ItemProperty '{_REG_KEY}' | Select EnableLUA\n"
+                f"Set-ItemProperty -Path '{_REG_KEY}' -Name EnableLUA -Value 1"
             ),
         )]
 
@@ -107,11 +106,12 @@ def _check_uac_enabled(data: dict) -> list[CheckResult]:
         details=f"UAC (EnableLUA) is {'enabled' if enabled else 'disabled'}.",
         remediation=(
             "" if enabled else
-            "Enable UAC immediately: "
-            "Set-ItemProperty -Path "
-            f"'{_REG_KEY}' "
-            "-Name EnableLUA -Value 1. "
-            "A reboot is required for the change to take effect."
+            "Re-enable User Account Control, then reboot for it to take effect."
+        ),
+        command=(
+            "" if enabled else
+            f"Set-ItemProperty -Path '{_REG_KEY}' -Name 'EnableLUA' -Value 1\n"
+            "Restart-Computer"
         ),
     )]
 
@@ -148,11 +148,12 @@ def _check_admin_behavior(data: dict) -> list[CheckResult]:
                 "Administrators are elevated silently without any confirmation prompt."
             ),
             remediation=(
-                "Set admin UAC to at least require consent: "
-                "Set-ItemProperty -Path "
-                f"'{_REG_KEY}' "
-                "-Name ConsentPromptBehaviorAdmin -Value 2. "
-                "Recommended value: 2 (prompt for consent on secure desktop)"
+                "Require administrators to confirm elevation by prompting for consent "
+                "on the secure desktop instead of elevating silently."
+            ),
+            command=(
+                f"Set-ItemProperty -Path '{_REG_KEY}' "
+                "-Name ConsentPromptBehaviorAdmin -Value 2"
             ),
         )]
 
@@ -197,10 +198,11 @@ def _check_secure_desktop(data: dict) -> list[CheckResult]:
         ),
         remediation=(
             "" if on_secure else
-            "Enable secure desktop for UAC prompts: "
-            "Set-ItemProperty -Path "
-            f"'{_REG_KEY}' "
-            "-Name PromptOnSecureDesktop -Value 1"
+            "Show UAC prompts on the isolated secure desktop."
+        ),
+        command=(
+            "" if on_secure else
+            f"Set-ItemProperty -Path '{_REG_KEY}' -Name 'PromptOnSecureDesktop' -Value 1"
         ),
     )]
 

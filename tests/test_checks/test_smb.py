@@ -45,7 +45,9 @@ class TestCheckSmb1:
 
     def test_smb1_enabled_has_remediation(self):
         r = self._run(_data(smb1=True))[0]
-        assert "Set-SmbServerConfiguration" in r.remediation
+        assert r.remediation and "Set-" not in r.remediation
+        assert "Disable-WindowsOptionalFeature" in r.command
+        assert "SMB1Protocol" in r.command
 
     def test_null_value_is_warn(self):
         r = smb._check_smb1({"EnableSMB1Protocol": None})[0]
@@ -78,10 +80,11 @@ class TestCheckSmbSigning:
         assert r.status == Status.FAIL
         assert r.severity == Severity.HIGH
 
-    def test_fail_has_both_commands_in_remediation(self):
+    def test_fail_has_both_commands_in_command(self):
         r = self._run(_data(require_signing=False, enable_signing=False))[0]
-        assert "EnableSecuritySignature" in r.remediation
-        assert "RequireSecuritySignature" in r.remediation
+        assert "Set-SmbClientConfiguration" in r.command
+        assert "Set-SmbServerConfiguration" in r.command
+        assert "RequireSecuritySignature" in r.command
 
     def test_null_required_is_warn(self):
         r = smb._check_smb_signing({"RequireSecuritySignature": None})[0]

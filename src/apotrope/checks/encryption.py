@@ -65,11 +65,10 @@ def run() -> list[CheckResult]:
                 "BitLocker may be unavailable, or elevated privileges are required."
             ),
             remediation=(
-                "Run Apotrope as Administrator to retrieve BitLocker status. "
-                "To enable BitLocker on the OS drive: "
-                "Enable-BitLocker -MountPoint 'C:' "
-                "-EncryptionMethod XtsAes256 -RecoveryPasswordProtector"
+                "Run Apotrope as Administrator to retrieve BitLocker status, then "
+                "encrypt the system drive with BitLocker using the TPM protector."
             ),
+            command="Enable-BitLocker -MountPoint 'C:' -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector",
         )]
 
     results: list[CheckResult] = []
@@ -119,8 +118,10 @@ def _check_volume(vol: dict) -> list[CheckResult]:
             f"Encrypted: {pct}% | Protection: Off"
         ),
         remediation=(
-            f"Enable BitLocker on drive {mount}: "
+            f"Encrypt drive {mount} with BitLocker using the TPM protector."
+        ),
+        command=(
             f"Enable-BitLocker -MountPoint '{mount}' "
-            f"-EncryptionMethod XtsAes256 -RecoveryPasswordProtector"
+            f"-EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector"
         ),
     )]

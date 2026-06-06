@@ -154,8 +154,15 @@ def _check_os_build() -> list[CheckResult]:
                     f"This build no longer receives security updates."
                 ),
                 remediation=(
-                    "Upgrade to a supported Windows release. "
-                    "See: https://learn.microsoft.com/en-us/windows/release-health/"
+                    "Upgrade to a supported build (Windows 10 22H2) or Windows 11 — "
+                    "the upgrade itself has no single command. Confirm the current "
+                    "build first, then run Windows Update or the Installation Assistant."
+                ),
+                command=(
+                    "# There is no in-place command for the upgrade — use Windows Update or the\n"
+                    "# Windows Installation Assistant. Confirm the current build first:\n"
+                    "[System.Environment]::OSVersion.Version\n"
+                    "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').DisplayVersion"
                 ),
             )
         else:
@@ -185,8 +192,12 @@ def _check_os_build() -> list[CheckResult]:
                 "Verify this is a current supported release."
             ),
             remediation=(
-                "Check the Microsoft support lifecycle page: "
-                "https://learn.microsoft.com/en-us/windows/release-health/"
+                "Confirm the current build and verify it is a supported release on the "
+                "Microsoft support lifecycle page."
+            ),
+            command=(
+                "[System.Environment]::OSVersion.Version\n"
+                "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').DisplayVersion"
             ),
         )
 
@@ -209,10 +220,8 @@ def _check_uptime() -> list[CheckResult]:
             severity=Severity.MEDIUM,
             description=f"Warns when uptime exceeds {_UPTIME_WARN_DAYS} days (suggests pending patch reboots).",
             details=f"System has been running for {days} days without a reboot.",
-            remediation=(
-                "Reboot the system to apply pending patches. "
-                "Review Windows Update history for updates that require a restart."
-            ),
+            remediation="Schedule a reboot to apply deferred updates.",
+            command="Restart-Computer",
         )]
 
     return [CheckResult(
@@ -267,8 +276,13 @@ def _check_secure_boot() -> list[CheckResult]:
             description="Checks whether UEFI Secure Boot is enabled.",
             details="Secure Boot is not supported or the system is running in legacy BIOS mode.",
             remediation=(
-                "Enable UEFI mode in firmware settings if the hardware supports it. "
-                "Secure Boot requires UEFI firmware."
+                "Secure Boot requires UEFI firmware — enable UEFI mode in firmware "
+                "settings if the hardware supports it, then confirm the state from Windows."
+            ),
+            command=(
+                "# Secure Boot is a UEFI/firmware setting — reboot into firmware setup to enable it.\n"
+                "# Verify Secure Boot state (returns True once enabled in UEFI):\n"
+                "Confirm-SecureBootUEFI"
             ),
         )]
 
@@ -282,8 +296,15 @@ def _check_secure_boot() -> list[CheckResult]:
         details=f"Secure Boot is {'enabled' if enabled else 'disabled'}.",
         remediation=(
             "" if enabled else
-            "Enable Secure Boot in UEFI/BIOS firmware settings. "
-            "Note: may require reinstalling Windows in UEFI mode if currently using legacy BIOS."
+            "Secure Boot is a UEFI/firmware setting — reboot into firmware setup to "
+            "enable it, then confirm the state from Windows afterwards. May require "
+            "reinstalling Windows in UEFI mode if currently using legacy BIOS."
+        ),
+        command=(
+            "" if enabled else
+            "# Secure Boot is a UEFI/firmware setting — reboot into firmware setup to enable it.\n"
+            "# Verify Secure Boot state (returns True once enabled in UEFI):\n"
+            "Confirm-SecureBootUEFI"
         ),
     )]
 
@@ -312,8 +333,10 @@ def _check_tpm() -> list[CheckResult]:
             details="No TPM chip detected.",
             remediation=(
                 "A TPM 2.0 chip is required for BitLocker and is mandatory for Windows 11. "
-                "Enable TPM in UEFI/BIOS settings if available."
+                "Enable the TPM in UEFI/BIOS firmware settings if the hardware supports it, "
+                "then confirm it is detected from Windows."
             ),
+            command="Get-Tpm",
         )]
 
     return [CheckResult(
@@ -325,8 +348,12 @@ def _check_tpm() -> list[CheckResult]:
         details=f"TPM present. Ready: {ready}. Firmware version: {version}.",
         remediation=(
             "" if ready else
-            "Check TPM status in tpm.msc or Device Manager. "
-            "Clear and re-initialize the TPM if it reports errors."
+            "Initialize the TPM and take ownership so it is ready for use."
+        ),
+        command=(
+            "" if ready else
+            "Get-Tpm\n"
+            "Initialize-Tpm -AllowClear -AllowPhysicalPresence"
         ),
     )]
 

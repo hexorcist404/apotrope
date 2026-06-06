@@ -217,7 +217,7 @@ class TestMain:
             importlib.reload(cli_mod)
             cli_mod.main()
 
-        MockReporter.assert_called_once_with(verbose=True, no_color=False)
+        MockReporter.assert_called_once_with(verbose=True, no_color=False, fix=False)
 
     def test_exit_1_when_score_below_70(self):
         """Score 69 → exit 1."""

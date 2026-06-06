@@ -80,7 +80,7 @@ class TestEncryptionRunOsDrive:
         assert results[0].status == Status.FAIL
         assert results[0].severity == Severity.HIGH
         assert results[0].remediation != ""
-        assert "Enable-BitLocker" in results[0].remediation
+        assert "Enable-BitLocker" in results[0].command
 
     def test_unencrypted_os_drive_remediation_includes_mount_point(self):
         with patch("apotrope.checks.encryption.run_powershell_json",

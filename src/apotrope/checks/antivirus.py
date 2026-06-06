@@ -79,9 +79,11 @@ def _check_defender() -> list[CheckResult]:
         ),
         remediation=(
             "" if rtp_enabled else
-            "Enable real-time protection: "
-            "Set-MpPreference -DisableRealtimeMonitoring $false. "
-            "Or: Windows Security → Virus & threat protection → Real-time protection: On"
+            "Turn Microsoft Defender real-time protection back on immediately."
+        ),
+        command=(
+            "" if rtp_enabled else
+            "Set-MpPreference -DisableRealtimeMonitoring $false"
         ),
     ))
 
@@ -99,8 +101,11 @@ def _check_defender() -> list[CheckResult]:
         details=f"Antivirus signature age: {sig_age} day(s).",
         remediation=(
             "" if sig_ok else
-            "Update Defender signatures immediately: Update-MpSignature. "
-            "Or: Windows Security → Virus & threat protection → Check for updates"
+            "Update Defender's antivirus definitions now."
+        ),
+        command=(
+            "" if sig_ok else
+            "Update-MpSignature"
         ),
     ))
 
@@ -117,9 +122,13 @@ def _check_defender() -> list[CheckResult]:
         details=f"IsTamperProtected: {tamper}",
         remediation=(
             "" if tamper else
-            "Enable Tamper Protection: "
-            "Windows Security → Virus & threat protection → "
-            "Manage settings → Tamper Protection: On"
+            "Enable Tamper Protection so Defender settings can't be changed by malware or scripts."
+        ),
+        command=(
+            "" if tamper else
+            "# Enable in Windows Security -> Virus & threat protection ->\n"
+            "# Manage settings -> Tamper Protection: On. Verify the current state:\n"
+            "(Get-MpComputerStatus).IsTamperProtected"
         ),
     ))
 

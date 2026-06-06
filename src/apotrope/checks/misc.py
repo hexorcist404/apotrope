@@ -98,10 +98,14 @@ def _check_autoplay() -> list[CheckResult]:
                 "AutoPlay can be abused to auto-execute malicious content from USB drives."
             ),
             remediation=(
-                "Disable AutoPlay via Group Policy: Computer Configuration → Administrative "
-                "Templates → Windows Components → AutoPlay Policies → Turn off AutoPlay → Enabled. "
-                "Or via registry: Set-ItemProperty -Path "
-                f"'{_AUTOPLAY_KEY}' -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force"
+                "Disable AutoPlay for all drive types so removable media cannot "
+                "auto-execute content. This can also be set via Group Policy: Computer "
+                "Configuration → Administrative Templates → Windows Components → AutoPlay "
+                "Policies → Turn off AutoPlay → Enabled."
+            ),
+            command=(
+                f"Set-ItemProperty -Path '{_AUTOPLAY_KEY}' "
+                "-Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force"
             ),
         )]
 
@@ -137,7 +141,10 @@ def _check_autoplay() -> list[CheckResult]:
                 "Some drive types may still trigger AutoPlay."
             ),
             remediation=(
-                "Set NoDriveTypeAutoRun to 255 to disable AutoPlay for all drive types: "
+                "Disable AutoPlay for all drive types so the remaining drive types "
+                "can no longer auto-execute content."
+            ),
+            command=(
                 f"Set-ItemProperty -Path '{_AUTOPLAY_KEY}' "
                 "-Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force"
             ),
@@ -150,7 +157,8 @@ def _check_autoplay() -> list[CheckResult]:
         severity=Severity.MEDIUM,
         description="Checks whether AutoPlay is disabled for all drive types.",
         details=f"AutoPlay may be enabled (NoDriveTypeAutoRun = {val}).",
-        remediation=(
+        remediation="Disable AutoPlay for all drive types so removable media cannot auto-execute content.",
+        command=(
             f"Set-ItemProperty -Path '{_AUTOPLAY_KEY}' "
             "-Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force"
         ),
@@ -191,9 +199,15 @@ def _check_winrm() -> list[CheckResult]:
         ),
         remediation=(
             "" if not running else
-            "If remote management is not required, stop and disable WinRM: "
-            "Stop-Service WinRM; Set-Service WinRM -StartupType Disabled. "
-            "If required, restrict access: "
+            "If remote management is not required, stop and disable WinRM. If it is "
+            "required, restrict access and disable Basic authentication."
+        ),
+        command=(
+            "" if not running else
+            "# If remote management is not required, stop and disable WinRM:\n"
+            "Stop-Service WinRM\n"
+            "Set-Service WinRM -StartupType Disabled\n"
+            "# If WinRM is required, disable Basic authentication instead:\n"
             "Set-Item WSMan:\\localhost\\Service\\Auth\\Basic -Value $false"
         ),
     )]
@@ -249,7 +263,10 @@ def _check_spectre() -> list[CheckResult]:
                 "This improves CPU performance but removes Spectre/Meltdown protections."
             ),
             remediation=(
-                "Re-enable mitigations by removing the override registry keys: "
+                "Re-enable Spectre/Meltdown mitigations by removing the override "
+                "registry keys that disable them."
+            ),
+            command=(
                 f"Remove-ItemProperty -Path '{_SPECTRE_KEY}' "
                 "-Name FeatureSettingsOverride,FeatureSettingsOverrideMask -ErrorAction SilentlyContinue"
             ),
@@ -316,10 +333,12 @@ def _check_audit_policy() -> list[CheckResult]:
                 "Security-relevant events may not be recorded."
             ),
             remediation=(
-                "Enable audit logging for key subcategories via Group Policy or auditpol: "
-                "auditpol /set /subcategory:'Logon' /success:enable /failure:enable. "
-                "Review: secpol.msc → Advanced Audit Policy Configuration."
+                "Enable audit logging for the key subcategories that currently have "
+                "auditing disabled so security-relevant events are recorded. This can "
+                "also be configured via Group Policy (secpol.msc → Advanced Audit Policy "
+                "Configuration)."
             ),
+            command="auditpol /set /subcategory:'Logon' /success:enable /failure:enable",
         )]
 
     checked = ", ".join(audit_map.keys()) if audit_map else "none found"

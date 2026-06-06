@@ -93,11 +93,15 @@ def _check_rdp_enabled(data: dict) -> tuple[list[CheckResult], bool]:
                 "Ensure access is restricted by firewall and NLA is required."
             ),
             remediation=(
-                "If RDP is not required, disable it: "
+                "If RDP isn't needed, disable it. If it is required, keep NLA required "
+                "and restrict access by firewall scope or a VPN / RD gateway."
+            ),
+            command=(
+                "# Disable Remote Desktop (skip this if RDP is intentionally in use)\n"
                 "Set-ItemProperty -Path "
-                "'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server' "
-                "-Name fDenyTSConnections -Value 1. "
-                "If RDP is required, restrict access via Windows Firewall."
+                "'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' "
+                "-Name 'fDenyTSConnections' -Value 1\n"
+                "Disable-NetFirewallRule -DisplayGroup 'Remote Desktop'"
             ),
         )
     else:
@@ -126,11 +130,11 @@ def _check_rdp_nla(data: dict) -> list[CheckResult]:
             severity=Severity.HIGH,
             description="Checks whether NLA is required for RDP connections.",
             details="Could not determine NLA setting (UserAuthentication key not found).",
-            remediation=(
-                "Enable NLA: "
+            remediation="Require Network Level Authentication for RDP.",
+            command=(
                 "Set-ItemProperty -Path "
-                "'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' "
-                "-Name UserAuthentication -Value 1"
+                "'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' "
+                "-Name 'UserAuthentication' -Value 1"
             ),
         )]
 
@@ -150,12 +154,13 @@ def _check_rdp_nla(data: dict) -> list[CheckResult]:
         ),
         remediation=(
             "" if nla_required else
-            "Enable NLA: "
+            "Require Network Level Authentication for RDP."
+        ),
+        command=(
+            "" if nla_required else
             "Set-ItemProperty -Path "
-            "'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' "
-            "-Name UserAuthentication -Value 1. "
-            "Or: System Properties → Remote → "
-            "'Allow connections only from computers running Remote Desktop with NLA'"
+            "'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' "
+            "-Name 'UserAuthentication' -Value 1"
         ),
     )]
 

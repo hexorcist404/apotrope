@@ -83,7 +83,7 @@ class TestCheckScriptBlockLogging:
 
     def test_warn_has_remediation(self):
         r = self._run("NOTSET")[0]
-        assert "EnableScriptBlockLogging" in r.remediation
+        assert "EnableScriptBlockLogging" in r.command
 
     def test_error_returns_error(self):
         with patch("apotrope.checks.powershell.run_powershell",
@@ -115,7 +115,7 @@ class TestCheckModuleLogging:
 
     def test_warn_has_remediation(self):
         r = self._run("0")[0]
-        assert "EnableModuleLogging" in r.remediation
+        assert "EnableModuleLogging" in r.command
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ class TestCheckPsv2:
 
     def test_warn_has_remediation(self):
         r = self._run("Enabled")[0]
-        assert "Disable-WindowsOptionalFeature" in r.remediation
+        assert "Disable-WindowsOptionalFeature" in r.command
 
 
 # ---------------------------------------------------------------------------
