@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.6] - 2026-06-06
+
+### Added
+- **Copy-paste-ready remediation commands.** Every failing/warning check now
+  carries an exact, paste-ready PowerShell command alongside its plain-English
+  explanation, split into a new `CheckResult.command` field.
+  - **HTML report:** each FAIL/WARN finding shows the explanation plus a labeled
+    "Windows PowerShell · run as Administrator" code block with a copy button
+    that copies only the command. The findings filter also matches command text.
+  - **Terminal:** new `--fix` flag prints a `TOP FIXES` block whose command
+    lines are bare and paste-valid (no glyphs, rails, or prompts); `--verbose`
+    prints every command verbatim under its finding. Honors `--no-color`.
+  - **JSON:** the `command` field serializes automatically for SIEM/pipeline use
+    and round-trips through `--compare` baselines.
+
+### Changed
+- Remediation strings are now pure prose (the *what & why*); the PowerShell to
+  run lives in the new `command` field. Manual/firmware fixes (Secure Boot, OS
+  upgrade) ship a commented note plus the closest verification cmdlet so the
+  block is always safe to paste.
+
+---
+
 ## [0.1.5] - 2026-06-02
 
 ### Changed
