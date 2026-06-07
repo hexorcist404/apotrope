@@ -20,7 +20,8 @@ Most posture tools want something before they'll help you: a cloud account, a
 license key, an agent to install, your data shipped off to a dashboard somewhere.
 Apotrope wants none of it. It's a single executable. Drop it on a USB stick, run it
 on any Windows machine, and you get a 0–100 score plus a list of exactly what's
-wrong and how to fix it — in plain English, not bare control IDs.
+wrong and how to fix it — in plain English, not bare control IDs, with a
+ready-to-paste PowerShell command for every issue.
 
 Run it as Administrator for the full picture. It works without admin too; a handful
 of checks (BitLocker, some policy reads) just come back limited.
@@ -53,6 +54,12 @@ apotrope.exe --html report.html
 ```
 
 Then open `report.html` in your browser.
+
+To get a copy-paste-ready PowerShell command for each issue, add `--fix`:
+
+```
+apotrope.exe --fix
+```
 
 ---
 
@@ -128,6 +135,8 @@ Options:
   --category CATS      Comma-separated list of categories to audit
                        (e.g. firewall,encryption,patching)
   --dry-run            List check modules that would run without executing them
+  --fix                Print a copy-paste-ready PowerShell command for each
+                       failing/warning check (a "TOP FIXES" block)
   --verbose            Show detail for every check, including PASSes
   --no-color           Disable Rich color output (for CI / log files)
   --log-level LEVEL    Logging verbosity: DEBUG, INFO, WARNING (default), ERROR
@@ -154,6 +163,9 @@ apotrope --json report.json
 
 # Audit only firewall and patching
 apotrope --category firewall,patching
+
+# Print a copy-paste-ready PowerShell fix for each failing/warning check
+apotrope --fix
 
 # Show pass/fail details for every check
 apotrope --verbose

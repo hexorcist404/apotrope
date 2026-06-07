@@ -6,11 +6,10 @@ Apotrope is a **read-only** security auditing tool. It does not modify system co
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.2   | :white_check_mark: |
-| 0.1.1   | :x:                |
-| 0.1.0   | :x:                |
+| Version  | Supported          |
+| -------- | ------------------ |
+| 0.1.6    | :white_check_mark: |
+| < 0.1.6  | :x:                |
 
 Only the latest release is actively supported with security updates.
 
