@@ -67,10 +67,8 @@ def _check_smb1(data: dict) -> list[CheckResult]:
             severity=Severity.CRITICAL,
             description="Checks that SMBv1 is disabled (mitigates EternalBlue/WannaCry).",
             details="Could not determine SMBv1 status from Get-SmbServerConfiguration.",
-            remediation=(
-                "Verify SMBv1 status manually: Get-SmbServerConfiguration | Select EnableSMB1Protocol. "
-                "To disable: Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force"
-            ),
+            remediation="Remove the legacy SMBv1 protocol, then reboot.",
+            command="Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart",
         )]
 
     enabled = bool(raw)
@@ -83,10 +81,11 @@ def _check_smb1(data: dict) -> list[CheckResult]:
         details=f"SMBv1 protocol is {'enabled' if enabled else 'disabled'}.",
         remediation=(
             "" if not enabled else
-            "Disable SMBv1 immediately: "
-            "Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force. "
-            "Also disable via Windows Features: "
-            "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol"
+            "Remove the legacy SMBv1 protocol, then reboot."
+        ),
+        command=(
+            "" if not enabled else
+            "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart"
         ),
     )]
 
@@ -104,31 +103,43 @@ def _check_smb_signing(data: dict) -> list[CheckResult]:
             severity=Severity.HIGH,
             description="Checks that SMB message signing is required (mitigates relay attacks).",
             details="Could not determine SMB signing configuration.",
-            remediation="Check manually: Get-SmbServerConfiguration | Select RequireSecuritySignature",
+            remediation=(
+                "Require SMB message signing on both the client and server side so "
+                "sessions can't be relayed or tampered with."
+            ),
+            command=(
+                "Set-SmbClientConfiguration -RequireSecuritySignature $true -Force\n"
+                "Set-SmbServerConfiguration -RequireSecuritySignature $true -Force"
+            ),
         )]
 
     required_bool = bool(required)
     enabled_bool = bool(enabled) if enabled is not None else False
 
+    _signing_command = (
+        "Set-SmbClientConfiguration -RequireSecuritySignature $true -Force\n"
+        "Set-SmbServerConfiguration -RequireSecuritySignature $true -Force"
+    )
+    _signing_remediation = (
+        "Require SMB message signing on both the client and server side so "
+        "sessions can't be relayed or tampered with."
+    )
+
     if required_bool:
         details = "SMB signing is required on this server."
         status = Status.PASS
         remediation = ""
+        command = ""
     elif enabled_bool:
         details = "SMB signing is enabled but not required — clients may negotiate unsigned connections."
         status = Status.WARN
-        remediation = (
-            "Require SMB signing to prevent relay attacks: "
-            "Set-SmbServerConfiguration -RequireSecuritySignature $true -Force"
-        )
+        remediation = _signing_remediation
+        command = _signing_command
     else:
         details = "SMB signing is neither required nor enabled."
         status = Status.FAIL
-        remediation = (
-            "Enable and require SMB signing: "
-            "Set-SmbServerConfiguration -EnableSecuritySignature $true "
-            "-RequireSecuritySignature $true -Force"
-        )
+        remediation = _signing_remediation
+        command = _signing_command
 
     return [CheckResult(
         category=CATEGORY,
@@ -138,6 +149,7 @@ def _check_smb_signing(data: dict) -> list[CheckResult]:
         description="Checks that SMB message signing is required (mitigates NTLM relay attacks).",
         details=details,
         remediation=remediation,
+        command=command,
     )]
 
 

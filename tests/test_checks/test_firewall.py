@@ -113,7 +113,7 @@ class TestFirewallRunFailures:
         enabled_check = next(r for r in results if "Enabled" in r.check_name)
         assert enabled_check.status == Status.FAIL
         assert enabled_check.severity == Severity.HIGH
-        assert "Set-NetFirewallProfile" in enabled_check.remediation
+        assert "Set-NetFirewallProfile" in enabled_check.command
 
     def test_explicit_allow_inbound_returns_warn(self):
         profiles = [_PROFILE_ALLOW_INBOUND]
@@ -122,7 +122,7 @@ class TestFirewallRunFailures:
         inbound_check = next(r for r in results if "Inbound" in r.check_name)
         assert inbound_check.status == Status.WARN
         assert inbound_check.severity == Severity.MEDIUM
-        assert "Set-NetFirewallProfile" in inbound_check.remediation
+        assert "Set-NetFirewallProfile" in inbound_check.command
 
     def test_not_configured_inbound_is_not_a_warn(self):
         """NotConfigured inherits Block from system policy — not a finding."""

@@ -80,8 +80,11 @@ def _check_execution_policy() -> list[CheckResult]:
         ),
         remediation=(
             "" if not risky else
-            f"Set a more restrictive policy: Set-ExecutionPolicy RemoteSigned -Scope LocalMachine. "
-            f"Current policy '{output}' allows unsigned scripts to run freely."
+            "Tighten the execution policy from Unrestricted to RemoteSigned (or AllSigned)."
+        ),
+        command=(
+            "" if not risky else
+            "Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force"
         ),
     )]
 
@@ -108,10 +111,14 @@ def _check_script_block_logging() -> list[CheckResult]:
         ),
         remediation=(
             "" if enabled else
-            "Enable via Group Policy: Computer Configuration → Administrative Templates → "
-            "Windows Components → Windows PowerShell → Turn on PowerShell Script Block Logging. "
-            "Or via registry: Set-ItemProperty -Path "
-            f"'{_SBL_KEY}' -Name EnableScriptBlockLogging -Value 1 -Type DWord -Force"
+            "Enable PowerShell Script Block Logging so malicious or obfuscated scripts "
+            "are recorded in the event log."
+        ),
+        command=(
+            "" if enabled else
+            f"$key = '{_SBL_KEY}'\n"
+            "New-Item -Path $key -Force | Out-Null\n"
+            "Set-ItemProperty -Path $key -Name 'EnableScriptBlockLogging' -Value 1"
         ),
     )]
 
@@ -138,10 +145,14 @@ def _check_module_logging() -> list[CheckResult]:
         ),
         remediation=(
             "" if enabled else
-            "Enable via Group Policy: Computer Configuration → Administrative Templates → "
-            "Windows Components → Windows PowerShell → Turn on Module Logging. "
-            "Or via registry: Set-ItemProperty -Path "
-            f"'{_ML_KEY}' -Name EnableModuleLogging -Value 1 -Type DWord -Force"
+            "Enable PowerShell Module Logging so module pipeline execution is recorded "
+            "in the event log."
+        ),
+        command=(
+            "" if enabled else
+            f"$key = '{_ML_KEY}'\n"
+            "New-Item -Path $key -Force | Out-Null\n"
+            "Set-ItemProperty -Path $key -Name 'EnableModuleLogging' -Value 1"
         ),
     )]
 
@@ -187,9 +198,10 @@ def _check_psv2() -> list[CheckResult]:
                 "PowerShell v2 is installed. Attackers can invoke 'powershell -Version 2' "
                 "to bypass Script Block Logging and other v5+ security controls."
             ),
-            remediation=(
-                "Remove PowerShell v2: "
-                "Disable-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root"
+            remediation="Remove the legacy PowerShell v2 engine (a downgrade-attack vector).",
+            command=(
+                "Disable-WindowsOptionalFeature -Online "
+                "-FeatureName MicrosoftWindowsPowerShellV2Root -NoRestart"
             ),
         )]
 

@@ -38,7 +38,11 @@ class CheckResult:
         severity:    Risk level if the check fails (CRITICAL/HIGH/MEDIUM/LOW/INFO).
         description: What this check verifies.
         details:     What was actually found on the system.
-        remediation: Actionable fix guidance; empty string when status is PASS.
+        remediation: Plain-English fix guidance (the *what & why*); no command
+                     text. Empty string when status is PASS/INFO.
+        command:     Verbatim, ready-to-paste PowerShell a user can run in an
+                     elevated prompt. May be multi-line (one statement per line);
+                     empty string when there is nothing to run (PASS/INFO).
     """
 
     category: str
@@ -48,6 +52,7 @@ class CheckResult:
     description: str
     details: str
     remediation: str = ""
+    command: str = ""            # ready-to-paste PowerShell; "" when PASS/INFO
     check_duration: float = 0.0  # seconds the parent module took to run
     cis_reference: str = ""      # CIS Benchmark control ID, e.g. "CIS 9.1.1"
 

@@ -39,7 +39,7 @@ class TestCheckUacEnabled:
         r = uac._check_uac_enabled(_data(lua=0))[0]
         assert r.status == Status.FAIL
         assert r.severity == Severity.CRITICAL
-        assert "EnableLUA" in r.remediation
+        assert "EnableLUA" in r.command
 
     def test_uac_absent_is_warn(self):
         r = uac._check_uac_enabled({})[0]
@@ -76,7 +76,7 @@ class TestCheckAdminBehavior:
 
     def test_warn_has_remediation(self):
         r = uac._check_admin_behavior(_data(admin_behavior=0))[0]
-        assert "ConsentPromptBehaviorAdmin" in r.remediation
+        assert "ConsentPromptBehaviorAdmin" in r.command
 
     def test_level_description_in_details(self):
         r = uac._check_admin_behavior(_data(admin_behavior=2))[0]
@@ -104,7 +104,7 @@ class TestCheckSecureDesktop:
 
     def test_off_has_remediation(self):
         r = uac._check_secure_desktop(_data(secure_desktop=0))[0]
-        assert "PromptOnSecureDesktop" in r.remediation
+        assert "PromptOnSecureDesktop" in r.command
 
 
 # ---------------------------------------------------------------------------

@@ -29,7 +29,7 @@ class TestCheckGuestAccount:
         r = results[0]
         assert r.status == Status.FAIL
         assert "enabled" in r.details.lower()
-        assert "Disable-LocalUser" in r.remediation
+        assert "Disable-LocalUser" in r.command
 
     def test_guest_not_found_is_info(self):
         with patch("apotrope.checks.accounts.run_powershell", return_value=""):
@@ -232,7 +232,7 @@ class TestCheckPasswordPolicy:
         results = self._run(self._NET_NO_LOCKOUT, "1")
         r = next(r for r in results if "Lockout" in r.check_name)
         assert r.status == Status.WARN
-        assert "net accounts" in r.remediation
+        assert "net accounts" in r.command
 
     def test_complexity_disabled_is_fail(self):
         results = self._run(self._NET_GOOD, "0")

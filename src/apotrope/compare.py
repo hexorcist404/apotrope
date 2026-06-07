@@ -165,6 +165,7 @@ def load_baseline(path: str) -> AuditReport:
                 description=r.get("description", ""),
                 details=r.get("details", ""),
                 remediation=r.get("remediation", ""),
+                command=r.get("command", ""),
                 check_duration=float(r.get("check_duration", 0.0)),
                 cis_reference=r.get("cis_reference", ""),
             )

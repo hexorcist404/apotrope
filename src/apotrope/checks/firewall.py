@@ -83,7 +83,10 @@ def run() -> list[CheckResult]:
             details=f"Profile: {name} | Enabled: {enabled}",
             remediation=(
                 "" if enabled else
-                f"Enable the {name} firewall profile: "
+                f"Turn the {name}-profile firewall back on."
+            ),
+            command=(
+                "" if enabled else
                 f"Set-NetFirewallProfile -Profile {name} -Enabled True"
             ),
         ))
@@ -110,7 +113,10 @@ def run() -> list[CheckResult]:
             ),
             remediation=(
                 "" if not inbound_explicit_allow else
-                f"Set default inbound to Block for the {name} profile: "
+                f"Set the {name} firewall profile to block inbound connections by default."
+            ),
+            command=(
+                "" if not inbound_explicit_allow else
                 f"Set-NetFirewallProfile -Profile {name} -DefaultInboundAction Block"
             ),
         ))

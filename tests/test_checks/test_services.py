@@ -103,7 +103,7 @@ class TestCheckUnquotedPaths:
 
     def test_fail_has_remediation(self):
         r = self._run([_unquoted("MySvc", "C:\\My Path\\svc.exe")])[0]
-        assert "ImagePath" in r.remediation
+        assert "ImagePath" in r.command
 
     def test_multiple_unquoted_paths_counted(self):
         items = [

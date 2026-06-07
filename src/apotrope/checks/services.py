@@ -34,35 +34,39 @@ _PS_UNQUOTED = (
     "| ConvertTo-Json -Compress"
 )
 
-# Known-risky service names → (status, severity, details, remediation)
-_RISKY: dict[str, tuple[Status, Severity, str, str]] = {
+# Known-risky service names → (status, severity, details, remediation, command)
+_RISKY: dict[str, tuple[Status, Severity, str, str, str]] = {
     "RemoteRegistry": (
         Status.WARN,
         Severity.HIGH,
         "Remote Registry service is running — allows remote modification of the registry.",
-        "Stop and disable Remote Registry: "
-        "Stop-Service RemoteRegistry; Set-Service RemoteRegistry -StartupType Disabled",
+        "Stop and disable the Remote Registry service.",
+        "Stop-Service -Name 'RemoteRegistry' -Force\n"
+        "Set-Service -Name 'RemoteRegistry' -StartupType Disabled",
     ),
     "TlntSvr": (
         Status.FAIL,
         Severity.CRITICAL,
         "Telnet Server is running — all traffic (including credentials) is sent in cleartext.",
-        "Disable Telnet Server immediately: "
-        "Stop-Service TlntSvr; Set-Service TlntSvr -StartupType Disabled",
+        "Stop and disable the Telnet Server service immediately.",
+        "Stop-Service -Name 'TlntSvr' -Force\n"
+        "Set-Service -Name 'TlntSvr' -StartupType Disabled",
     ),
     "Telnet": (
         Status.FAIL,
         Severity.CRITICAL,
         "Telnet service is running — cleartext credential exposure.",
-        "Disable Telnet: Stop-Service Telnet; Set-Service Telnet -StartupType Disabled",
+        "Stop and disable the Telnet service immediately.",
+        "Stop-Service -Name 'Telnet' -Force\n"
+        "Set-Service -Name 'Telnet' -StartupType Disabled",
     ),
     "SNMP": (
         Status.WARN,
         Severity.MEDIUM,
         "SNMP service is running. SNMPv1/v2 uses weak community-string authentication.",
-        "Disable SNMP if not required: "
-        "Stop-Service SNMP; Set-Service SNMP -StartupType Disabled. "
-        "If required, restrict access and use SNMPv3.",
+        "Disable SNMP if it is not required; if it is, restrict access and use SNMPv3.",
+        "Stop-Service -Name 'SNMP' -Force\n"
+        "Set-Service -Name 'SNMP' -StartupType Disabled",
     ),
 }
 
@@ -90,7 +94,7 @@ def _check_risky_services() -> list[CheckResult]:
     running_names = {str(s.get("Name", "")).lower(): str(s.get("Name", "")) for s in services}
 
     results: list[CheckResult] = []
-    for svc_name, (status, severity, details, remediation) in _RISKY.items():
+    for svc_name, (status, severity, details, remediation, command) in _RISKY.items():
         if svc_name.lower() in running_names:
             display = running_names[svc_name.lower()]
             results.append(CheckResult(
@@ -101,6 +105,7 @@ def _check_risky_services() -> list[CheckResult]:
                 description=f"Checks whether the {display} service is running.",
                 details=details,
                 remediation=remediation,
+                command=command,
             ))
 
     if not results:
@@ -162,9 +167,16 @@ def _check_unquoted_paths() -> list[CheckResult]:
             "executable that Windows resolves before the intended binary."
         ),
         remediation=(
-            "Quote the PathName of each affected service in the registry: "
-            "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\<ServiceName>\\ImagePath. "
-            "Wrap the executable path in double quotes, preserving any arguments."
+            "Wrap the executable path of each affected service in double quotes "
+            "(preserving any arguments) so Windows resolves the intended binary."
+        ),
+        command=(
+            "# Review the unquoted ImagePath, then re-set it wrapped in quotes\n"
+            "Get-ItemProperty -Path "
+            "'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\<ServiceName>' -Name ImagePath\n"
+            "Set-ItemProperty -Path "
+            "'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\<ServiceName>' "
+            "-Name ImagePath -Value '\"C:\\Path With Spaces\\service.exe\"'"
         ),
     )]
 

@@ -96,6 +96,21 @@ def _check_listening_ports() -> list[CheckResult]:
     for port, hits in sorted(risky_hits.items()):
         service, status, severity, reason = _RISKY_PORTS[port]
         addr_list = ", ".join(f"{a} ({p})" for a, p in hits)
+        if port == 23:
+            # Telnet — catalog entry: stop/disable the service outright.
+            remediation = "Stop and disable the Telnet service (it sends credentials in cleartext)."
+            command = (
+                "Stop-Service -Name 'TlntSvr' -Force\n"
+                "Set-Service -Name 'TlntSvr' -StartupType Disabled\n"
+                "Disable-WindowsOptionalFeature -Online -FeatureName TelnetServer -NoRestart"
+            )
+        else:
+            remediation = (
+                f"Stop the service behind port {port} ({service}) and block the port in Windows Firewall."
+            )
+            command = (
+                f"New-NetFirewallRule -Direction Inbound -LocalPort {port} -Protocol TCP -Action Block"
+            )
         results.append(CheckResult(
             category=CATEGORY,
             check_name=f"Listening Port — {port}/{service}",
@@ -103,11 +118,8 @@ def _check_listening_ports() -> list[CheckResult]:
             severity=severity,
             description=f"Checks whether port {port} ({service}) is listening. {reason}",
             details=f"Port {port} ({service}) is listening on: {addr_list}",
-            remediation=(
-                f"Disable or firewall port {port} ({service}). "
-                f"Stop the associated service and block the port in Windows Firewall: "
-                f"New-NetFirewallRule -Direction Inbound -LocalPort {port} -Protocol TCP -Action Block"
-            ),
+            remediation=remediation,
+            command=command,
         ))
 
     # Summary INFO result for all listeners
@@ -149,13 +161,11 @@ def _check_llmnr() -> list[CheckResult]:
                 "Attackers on the local network can use tools like Responder "
                 "to capture NTLMv2 hashes via LLMNR poisoning."
             ),
-            remediation=(
-                "Disable LLMNR via Group Policy: "
-                "Computer Configuration → Administrative Templates → Network → "
-                "DNS Client → Turn off multicast name resolution → Enabled. "
-                "Or via registry: "
-                "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient' "
-                "-Name 'EnableMulticast' -Value 0 -PropertyType DWORD -Force"
+            remediation="Disable LLMNR to block Responder-style name-resolution poisoning.",
+            command=(
+                "$key = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient'\n"
+                "New-Item -Path $key -Force | Out-Null\n"
+                "Set-ItemProperty -Path $key -Name 'EnableMulticast' -Value 0"
             ),
         )]
 
@@ -207,11 +217,8 @@ def _check_netbios() -> list[CheckResult]:
             f"NetBIOS over TCP/IP is explicitly enabled on {enabled_count} adapter(s). "
             f"NetBIOS exposes the host to name-spoofing and enumeration."
         )
-        remediation = (
-            "Disable NetBIOS on all adapters: "
-            "Network Connections → Adapter → Properties → TCP/IPv4 → Advanced → WINS → "
-            "Disable NetBIOS over TCP/IP. "
-            "Or via WMI: "
+        remediation = "Disable NetBIOS over TCP/IP on all IP-enabled adapters."
+        command = (
             "(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True')"
             ".SetTcpipNetbios(2)"
         )
@@ -221,14 +228,16 @@ def _check_netbios() -> list[CheckResult]:
             f"{dhcp_count} adapter(s) inherit NetBIOS setting from DHCP. "
             "If the DHCP server does not explicitly disable NetBIOS, it may be active."
         )
-        remediation = (
-            "Explicitly disable NetBIOS on all adapters rather than relying on DHCP. "
-            "Set TcpipNetbiosOptions to 2 on each adapter."
+        remediation = "Explicitly disable NetBIOS on all adapters rather than relying on DHCP."
+        command = (
+            "(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True')"
+            ".SetTcpipNetbios(2)"
         )
     else:
         status, severity = Status.PASS, Severity.LOW
         details = f"NetBIOS over TCP/IP is explicitly disabled on all {disabled_count} adapter(s)."
         remediation = ""
+        command = ""
 
     return [CheckResult(
         category=CATEGORY,
@@ -238,6 +247,7 @@ def _check_netbios() -> list[CheckResult]:
         description="Checks whether NetBIOS over TCP/IP is disabled on all network adapters.",
         details=details,
         remediation=remediation,
+        command=command,
     )]
 
 
