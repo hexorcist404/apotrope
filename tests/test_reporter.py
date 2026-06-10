@@ -139,6 +139,56 @@ class TestGenerateHtmlReport:
         assert "Top Issues" in html
         assert "CRITICAL" in html
 
+    def test_no_file_written_when_jinja2_missing(self):
+        import sys
+        from unittest import mock
+
+        reporter = Reporter()
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            path = f.name
+        os.unlink(path)
+        try:
+            with mock.patch.dict(sys.modules, {"jinja2": None}):
+                reporter.generate_html_report(_make_report(), path)
+            assert not os.path.exists(path)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_no_file_written_when_template_load_fails(self):
+        from unittest import mock
+
+        from jinja2 import Environment
+
+        reporter = Reporter()
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            path = f.name
+        os.unlink(path)
+        try:
+            with mock.patch.object(
+                Environment, "get_template", side_effect=OSError("boom")
+            ):
+                reporter.generate_html_report(_make_report(), path)
+            assert not os.path.exists(path)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_frozen_bundle_uses_meipass_template_dir(self):
+        """PyInstaller path: templates resolve under sys._MEIPASS/templates."""
+        import sys
+        from unittest import mock
+
+        import apotrope.reporter as reporter_mod
+
+        # Point _MEIPASS at the package dir so _MEIPASS/templates is the real
+        # template directory and rendering still succeeds.
+        package_dir = Path(reporter_mod.__file__).parent
+        with mock.patch.object(sys, "frozen", True, create=True), \
+             mock.patch.object(sys, "_MEIPASS", str(package_dir), create=True):
+            html = self._generate(_make_report())
+        assert "<!DOCTYPE html>" in html
+
     def test_html_special_chars_escaped(self):
         """Regression: autoescape=True must escape user-controlled fields.
 
