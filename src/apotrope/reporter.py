@@ -11,7 +11,6 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
-import shutil
 import textwrap
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -302,9 +301,9 @@ class Reporter:
         self._print_score_panel(console, report)
         # Default = triage view: one box per category with FAIL/WARN findings.
         # --verbose widens the selection: every category, every check.
-        # (console.width can come in below the OS-reported size — e.g. Rich
-        # reserves a column on legacy Windows consoles — so check both.)
-        if min(shutil.get_terminal_size().columns, console.width) < _BOX_W + 6:
+        # console.width tracks the real terminal (including the column Rich
+        # reserves on legacy Windows consoles, which would break the boxes).
+        if console.width < _BOX_W + 6:
             # Console too narrow for 78-column boxes — un-boxed fallback.
             self._print_category_detail(console, report,
                                         only_issues=not self.verbose)

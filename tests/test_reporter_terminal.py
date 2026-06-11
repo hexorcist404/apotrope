@@ -1,9 +1,10 @@
 """Tests for apotrope.reporter — Rich terminal rendering paths.
 
 Covers the terminal output surface that test_reporter.py (HTML/JSON) does not:
-the score panel, top-findings blocks, --fix block, --verbose category detail,
-footer variants, comparison view, progress runner, glyph/ASCII fallbacks, and
-the plain-text fallback used when Rich is not installed.
+the score panel, the default triage boxes (per-category FAIL/WARN findings with
+fix + run), the --verbose all-category boxes, footer variants, comparison view,
+progress runner, glyph/ASCII fallbacks, the narrow-console un-boxed fallback,
+and the plain-text fallback used when Rich is not installed.
 
 All tests render to an in-memory console (StringIO file, colors stripped) so
 assertions run against plain text on any OS.
@@ -153,20 +154,23 @@ class TestScorePanel:
 
 
 # ---------------------------------------------------------------------------
-# Top findings (TOP FAILURES / TOP WARNINGS)
+# Default triage view (per-category issue boxes)
 # ---------------------------------------------------------------------------
 
-class TestTopFindings:
-    def test_failures_and_warnings_headers(self):
+class TestTriageBoxes:
+    def test_issue_categories_boxed_no_top_lists(self):
         out = _render(Reporter(), "print_terminal", _report(_default_results()))
-        assert "TOP FAILURES" in out
-        assert "TOP WARNINGS" in out
-
-    def test_no_headers_when_clean(self):
-        results = [_result(name="Only Pass", status=Status.PASS)]
-        out = _render(Reporter(), "print_terminal", _report(results, score=100))
         assert "TOP FAILURES" not in out
         assert "TOP WARNINGS" not in out
+        assert "ANTIVIRUS" in out   # has a FAIL → boxed
+        assert "RDP" in out         # has a WARN → boxed
+        assert "FIREWALL" not in out  # PASS only → not in the triage view
+
+    def test_no_boxes_when_clean(self):
+        results = [_result(name="Only Pass", status=Status.PASS)]
+        out = _render(Reporter(), "print_terminal", _report(results, score=100))
+        assert "┌" not in out
+        assert "Only Pass" not in out
 
     def test_failures_sorted_by_severity(self):
         results = [
@@ -177,26 +181,46 @@ class TestTopFindings:
         out = _render(Reporter(), "print_terminal", _report(results))
         assert out.index("Critical Severity Fail") < out.index("Low Severity Fail")
 
-    def test_capped_at_five_rows(self):
+    def test_worst_category_boxed_first(self):
+        results = [
+            _result("Mild", "Mild Warn", Status.WARN, Severity.LOW),
+            _result("Grave", "Grave Fail", Status.FAIL, Severity.CRITICAL),
+        ]
+        out = _render(Reporter(), "print_terminal", _report(results))
+        assert out.index("GRAVE") < out.index("MILD")
+
+    def test_uncapped_all_findings_shown(self):
         results = [
             _result(name=f"Failure Number {i}", status=Status.FAIL, severity=Severity.HIGH)
             for i in range(1, 8)
         ]
         out = _render(Reporter(), "print_terminal", _report(results))
-        assert "Failure Number 5" in out
-        assert "Failure Number 6" not in out
-        assert "Failure Number 7" not in out
+        for i in range(1, 8):
+            assert f"Failure Number {i}" in out
 
-    def test_long_check_name_truncated(self):
-        long_name = "A" * 40
+    def test_long_check_name_truncated_to_box_width(self):
+        long_name = "A" * 70
         results = [_result(name=long_name, status=Status.FAIL)]
         out = _render(Reporter(), "print_terminal", _report(results))
         assert long_name not in out
-        assert "A" * 26 + "~" in out
+        assert "A" * 65 + "~" in out
 
-    def test_cis_reference_appended(self):
+    def test_details_fix_and_run_inside_box(self):
+        out = _render(Reporter(), "print_terminal", _report(_default_results()))
+        assert "fix" in out
+        assert "Enable Defender" in out
+        assert "run" in out
+        assert "Set-MpPreference X" in out
+
+    def test_cis_reference_shown_in_narrow_fallback(self):
+        # Boxes omit CIS tags (per the redesign spec); the un-boxed fallback
+        # for narrow consoles keeps them.
         results = [_result(name="Tagged Fail", status=Status.FAIL, cis="CIS 9.2.1")]
-        out = _render(Reporter(), "print_terminal", _report(results))
+        console = _make_console(width=70)
+        with mock.patch.object(Reporter, "_make_console", return_value=console):
+            Reporter().print_terminal(_report(results))
+        out = console.file.getvalue()
+        assert "┌" not in out          # too narrow for boxes
         assert "CIS 9.2.1" in out
 
     def test_severity_abbreviations_used(self):
@@ -210,43 +234,49 @@ class TestTopFindings:
 
 
 # ---------------------------------------------------------------------------
-# --fix: TOP FIXES block
+# Fixes in boxes (--fix retired; commands print by default)
 # ---------------------------------------------------------------------------
 
-class TestTopFixes:
-    def test_header_and_paste_hint(self):
-        out = _render(Reporter(fix=True), "print_terminal", _report(_default_results()))
-        assert "TOP FIXES" in out
-        assert "elevated PowerShell" in out
+class TestFixesInBoxes:
+    def test_no_top_fixes_block(self):
+        out = _render(Reporter(), "print_terminal", _report(_default_results()))
+        assert "TOP FIXES" not in out
+        assert "elevated PowerShell" not in out
 
-    def test_commands_printed_verbatim(self):
-        out = _render(Reporter(fix=True), "print_terminal", _report(_default_results()))
+    def test_commands_printed_by_default(self):
+        out = _render(Reporter(), "print_terminal", _report(_default_results()))
         assert "Set-MpPreference X" in out
         assert "Stop-Service TermService" in out
+
+    def test_fix_param_is_noop(self):
+        report = _report(_default_results())
+        assert (_render(Reporter(fix=True), "print_terminal", report)
+                == _render(Reporter(), "print_terminal", report))
 
     def test_multiline_command_all_lines_present(self):
         results = [_result(
             name="Multi Step Fix", status=Status.FAIL,
             command="First-Command -A 1\nSecond-Command -B 2",
         )]
-        out = _render(Reporter(fix=True), "print_terminal", _report(results))
+        out = _render(Reporter(), "print_terminal", _report(results))
         assert "First-Command -A 1" in out
         assert "Second-Command -B 2" in out
 
-    def test_findings_without_command_excluded(self):
+    def test_finding_without_command_still_boxed(self):
         results = [
             _result(name="Fixable Fail", status=Status.FAIL, command="Do-Fix"),
             _result(name="Unfixable Fail", status=Status.FAIL, command=""),
         ]
-        out = _render(Reporter(fix=True), "print_terminal", _report(results))
-        fixes_block = out[out.index("TOP FIXES"):]
-        assert "Fixable Fail" in fixes_block
-        assert "Unfixable Fail" not in fixes_block
+        out = _render(Reporter(), "print_terminal", _report(results))
+        assert "Fixable Fail" in out
+        assert "Do-Fix" in out
+        assert "Unfixable Fail" in out  # shown, just without a run line
 
     def test_pass_results_never_included(self):
         results = [_result(name="Passing Check", status=Status.PASS, command="Noop")]
-        out = _render(Reporter(fix=True), "print_terminal", _report(results, score=100))
-        assert "TOP FIXES" not in out
+        out = _render(Reporter(), "print_terminal", _report(results, score=100))
+        assert "Passing Check" not in out
+        assert "Noop" not in out
 
     def test_fail_ordered_before_warn_within_severity(self):
         results = [
@@ -255,58 +285,44 @@ class TestTopFixes:
             _result(name="Fail Finding", status=Status.FAIL,
                     severity=Severity.CRITICAL, command="Fix-Fail"),
         ]
-        out = _render(Reporter(fix=True), "print_terminal", _report(results))
+        out = _render(Reporter(), "print_terminal", _report(results))
         assert out.index("Fail Finding") < out.index("Warn Finding")
 
-    def test_no_block_when_no_fix_candidates(self):
-        results = [_result(name="No Command Fail", status=Status.FAIL)]
-        out = _render(Reporter(fix=True), "print_terminal", _report(results))
-        assert "TOP FIXES" not in out
-
-    def test_footer_counts_overflow_fixes(self):
+    def test_all_fixes_shown_uncapped(self):
         results = [
             _result(name=f"Fix {i}", status=Status.FAIL, command=f"Cmd-{i}")
             for i in range(7)
         ]
-        out = _render(Reporter(fix=True), "print_terminal", _report(results))
-        assert "5 of 7 fixes shown" in out
-        assert "run --verbose for every fix" in out
-
-    def test_footer_hint_when_all_fixes_shown(self):
-        out = _render(Reporter(fix=True), "print_terminal", _report(_default_results()))
-        assert "run with --verbose for per-check detail" in out
-
-    def test_cis_reference_shown_on_fix_row(self):
-        results = [_result(name="Tagged Fix", status=Status.FAIL,
-                           command="Do-Fix", cis="CIS 18.9.1")]
-        out = _render(Reporter(fix=True), "print_terminal", _report(results))
-        assert "CIS 18.9.1" in out
+        out = _render(Reporter(), "print_terminal", _report(results))
+        for i in range(7):
+            assert f"Cmd-{i}" in out
+        assert "fixes shown" not in out  # old overflow counter is gone
 
 
 # ---------------------------------------------------------------------------
-# --verbose: per-category detail
+# --verbose: every category boxed, every check shown
 # ---------------------------------------------------------------------------
 
-class TestCategoryDetail:
+class TestVerboseBoxes:
     def test_category_headers_with_score_badge(self):
         out = _render(Reporter(verbose=True), "print_terminal",
                       _report(_default_results()))
-        assert "Antivirus" in out
-        assert "Firewall" in out
+        assert "ANTIVIRUS" in out
+        assert "FIREWALL" in out  # PASS-only category boxed under --verbose
         assert "/100" in out
 
     def test_categories_sorted_alphabetically(self):
         out = _render(Reporter(verbose=True), "print_terminal",
                       _report(_default_results()))
-        assert out.index("Antivirus") < out.index("Firewall") < out.index("RDP")
+        assert out.index("ANTIVIRUS") < out.index("FIREWALL") < out.index("RDP")
 
-    def test_severity_details_fix_labels(self):
+    def test_label_columns_dropped_fix_kept(self):
         out = _render(Reporter(verbose=True), "print_terminal",
                       _report(_default_results()))
-        assert "severity" in out
-        assert "details" in out
+        assert "severity" not in out   # old per-check label column is gone
+        assert "details" not in out
         assert "fix" in out
-        assert "CRITICAL" in out
+        assert "CRIT" in out           # abbreviated, right-aligned severity
         assert "Enable Defender" in out
 
     def test_command_printed_with_run_label(self):
@@ -336,9 +352,21 @@ class TestCategoryDetail:
                       _report(_default_results()))
         assert "TOP FAILURES" not in out
 
-    def test_cis_reference_shown_next_to_check(self):
+    def test_passing_check_has_no_fix_or_run(self):
+        results = [_result(name="Healthy Check", status=Status.PASS,
+                           remediation="Should not print", command="Should-Not-Run")]
+        out = _render(Reporter(verbose=True), "print_terminal",
+                      _report(results, score=100))
+        assert "Healthy Check" in out
+        assert "Should not print" not in out
+        assert "Should-Not-Run" not in out
+
+    def test_cis_reference_shown_in_narrow_fallback(self):
         results = [_result(name="Tagged Check", status=Status.FAIL, cis="CIS 2.3.1")]
-        out = _render(Reporter(verbose=True), "print_terminal", _report(results))
+        console = _make_console(width=70)
+        with mock.patch.object(Reporter, "_make_console", return_value=console):
+            Reporter(verbose=True).print_terminal(_report(results))
+        out = console.file.getvalue()
         assert "CIS 2.3.1" in out
 
 
@@ -372,7 +400,8 @@ class TestFooter:
     def test_clean_without_html(self):
         results = [_result(status=Status.PASS)]
         out = _render(Reporter(), "print_terminal", _report(results, score=100))
-        assert "clean — no issues found" in out
+        assert "no issues to triage" in out
+        assert "--html report.html for the full report" in out
 
     def test_json_path_mentioned(self):
         out = _render(Reporter(), "print_terminal", _report(_default_results()),
@@ -403,10 +432,16 @@ class TestFooter:
                       _report(_default_results(), is_admin=True))
         assert "some checks skipped" not in out
 
-    def test_default_hint_mentions_verbose_and_fix(self):
+    def test_default_hint_mentions_verbose_but_not_fix(self):
         out = _render(Reporter(), "print_terminal", _report(_default_results()))
         assert "--verbose for per-check detail" in out
-        assert "--fix for paste-ready commands" in out
+        assert "--fix" not in out  # retired flag is never advertised
+
+    def test_verbose_footer_drops_verbose_hint(self):
+        out = _render(Reporter(verbose=True), "print_terminal",
+                      _report(_default_results()))
+        assert "issues to triage" in out
+        assert "--verbose for per-check detail" not in out
 
 
 # ---------------------------------------------------------------------------
@@ -572,10 +607,19 @@ class TestPlainFallback:
         assert "Fix: Enable Defender" in out
         assert "Set-MpPreference X" in out
 
-    def test_plain_non_verbose_hides_details(self, capsys):
-        Reporter()._print_plain(_report(_default_results()))
+    def test_plain_non_verbose_shows_fixes_hides_pass_detail(self, capsys):
+        """Fixes print by default for FAIL/WARN; PASS detail needs --verbose."""
+        results = [
+            _result(name="Quiet Pass", status=Status.PASS,
+                    details="pass-only-detail"),
+            _result(name="Loud Fail", status=Status.FAIL,
+                    remediation="Enable Defender", command="Set-MpPreference X"),
+        ]
+        Reporter()._print_plain(_report(results))
         out = capsys.readouterr().out
-        assert "Fix: Enable Defender" not in out
+        assert "Fix: Enable Defender" in out
+        assert "Set-MpPreference X" in out
+        assert "pass-only-detail" not in out
 
 
 # ---------------------------------------------------------------------------
