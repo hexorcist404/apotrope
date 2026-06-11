@@ -30,5 +30,7 @@ jobs:
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
 
-      - name: Run tests
-        run: pytest tests/ -q --tb=short
+      - name: Run tests with coverage
+        # Branch coverage is enabled in pyproject.toml ([tool.coverage.run]).
+        # The threshold can only ratchet up — raise it as coverage improves.
+        run: pytest tests/ -q --tb=short --cov --cov-report=term-missing --cov-fail-under=95

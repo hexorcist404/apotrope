@@ -128,3 +128,51 @@ class TestLoadProfileFromToml:
         )
         p = load_profile()
         assert p.name == "AutoDetected"
+
+
+# ---------------------------------------------------------------------------
+# TOML library fallback (tomllib → tomli)
+# ---------------------------------------------------------------------------
+
+class TestTomlLibraryFallback:
+    def _write_toml(self, tmp_path):
+        path = tmp_path / "apotrope-profile.toml"
+        path.write_text('[profile]\nname = "fallback"\n', encoding="utf-8")
+        return path
+
+    def test_tomli_used_when_tomllib_missing(self, tmp_path):
+        import sys
+        import tomllib
+        from types import ModuleType
+        from unittest.mock import patch
+
+        from apotrope.profile import _parse_toml
+
+        fake_tomli = ModuleType("tomli")
+        fake_tomli.load = tomllib.load
+        path = self._write_toml(tmp_path)
+        with patch.dict(sys.modules, {"tomllib": None, "tomli": fake_tomli}):
+            profile = _parse_toml(path)
+        assert profile.name == "fallback"
+
+    def test_import_error_when_no_toml_library(self, tmp_path):
+        import sys
+        from unittest.mock import patch
+
+        import pytest
+
+        from apotrope.profile import _parse_toml
+
+        path = self._write_toml(tmp_path)
+        with patch.dict(sys.modules, {"tomllib": None, "tomli": None}):
+            with pytest.raises(ImportError, match="tomli"):
+                _parse_toml(path)
+
+    def test_load_profile_falls_back_to_defaults_without_toml_library(self, tmp_path):
+        import sys
+        from unittest.mock import patch
+
+        path = self._write_toml(tmp_path)
+        with patch.dict(sys.modules, {"tomllib": None, "tomli": None}):
+            profile = load_profile(str(path))
+        assert profile.name == "default"

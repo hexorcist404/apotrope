@@ -274,3 +274,36 @@ class TestRun:
             results = accounts.run()
         assert all(isinstance(r, CheckResult) for r in results)
         assert len(results) >= 6
+
+
+# ---------------------------------------------------------------------------
+# Password policy parse fallback and complexity error path
+# ---------------------------------------------------------------------------
+
+class TestPasswordPolicyFallbacks:
+    _NET_BAD_LEN = (
+        "Minimum password length: None\n"
+        "Lockout threshold: 5\n"
+        "Lockout duration (minutes): 30\n"
+    )
+
+    def test_non_numeric_min_length_treated_as_zero(self):
+        with patch("apotrope.checks.accounts.run_powershell",
+                   side_effect=[self._NET_BAD_LEN, "1"]):
+            results = accounts._check_password_policy()
+        length = next(r for r in results if "Length" in r.check_name)
+        assert length.status == Status.FAIL
+        assert "0" in length.details
+
+    def test_complexity_query_error_appends_error_result(self):
+        net_good = (
+            "Minimum password length: 14\n"
+            "Lockout threshold: 5\n"
+            "Lockout duration (minutes): 30\n"
+        )
+        with patch("apotrope.checks.accounts.run_powershell",
+                   side_effect=[net_good, ApotropeError("secedit denied")]):
+            results = accounts._check_password_policy()
+        complexity = next(r for r in results if "Complexity" in r.check_name)
+        assert complexity.status == Status.ERROR
+        assert "secedit denied" in complexity.details

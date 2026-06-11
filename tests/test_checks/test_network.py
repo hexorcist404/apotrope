@@ -193,3 +193,16 @@ class TestRun:
             results = network.run()
         assert all(isinstance(r, CheckResult) for r in results)
         assert len(results) >= 4
+
+
+# ---------------------------------------------------------------------------
+# _check_ipv6 error fallback
+# ---------------------------------------------------------------------------
+
+class TestIpv6ErrorFallback:
+    def test_powershell_error_reports_inactive(self):
+        with patch("apotrope.checks.network.run_powershell",
+                   side_effect=ApotropeError("denied")):
+            r = network._check_ipv6()[0]
+        assert r.status == Status.INFO
+        assert "not active" in r.details

@@ -390,3 +390,13 @@ class TestPsBool:
         ):
             with pytest.raises(ApotropeError):
                 utils.ps_bool("broken-command")
+
+
+# ---------------------------------------------------------------------------
+# get_wmi_object — scalar JSON payload fallback
+# ---------------------------------------------------------------------------
+
+class TestGetWmiObjectScalarJson:
+    def test_scalar_json_returns_empty_list(self):
+        with patch("apotrope.utils.run_powershell", return_value="42"):
+            assert utils.get_wmi_object("Win32_Weird") == []

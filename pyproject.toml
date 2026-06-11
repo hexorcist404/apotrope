@@ -55,3 +55,11 @@ addopts = "-v"
 
 [tool.coverage.run]
 source = ["src/apotrope"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

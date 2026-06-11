@@ -193,3 +193,39 @@ class TestUpdatesRun:
         assert results[0].status == Status.ERROR
         assert results[1].status == Status.PASS   # Running
         assert results[2].status == Status.PASS   # 0 pending
+
+
+# ---------------------------------------------------------------------------
+# configure() — profile threshold overrides
+# ---------------------------------------------------------------------------
+
+class TestConfigure:
+    def setup_method(self):
+        self._orig = (updates._WARN_DAYS, updates._FAIL_DAYS)
+
+    def teardown_method(self):
+        updates._WARN_DAYS, updates._FAIL_DAYS = self._orig
+
+    def test_thresholds_override_module_defaults(self):
+        updates.configure({"max_update_age_warn": 45, "max_update_age_fail": 90})
+        assert updates._WARN_DAYS == 45
+        assert updates._FAIL_DAYS == 90
+
+    def test_partial_thresholds_only_change_named_key(self):
+        updates.configure({"max_update_age_warn": 10})
+        assert updates._WARN_DAYS == 10
+        assert updates._FAIL_DAYS == self._orig[1]
+
+    def test_unknown_keys_ignored(self):
+        updates.configure({"unrelated_threshold": 5})
+        assert (updates._WARN_DAYS, updates._FAIL_DAYS) == self._orig
+
+    def test_values_coerced_to_int(self):
+        updates.configure({"max_update_age_warn": "45"})
+        assert updates._WARN_DAYS == 45
+
+
+class TestNowHelper:
+    def test_now_returns_utc_aware_datetime(self):
+        now = updates._now()
+        assert now.tzinfo is timezone.utc

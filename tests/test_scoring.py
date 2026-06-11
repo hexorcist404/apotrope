@@ -223,3 +223,12 @@ class TestScoreLabel:
     ])
     def test_labels(self, score: int, expected: str):
         assert score_label(score) == expected
+
+
+# ---------------------------------------------------------------------------
+# score_grade defensive fallback
+# ---------------------------------------------------------------------------
+
+class TestScoreGradeFallback:
+    def test_negative_score_grades_f(self):
+        assert score_grade(-5) == ("F", "Critical")
