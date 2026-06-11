@@ -65,17 +65,16 @@ apotrope.exe --fix
 
 ## Terminal Output
 
-**Standard scan (default view):**
+**Standard scan (default view)** — a triage view: every category with issues gets
+its own box listing each FAIL/WARN finding with its fix and a ready-to-paste
+PowerShell command:
 
 ![Apotrope scan overview](assets/screenshots/Ap-scan-overview.png)
 
-**Verbose mode (`--verbose`) — full details and remediation steps for every check:**
+**Verbose mode (`--verbose`) — the same boxes for every category and every check,
+passing ones included:**
 
 ![Apotrope verbose output](assets/screenshots/Ap-scan-verbose.png)
-
-**Top issues summary (shown at the end of every scan):**
-
-![Apotrope top issues](assets/screenshots/Ap-scan-top-issues.png)
 
 ---
 

@@ -75,6 +75,14 @@ class TestBuildParser:
             self._parse("--version")
         assert exc_info.value.code == 0
 
+    def test_fix_still_parses_as_noop(self):
+        """Retired flag must not error for existing scripts."""
+        ns = self._parse("--fix")
+        assert ns.fix is True
+
+    def test_fix_hidden_from_help(self):
+        assert "--fix" not in build_parser().format_help()
+
 
 # ---------------------------------------------------------------------------
 # main() dispatch
@@ -217,7 +225,7 @@ class TestMain:
             importlib.reload(cli_mod)
             cli_mod.main()
 
-        MockReporter.assert_called_once_with(verbose=True, no_color=False, fix=False)
+        MockReporter.assert_called_once_with(verbose=True, no_color=False)
 
     def test_exit_1_when_score_below_70(self):
         """Score 69 → exit 1."""
