@@ -84,13 +84,12 @@ _SEV_ORDER: dict[Severity, int] = {
     Severity.INFO:     4,
 }
 
-_TOP_N        = 5    # cap on rows in TOP FAILURES / TOP WARNINGS
 _BAR_CELLS    = 24   # score-panel bar width (spec)
 _PROG_CELLS   = 20   # banner progress bar width
-_SEV_WIDTH    = 5    # severity column width in top findings (spec)
-_DESC_WIDTH   = 27   # description column width in top findings (spec)
 _PANEL_WIDTH  = 56   # inner width for right-aligned hostname / grade
-_REM_WRAP_WIDTH = 72  # detail / remediation wrap width (verbose)
+_REM_WRAP_WIDTH = 72  # detail / remediation wrap width (un-boxed fallback)
+_BOX_W        = 74   # inner content width of a category box (total 78 + 2 indent)
+_SEV_COL      = 4    # right-aligned severity column width inside a box
 
 
 def _grade_hex(score: int) -> str:
@@ -165,11 +164,15 @@ def _glyphs(console) -> dict[str, str]:
             "brand": "◈", "rail": "▌", "bar_full": "█", "bar_empty": "░",
             "pass": "✓", "fail": "✗", "warn": "!", "info": "i", "error": "·",
             "flag": "⚑", "arrow": "→", "sep": "·",
+            "box_tl": "┌", "box_tr": "┐", "box_bl": "└", "box_br": "┘",
+            "box_h": "─", "box_v": "│",
         }
     return {
         "brand": "*", "rail": "|", "bar_full": "#", "bar_empty": "-",
         "pass": "[+]", "fail": "[x]", "warn": "[!]", "info": "[i]", "error": "[.]",
         "flag": "", "arrow": "->", "sep": "-",
+        "box_tl": "+", "box_tr": "+", "box_bl": "+", "box_br": "+",
+        "box_h": "-", "box_v": "|",
     }
 
 
@@ -201,10 +204,11 @@ class Reporter:
     """Formats and outputs Apotrope audit reports.
 
     Args:
-        verbose:  Show details and remediation for every check result.
+        verbose:  Box every category and show every check (passing ones too).
+                  The default view is a triage view: only categories with
+                  FAIL/WARN findings, each with its fix and command.
         no_color: Disable Rich color markup (produces plain, no-ANSI output).
-        fix:      Print a copy-paste-ready "TOP FIXES" block with the exact
-                  PowerShell command for each failing/warning check.
+        fix:      Deprecated and ignored — fixes are shown by default.
     """
 
     def __init__(
@@ -212,7 +216,7 @@ class Reporter:
     ) -> None:
         self.verbose = verbose
         self.no_color = no_color
-        self.fix = fix
+        self.fix = fix  # retained for API compatibility; no longer changes output
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -295,16 +299,17 @@ class Reporter:
 
         console = self._make_console()
         self._print_score_panel(console, report)
-        if self.verbose:
-            # Full per-category detail lives here (and in the HTML report).
-            self._print_category_detail(console, report)
+        # Default = triage view: one box per category with FAIL/WARN findings.
+        # --verbose widens the selection: every category, every check.
+        # console.width tracks the real terminal (including the column Rich
+        # reserves on legacy Windows consoles, which would break the boxes).
+        if console.width < _BOX_W + 6:
+            # Console too narrow for 78-column boxes — un-boxed fallback.
+            self._print_category_detail(console, report,
+                                        only_issues=not self.verbose)
         else:
-            # Default view stays concise: prioritised failures, then warnings.
-            self._print_top_findings(console, report, Status.FAIL)
-            self._print_top_findings(console, report, Status.WARN)
-            # --fix: append a copy-paste-ready block of exact PowerShell commands.
-            if self.fix:
-                self._print_top_fixes(console, report)
+            self._print_category_boxes(console, report,
+                                       only_issues=not self.verbose)
         self._print_footer(console, report, html_path, json_path)
 
     def generate_html_report(self, report: AuditReport, path: str) -> None:
@@ -776,7 +781,19 @@ class Reporter:
         return Markup(" ".join(parts))
 
     def _make_console(self):
+        import sys
+
         from rich.console import Console
+
+        # Check data (details/remediation) may contain characters a non-UTF-8
+        # console (e.g. cp1252) cannot encode; degrade them to '?' rather than
+        # letting the report crash mid-render.
+        try:
+            enc = (getattr(sys.stdout, "encoding", None) or "utf-8").lower()
+            if "utf" not in enc.replace("-", ""):
+                sys.stdout.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
         return Console(no_color=self.no_color, highlight=False)
 
     def _print_non_admin_warning(self, console) -> None:
@@ -863,99 +880,150 @@ class Reporter:
         self._rail(console, _text((f"{total} checks evaluated", _FAINT)))
         console.print()
 
-    def _print_top_findings(
-        self, console, report: AuditReport, status: Status
-    ) -> None:
-        """Print a prioritised FAIL or WARN block (severity-sorted, capped)."""
-        g = _glyphs(console)
-        rows = sorted(
-            (r for r in report.results if r.status == status),
-            key=lambda r: _SEV_ORDER.get(r.severity, 5),
-        )[:_TOP_N]
-        if not rows:
-            return
+    # ── Category boxes (default triage view and --verbose) ───────────────────
 
-        if status == Status.FAIL:
-            head_glyph, head_text, accent, row_glyph = (
-                g["flag"], "TOP FAILURES", _RED, g["fail"]
-            )
-        else:
-            head_glyph, head_text, accent, row_glyph = (
-                g["warn"], "TOP WARNINGS", _AMBER, g["warn"]
-            )
+    @staticmethod
+    def _issue_sort_key(r: CheckResult) -> tuple[int, int]:
+        """FAIL before WARN, then severity CRITICAL→LOW."""
+        return (0 if r.status == Status.FAIL else 1,
+                _SEV_ORDER.get(r.severity, 5))
 
-        prefix = f"{head_glyph} " if head_glyph else ""
-        console.print(_text("  ", (f"{prefix}{head_text}", f"bold {accent}")))
+    def _box_row(self, console, g, segs=()) -> None:
+        """Print one box content line: `  │ <segs padded to _BOX_W> │`."""
+        pad = _BOX_W - sum(len(s[0]) if isinstance(s, tuple) else len(s)
+                           for s in segs)
+        line = _text("  ", (g["box_v"] + " ", _FAINT))
+        if segs:
+            line.append_text(_text(*segs))
+        line.append(" " * max(0, pad))
+        line.append(" " + g["box_v"], style=_FAINT)
+        console.print(line)
 
-        for r in rows:
-            sev  = _SEVERITY_ABBR.get(r.severity, "?").ljust(_SEV_WIDTH)
-            desc = _truncate(r.check_name, _DESC_WIDTH).ljust(_DESC_WIDTH)
-            line = _text(
-                "  ",
-                (row_glyph + " ", accent),
-                (sev + " ", _SEVERITY_HEX.get(r.severity, _TEXT)),
-                (desc, _TEXT),
-            )
-            if r.cis_reference:
-                line.append(" " + r.cis_reference, style=_FAINT)
-            console.print(line)
-        console.print()
-
-    def _fix_candidates(self, report: AuditReport) -> list[CheckResult]:
-        """FAIL/WARN findings that carry a command, ordered for the fixes block.
-
-        Severity-sorted (CRITICAL→LOW), FAIL before WARN — same priority the
-        HTML top-issues panel uses.
-        """
-        rows = [
-            r for r in report.results
-            if r.status in (Status.FAIL, Status.WARN) and r.command
-        ]
-        rows.sort(key=lambda r: (
-            _SEV_ORDER.get(r.severity, 5),
-            0 if r.status == Status.FAIL else 1,
-        ))
-        return rows
-
-    def _print_top_fixes(self, console, report: AuditReport) -> None:
-        """Print copy-paste-ready PowerShell for the top failing/warning checks.
-
-        Each finding gets a header line (glyph/severity/name/CIS) followed by its
-        exact command on indented bare lines — no glyph, rail, or prompt — so a
-        user can select and paste straight into an elevated PowerShell.
-        """
-        rows = self._fix_candidates(report)[:_TOP_N]
-        if not rows:
-            return
-
-        g = _glyphs(console)
-        flag = f"{g['flag']} " if g["flag"] else ""
+    def _print_box_top(self, console, g, name: str, score: int) -> None:
+        """Centered box header: `┌──── NAME  score/100 G ────┐`."""
+        letter, _ = score_grade(score)
+        gc    = _grade_hex(score)
+        label = name.upper()
+        badge = f"{score}/100 {letter}"
+        content_len = 1 + len(label) + 2 + len(badge) + 1
+        dashes_left  = (_BOX_W + 2 - content_len) // 2
+        dashes_right = _BOX_W + 2 - content_len - dashes_left
         console.print(_text(
             "  ",
-            (f"{flag}TOP FIXES", f"bold {_RED}"),
-            ("   copy-paste into an elevated PowerShell", _MUTED),
+            (g["box_tl"] + g["box_h"] * dashes_left, _FAINT),
+            " ",
+            (label, f"bold {_BRIGHT}"),
+            "  ",
+            (badge, gc),
+            " ",
+            (g["box_h"] * dashes_right + g["box_tr"], _FAINT),
         ))
+
+    def _print_box_bottom(self, console, g) -> None:
+        console.print(_text(
+            "  ", (g["box_bl"] + g["box_h"] * (_BOX_W + 2) + g["box_br"], _FAINT),
+        ))
+
+    def _print_box_check(self, console, g, r: CheckResult) -> None:
+        """One check inside a box: name row, details, then fix/run if actionable."""
+        glyph_for = {
+            Status.PASS: g["pass"], Status.FAIL: g["fail"], Status.WARN: g["warn"],
+            Status.INFO: g["info"], Status.ERROR: g["error"],
+        }
+        actionable = r.status in (Status.FAIL, Status.WARN)
+        glyph = glyph_for.get(r.status, "?")
+        sev   = _SEVERITY_ABBR.get(r.severity, "?").rjust(_SEV_COL)
+        name_hex = {Status.FAIL: _RED, Status.WARN: _AMBER}.get(r.status, _TEXT)
+        sev_hex  = _SEVERITY_HEX.get(r.severity, _TEXT) if actionable else _FAINT
+        name = _truncate(r.check_name,
+                         _BOX_W - len(glyph) - 1 - _SEV_COL - 2)
+        gap = _BOX_W - len(glyph) - 1 - len(name) - _SEV_COL
+        self._box_row(console, g, [
+            (glyph, _STATUS_HEX.get(r.status, _MUTED)),
+            " ",
+            (name, name_hex),
+            " " * gap,
+            (sev, sev_hex),
+        ])
+        if r.details:
+            body_hex = _TEXT if actionable else _MUTED
+            for ln in textwrap.wrap(r.details, _BOX_W - 4):
+                self._box_row(console, g, [("    " + ln, body_hex)])
+        if actionable and r.remediation:
+            for i, ln in enumerate(textwrap.wrap(r.remediation, _BOX_W - 9)):
+                self._box_row(console, g,
+                              [("    ", ""), ("fix", _MUTED), ("  ", ""), (ln, _TEXT)]
+                              if i == 0 else [(" " * 9 + ln, _TEXT)])
+        if actionable and r.command:
+            first = True
+            for stmt in r.command.split("\n"):
+                # Wrap at spaces only — never inside a command token like
+                # Select-String (textwrap breaks on hyphens by default).
+                for ln in textwrap.wrap(stmt, _BOX_W - 9,
+                                        break_on_hyphens=False) or [""]:
+                    self._box_row(console, g,
+                                  [("    ", ""), ("run", _MUTED), ("  ", ""), (ln, _GREEN)]
+                                  if first else [(" " * 9 + ln, _GREEN)])
+                    first = False
+
+    def _print_category_box(
+        self, console, g, name: str, score: int, results: list[CheckResult]
+    ) -> None:
+        """One category box: centered header, checks separated by blank rail rows."""
+        self._print_box_top(console, g, name, score)
+        for i, r in enumerate(results):
+            if i:
+                self._box_row(console, g)
+            self._print_box_check(console, g, r)
+        self._print_box_bottom(console, g)
         console.print()
 
-        for r in rows:
-            sev  = _SEVERITY_ABBR.get(r.severity, "?").ljust(_SEV_WIDTH)
-            desc = _truncate(r.check_name, _DESC_WIDTH).ljust(_DESC_WIDTH)
-            line = _text(
-                "  ",
-                (g["fail"] + " ", _RED),
-                (sev + " ", _SEVERITY_HEX.get(r.severity, _TEXT)),
-                (desc, _TEXT),
-            )
-            if r.cis_reference:
-                line.append(" " + r.cis_reference, style=_FAINT)
-            console.print(line)
-            # Bare command lines — nothing but the command, indented 6 spaces.
-            for cmd_line in r.command.split("\n"):
-                console.print(_text("      ", (cmd_line, _GREEN)))
-            console.print()
+    def _print_category_boxes(
+        self, console, report: AuditReport, only_issues: bool
+    ) -> None:
+        """Boxed per-category view.
 
-    def _print_category_detail(self, console, report: AuditReport) -> None:
-        """Verbose view: every check, grouped by category, in the rail language."""
+        only_issues=True (the default run) boxes only categories with FAIL/WARN
+        findings — and only those findings — worst category score first.
+        only_issues=False (--verbose) boxes every category alphabetically with
+        every check.
+        """
+        from collections import defaultdict
+
+        g = _glyphs(console)
+        cat_scores = calculate_category_scores(report.results)
+        by_cat: dict[str, list[CheckResult]] = defaultdict(list)
+        for r in report.results:
+            by_cat[r.category].append(r)
+
+        if only_issues:
+            selected = []
+            for cat, results in by_cat.items():
+                issues = sorted(
+                    (r for r in results
+                     if r.status in (Status.FAIL, Status.WARN)),
+                    key=self._issue_sort_key,
+                )
+                if issues:
+                    selected.append((cat, issues))
+            # Worst category first; alphabetical tie-break.
+            selected.sort(key=lambda c: (cat_scores.get(c[0], 100), c[0]))
+        else:
+            selected = [(cat, by_cat[cat]) for cat in sorted(by_cat)]
+
+        for cat, results in selected:
+            self._print_category_box(
+                console, g, cat, cat_scores.get(cat, 100), results,
+            )
+
+    def _print_category_detail(
+        self, console, report: AuditReport, only_issues: bool = False
+    ) -> None:
+        """Un-boxed per-category view for consoles too narrow for the boxes.
+
+        Same selection rules as the boxed view: only_issues=True restricts to
+        categories (and checks) with FAIL/WARN findings, worst category first.
+        """
         g = _glyphs(console)
         glyph_for = {
             Status.PASS:  g["pass"],  Status.FAIL: g["fail"], Status.WARN: g["warn"],
@@ -963,8 +1031,23 @@ class Reporter:
         }
         cat_scores = calculate_category_scores(report.results)
 
-        for category in sorted({r.category for r in report.results}):
-            results   = [r for r in report.results if r.category == category]
+        categories = sorted({r.category for r in report.results})
+        if only_issues:
+            categories = [
+                c for c in categories
+                if any(r.category == c and r.status in (Status.FAIL, Status.WARN)
+                       for r in report.results)
+            ]
+            categories.sort(key=lambda c: (cat_scores.get(c, 100), c))
+
+        for category in categories:
+            results = [r for r in report.results if r.category == category]
+            if only_issues:
+                results = sorted(
+                    (r for r in results
+                     if r.status in (Status.FAIL, Status.WARN)),
+                    key=self._issue_sort_key,
+                )
             cat_score = cat_scores.get(category, 100)
             letter, _ = score_grade(cat_score)
             gc        = _grade_hex(cat_score)
@@ -1034,14 +1117,13 @@ class Reporter:
                 (f"{g['arrow']} {html_path} written", _GREEN),
                 (tail, _MUTED),
             ))
-        elif issues:
-            console.print(_text(
-                "  ",
-                (f"{g['arrow']} {issues} issue{plural} to triage", _AMBER),
-                (f" {g['sep']} run with --html report.html for the full report", _MUTED),
-            ))
         else:
-            console.print(_text("  ", (f"{g['arrow']} clean — no issues found", _GREEN)))
+            head = (f"{g['arrow']} {issues} issue{plural} to triage" if issues
+                    else f"{g['arrow']} no issues to triage")
+            tail = f" {g['sep']} --html report.html for the full report"
+            if not self.verbose and issues:
+                tail += f" {g['sep']} --verbose for per-check detail"
+            console.print(_text("  ", (head, _GREEN), (tail, _MUTED)))
 
         if json_path:
             console.print(_text("  ", (f"{g['sep']} {json_path} written", _MUTED)))
@@ -1057,25 +1139,6 @@ class Reporter:
                 "  ",
                 ("note: some checks skipped — run as Administrator for complete results",
                  _MUTED),
-            ))
-        if self.fix and not self.verbose:
-            total_fixes = len(self._fix_candidates(report))
-            shown = min(total_fixes, _TOP_N)
-            if total_fixes > shown:
-                console.print(_text(
-                    "  ",
-                    (f"{shown} of {total_fixes} fixes shown", _MUTED),
-                    (" — run --verbose for every fix", _MUTED),
-                ))
-            else:
-                console.print(_text(
-                    "  ", ("run with --verbose for per-check detail", _MUTED),
-                ))
-        elif not self.verbose:
-            console.print(_text(
-                "  ",
-                ("run with --verbose for per-check detail "
-                 f"{g['sep']} --fix for paste-ready commands", _MUTED),
             ))
         console.print()
 
@@ -1097,10 +1160,13 @@ class Reporter:
         for r in report.results:
             icon = _STATUS_ICON.get(r.status, "?")
             print(f"[{icon}] [{r.severity.value:8}] {r.category}: {r.check_name}")
-            if (self.verbose or self.fix) and r.details:
+            # Fixes are shown by default for actionable findings; --verbose
+            # additionally shows detail for passing checks.
+            show = self.verbose or r.status in (Status.FAIL, Status.WARN)
+            if show and r.details:
                 print(f"       {r.details}")
-            if (self.verbose or self.fix) and r.remediation:
+            if show and r.remediation:
                 print(f"       Fix: {r.remediation}")
-            if (self.verbose or self.fix) and r.command:
+            if show and r.command:
                 for ln in r.command.split("\n"):
                     print(f"       {ln}")

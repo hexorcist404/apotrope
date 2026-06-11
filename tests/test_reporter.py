@@ -336,3 +336,92 @@ class TestBuildExecutiveSummary:
         ]
         s = self._summary(results, score=70)
         assert "2" in s or "failed" in s.lower()
+
+
+# ---------------------------------------------------------------------------
+# Terminal output — triage boxes (default) and --verbose boxes
+# ---------------------------------------------------------------------------
+
+class TestPrintTerminal:
+    def _boxed_report(self) -> AuditReport:
+        return _make_report(extra_results=[
+            CheckResult(
+                "Firewall", "Public Firewall", Status.FAIL, Severity.HIGH,
+                "desc", "Profile disabled.", "Turn the public profile on.",
+                command="Set-NetFirewallProfile -Profile Public -Enabled True",
+            ),
+        ])
+
+    def _output(self, report: AuditReport, capsys, monkeypatch,
+                verbose: bool = False, columns: int = 120) -> str:
+        # Pin the console width (Rich and shutil both honor COLUMNS) so the
+        # wide/narrow rendering path doesn't depend on the test runner's tty.
+        monkeypatch.setenv("COLUMNS", str(columns))
+        Reporter(verbose=verbose, no_color=True).print_terminal(report)
+        return capsys.readouterr().out
+
+    def test_default_boxes_issue_categories_only(self, capsys, monkeypatch):
+        out = self._output(self._boxed_report(), capsys, monkeypatch)
+        assert "FIREWALL" in out   # has FAIL findings → boxed
+        assert "SERVICES" in out   # has a WARN finding → boxed
+        assert "OS  " not in out   # INFO only → no box in the triage view
+
+    def test_default_hides_passing_checks(self, capsys, monkeypatch):
+        out = self._output(self._boxed_report(), capsys, monkeypatch)
+        assert "Domain Profile" not in out  # PASS check stays out of triage
+
+    def test_default_shows_fix_and_run(self, capsys, monkeypatch):
+        out = self._output(self._boxed_report(), capsys, monkeypatch)
+        assert "fix" in out
+        assert "Turn the public profile on." in out
+        assert "run" in out
+        assert "Set-NetFirewallProfile -Profile Public -Enabled True" in out
+
+    def test_old_summary_blocks_removed(self, capsys, monkeypatch):
+        out = self._output(self._boxed_report(), capsys, monkeypatch)
+        assert "TOP FAILURES" not in out
+        assert "TOP WARNINGS" not in out
+        assert "TOP FIXES" not in out
+
+    def test_box_frame_drawn(self, capsys, monkeypatch):
+        out = self._output(self._boxed_report(), capsys, monkeypatch)
+        assert "┌" in out and "┐" in out and "└" in out and "┘" in out
+
+    def test_box_lines_align_at_78_columns(self, capsys, monkeypatch):
+        out = self._output(self._boxed_report(), capsys, monkeypatch)
+        box_lines = [ln for ln in out.splitlines()
+                     if ln.lstrip().startswith(("┌", "│", "└"))]
+        assert box_lines
+        assert all(len(ln) == 80 for ln in box_lines)  # 2 indent + 78 box
+
+    def test_footer_default(self, capsys, monkeypatch):
+        out = self._output(self._boxed_report(), capsys, monkeypatch)
+        assert "issues to triage" in out
+        assert "--verbose for per-check detail" in out
+
+    def test_footer_zero_issues(self, capsys, monkeypatch):
+        clean = AuditReport(
+            hostname="TEST-PC",
+            os_version="Windows 11 Pro 10.0.22621",
+            scan_timestamp=datetime(2026, 3, 17, 12, 0, 0, tzinfo=timezone.utc),
+            scan_duration=2.5,
+            results=[
+                CheckResult("Firewall", "Domain Profile", Status.PASS,
+                            Severity.HIGH, "desc", "ok"),
+            ],
+            score=100,
+        )
+        out = self._output(clean, capsys, monkeypatch)
+        assert "no issues to triage" in out
+        assert "┌" not in out  # no boxes on a clean run
+
+    def test_verbose_boxes_every_category_and_check(self, capsys, monkeypatch):
+        out = self._output(self._boxed_report(), capsys, monkeypatch, verbose=True)
+        assert "OS Version" in out         # INFO-only category boxed now
+        assert "Domain Profile" in out     # passing check shown
+        assert "--verbose for per-check detail" not in out
+
+    def test_narrow_console_falls_back_unboxed(self, capsys, monkeypatch):
+        out = self._output(self._boxed_report(), capsys, monkeypatch, columns=70)
+        assert "┌" not in out
+        assert "Public Firewall" in out  # content still there, un-boxed

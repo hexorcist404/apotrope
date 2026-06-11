@@ -75,6 +75,14 @@ class TestBuildParser:
             self._parse("--version")
         assert exc_info.value.code == 0
 
+    def test_fix_still_parses_as_noop(self):
+        """Retired flag must not error for existing scripts."""
+        ns = self._parse("--fix")
+        assert ns.fix is True
+
+    def test_fix_hidden_from_help(self):
+        assert "--fix" not in build_parser().format_help()
+
 
 # ---------------------------------------------------------------------------
 # main() dispatch
@@ -217,7 +225,7 @@ class TestMain:
             importlib.reload(cli_mod)
             cli_mod.main()
 
-        MockReporter.assert_called_once_with(verbose=True, no_color=False, fix=False)
+        MockReporter.assert_called_once_with(verbose=True, no_color=False)
 
     def test_exit_1_when_score_below_70(self):
         """Score 69 → exit 1."""
@@ -380,14 +388,23 @@ class TestMainErrorPaths:
             mock_report, html_path="out.html", json_path="out.json"
         )
 
-    def test_fix_flag_passed_to_reporter(self):
+    def test_fix_flag_is_noop_with_notice(self, capsys):
+        """Retired --fix: not forwarded to Reporter; prints the muted notice."""
         from apotrope.cli import main
 
         mock_reporter, _ = self._reporter_with_report()
         p1, p2, p3, p4, p5 = self._patches(["--fix"], mock_reporter)
         with p1, p2, p3 as MockReporter, p4, p5:
             main()
-        MockReporter.assert_called_once_with(verbose=False, no_color=False, fix=True)
+        MockReporter.assert_called_once_with(verbose=False, no_color=False)
+        out = capsys.readouterr().out
+        assert "--fix is no longer needed" in out
+        mock_reporter.run_with_progress.assert_called_once()  # scan still runs
+
+    def test_no_fix_notice_without_flag(self, capsys):
+        mock_reporter, _ = self._reporter_with_report()
+        self._run_main([], mock_reporter)
+        assert "--fix is no longer needed" not in capsys.readouterr().out
 
     def test_dry_run_prints_module_names(self, capsys):
         mock_reporter, _ = self._reporter_with_report()

@@ -55,27 +55,23 @@ apotrope.exe --html report.html
 
 Then open `report.html` in your browser.
 
-To get a copy-paste-ready PowerShell command for each issue, add `--fix`:
-
-```
-apotrope.exe --fix
-```
+Every issue is shown with a copy-paste-ready PowerShell command by default —
+no extra flags needed.
 
 ---
 
 ## Terminal Output
 
-**Standard scan (default view):**
+**Standard scan (default view)** — a triage view: every category with issues gets
+its own box listing each FAIL/WARN finding with its fix and a ready-to-paste
+PowerShell command:
 
 ![Apotrope scan overview](assets/screenshots/Ap-scan-overview.png)
 
-**Verbose mode (`--verbose`) — full details and remediation steps for every check:**
+**Verbose mode (`--verbose`) — the same boxes for every category and every check,
+passing ones included:**
 
 ![Apotrope verbose output](assets/screenshots/Ap-scan-verbose.png)
-
-**Top issues summary (shown at the end of every scan):**
-
-![Apotrope top issues](assets/screenshots/Ap-scan-top-issues.png)
 
 ---
 
@@ -135,8 +131,6 @@ Options:
   --category CATS      Comma-separated list of categories to audit
                        (e.g. firewall,encryption,patching)
   --dry-run            List check modules that would run without executing them
-  --fix                Print a copy-paste-ready PowerShell command for each
-                       failing/warning check (a "TOP FIXES" block)
   --verbose            Show detail for every check, including PASSes
   --no-color           Disable Rich color output (for CI / log files)
   --log-level LEVEL    Logging verbosity: DEBUG, INFO, WARNING (default), ERROR
@@ -163,9 +157,6 @@ apotrope --json report.json
 
 # Audit only firewall and patching
 apotrope --category firewall,patching
-
-# Print a copy-paste-ready PowerShell fix for each failing/warning check
-apotrope --fix
 
 # Show pass/fail details for every check
 apotrope --verbose

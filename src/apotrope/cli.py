@@ -34,7 +34,6 @@ def build_parser() -> argparse.ArgumentParser:
             "  apotrope --category firewall,encryption  Specific categories only\n"
             "  apotrope --dry-run                   List checks without running\n"
             "  apotrope --verbose                   Show details for every check\n"
-            "  apotrope --fix                       Print paste-ready PowerShell fixes\n"
             "\n"
             "NOTICE: Apotrope is a READ-ONLY tool for AUTHORISED auditing only.\n"
             "It makes no changes to the system.  Do not run on systems you do\n"
@@ -92,7 +91,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--fix",
         action="store_true",
-        help="Print copy-paste-ready PowerShell remediation for each failing/warning check",
+        # Retired: fixes are shown by default in the triage view. Kept as a
+        # hidden no-op so existing scripts don't error. Do not repurpose the
+        # name — a future auto-remediation flag should be e.g. --remediate.
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--no-color",
@@ -133,7 +135,18 @@ def main() -> None:
 
     admin    = is_admin()
     scanner  = Scanner(categories=categories, is_admin=admin, profile=profile)
-    reporter = Reporter(verbose=args.verbose, no_color=args.no_color, fix=args.fix)
+    reporter = Reporter(verbose=args.verbose, no_color=args.no_color)
+
+    if args.fix:
+        # Retired flag — fixes print by default now.
+        notice = "--fix is no longer needed — fixes are shown by default"
+        try:
+            from rich.console import Console
+            Console(no_color=args.no_color, highlight=False).print(
+                f"  [#5d776c]{notice}[/]"
+            )
+        except ImportError:
+            print(f"  {notice}")
 
     # --dry-run: list modules and exit without scanning
     if args.dry_run:
