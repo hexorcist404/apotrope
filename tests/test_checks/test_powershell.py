@@ -206,3 +206,29 @@ class TestRun:
         with patch("apotrope.checks.powershell.run_powershell", side_effect=side_effects):
             results = powershell.run()
         assert all(r.category == "PowerShell" for r in results)
+
+
+# ---------------------------------------------------------------------------
+# Error handling for the remaining sub-checks
+# ---------------------------------------------------------------------------
+
+class TestSubCheckErrorPaths:
+    def _error_run(self, fn):
+        with patch("apotrope.checks.powershell.run_powershell",
+                   side_effect=ApotropeError("access denied")):
+            return fn()[0]
+
+    def test_module_logging_error(self):
+        r = self._error_run(powershell._check_module_logging)
+        assert r.status == Status.ERROR
+        assert "access denied" in r.details
+
+    def test_constrained_language_error(self):
+        r = self._error_run(powershell._check_constrained_language)
+        assert r.status == Status.ERROR
+        assert "access denied" in r.details
+
+    def test_psv2_error(self):
+        r = self._error_run(powershell._check_psv2)
+        assert r.status == Status.ERROR
+        assert "access denied" in r.details

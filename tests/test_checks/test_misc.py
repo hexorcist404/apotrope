@@ -240,3 +240,43 @@ class TestRun:
         ):
             results = misc.run()
         assert all(r.category == "Hardening" for r in results)
+
+
+# ---------------------------------------------------------------------------
+# Parse fallbacks and list-shaped JSON payloads
+# ---------------------------------------------------------------------------
+
+class TestAutoplayParseFallback:
+    def test_non_numeric_registry_value_not_treated_as_disabled(self):
+        with patch("apotrope.checks.misc.run_powershell",
+                   return_value="garbage"):
+            r = misc._check_autoplay()[0]
+        assert r.status != Status.PASS
+        assert r.status != Status.ERROR
+
+
+class TestSpectreParseFallback:
+    def test_non_numeric_override_not_flagged_as_disabled(self):
+        payload = {"Override": "garbage", "Mask": "junk"}
+        with patch("apotrope.checks.misc.run_powershell_json",
+                   return_value=payload):
+            r = misc._check_spectre()[0]
+        assert r.status != Status.ERROR
+        assert r.status != Status.FAIL
+
+
+class TestScreenLockPayloadShapes:
+    def test_json_as_list_unwrapped(self):
+        payload = [{"Active": "1", "Secure": "1", "Timeout": "600"}]
+        with patch("apotrope.checks.misc.run_powershell_json",
+                   return_value=payload):
+            r = misc._check_screen_lock()[0]
+        assert r.status == Status.PASS
+
+    def test_non_numeric_timeout_warns_as_unset(self):
+        payload = {"Active": "1", "Secure": "1", "Timeout": "garbage"}
+        with patch("apotrope.checks.misc.run_powershell_json",
+                   return_value=payload):
+            r = misc._check_screen_lock()[0]
+        assert r.status == Status.WARN
+        assert "0 or unset" in r.details

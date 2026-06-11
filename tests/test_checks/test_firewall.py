@@ -167,3 +167,15 @@ class TestFirewallRunErrors:
                    side_effect=ApotropeError("access denied")):
             results = firewall.run()
         assert "access denied" in results[0].details
+
+
+# ---------------------------------------------------------------------------
+# _parse_action fallback for unparseable values
+# ---------------------------------------------------------------------------
+
+class TestParseActionFallback:
+    def test_unintable_object_returns_unknown(self):
+        assert firewall._parse_action([1, 2]) == "Unknown([1, 2])"
+
+    def test_unintable_object_does_not_raise(self):
+        assert firewall._parse_action(object()).startswith("Unknown(")

@@ -194,3 +194,23 @@ class TestBaselineSerialization:
                 load_baseline(path)
         finally:
             os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# One-sided good results count as unchanged
+# ---------------------------------------------------------------------------
+
+class TestOneSidedGoodResults:
+    def test_current_only_pass_counts_as_unchanged(self):
+        baseline = _make_report([])
+        current = _make_report([_make_result("New Pass", Status.PASS)])
+        diff = compare_reports(baseline, current)
+        assert diff.new_findings == []
+        assert diff.unchanged_count == 1
+
+    def test_baseline_only_pass_counts_as_unchanged(self):
+        baseline = _make_report([_make_result("Old Pass", Status.PASS)])
+        current = _make_report([])
+        diff = compare_reports(baseline, current)
+        assert diff.resolved_findings == []
+        assert diff.unchanged_count == 1

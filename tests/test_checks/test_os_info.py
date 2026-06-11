@@ -287,3 +287,51 @@ class TestOsInfoRun:
             results = os_info.run()
         assert len(results) > 0
         assert all(r.status == Status.ERROR for r in results)
+
+
+# ---------------------------------------------------------------------------
+# Parse fallbacks and list-shaped JSON payloads
+# ---------------------------------------------------------------------------
+
+class TestBuildParseFallback:
+    def test_non_numeric_build_does_not_crash(self):
+        data = _os_json(build="garbage")
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=data), \
+             patch("apotrope.checks.os_info._now",
+                   return_value=datetime(2026, 1, 1, tzinfo=timezone.utc)):
+            results = os_info._check_os_build()
+        assert results
+        assert all(r.status != Status.ERROR for r in results)
+        version = next(r for r in results if r.check_name == "OS Version")
+        assert version.status == Status.INFO
+
+
+class TestListShapedPayloads:
+    def test_domain_json_as_list_unwrapped(self):
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=[_domain_json(part_of_domain=True, domain="CORP")]):
+            results = os_info._check_domain()
+        assert results[0].status != Status.ERROR
+        assert "CORP" in results[0].details
+
+    def test_domain_empty_list_treated_as_unknown(self):
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=[]):
+            results = os_info._check_domain()
+        assert results[0].status != Status.ERROR
+        assert "UNKNOWN" in results[0].details
+
+    def test_tpm_json_as_list_unwrapped(self):
+        payload = [{"TpmPresent": True, "TpmReady": True,
+                    "ManufacturerVersion": "7.2"}]
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=payload):
+            results = os_info._check_tpm()
+        assert results[0].status != Status.ERROR
+        assert "TPM" in results[0].check_name
+
+
+class TestNowHelper:
+    def test_now_returns_utc_aware_datetime(self):
+        assert os_info._now().tzinfo is timezone.utc

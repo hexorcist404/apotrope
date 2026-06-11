@@ -280,3 +280,161 @@ class TestMain:
         mock_scanner.run_with_progress = MagicMock()
         # run_with_progress should NOT have been called on the reporter
         # (checking via scanner.dry_run was called is sufficient)
+
+
+# ---------------------------------------------------------------------------
+# main() error paths, exit codes, and output wiring
+# ---------------------------------------------------------------------------
+
+class TestMainErrorPaths:
+    _SCANNER_PATH  = "apotrope.scanner.Scanner"
+    _REPORTER_PATH = "apotrope.reporter.Reporter"
+    _ADMIN_PATH    = "apotrope.utils.is_admin"
+    _PROFILE_PATH  = "apotrope.profile.load_profile"
+
+    def _patches(self, argv, mock_reporter):
+        mock_scanner = MagicMock(is_admin=False)
+        return (
+            patch("sys.argv", ["apotrope"] + argv),
+            patch(self._SCANNER_PATH, return_value=mock_scanner),
+            patch(self._REPORTER_PATH, return_value=mock_reporter),
+            patch(self._ADMIN_PATH, return_value=False),
+            patch(self._PROFILE_PATH, return_value=MagicMock()),
+        )
+
+    def _reporter_with_report(self, score=80):
+        mock_report = MagicMock(fail_count=0, error_count=0, score=score)
+        mock_reporter = MagicMock()
+        mock_reporter.run_with_progress.return_value = mock_report
+        return mock_reporter, mock_report
+
+    def _run_main(self, argv, mock_reporter):
+        from apotrope.cli import main
+
+        p1, p2, p3, p4, p5 = self._patches(argv, mock_reporter)
+        with p1, p2, p3, p4, p5:
+            main()
+
+    def test_compare_missing_baseline_exits_2(self, tmp_path, capsys):
+        mock_reporter, _ = self._reporter_with_report()
+        missing = str(tmp_path / "no-such-baseline.json")
+        with pytest.raises(SystemExit) as exc:
+            self._run_main(["--compare", missing], mock_reporter)
+        assert exc.value.code == 2
+        assert "Cannot load baseline" in capsys.readouterr().err
+        mock_reporter.run_with_progress.assert_not_called()
+
+    def test_compare_corrupt_baseline_exits_2(self, tmp_path, capsys):
+        bad = tmp_path / "corrupt.json"
+        bad.write_text("{not valid json", encoding="utf-8")
+        mock_reporter, _ = self._reporter_with_report()
+        with pytest.raises(SystemExit) as exc:
+            self._run_main(["--compare", str(bad)], mock_reporter)
+        assert exc.value.code == 2
+        assert "Cannot load baseline" in capsys.readouterr().err
+
+    def test_fatal_scan_error_exits_2(self, capsys):
+        mock_reporter = MagicMock()
+        mock_reporter.run_with_progress.side_effect = RuntimeError("kaboom")
+        with pytest.raises(SystemExit) as exc:
+            self._run_main([], mock_reporter)
+        assert exc.value.code == 2
+        err = capsys.readouterr().err
+        assert "[FATAL]" in err
+        assert "kaboom" in err
+
+    def test_compare_success_prints_comparison(self, tmp_path):
+        baseline = MagicMock()
+        diff = MagicMock()
+        mock_reporter, mock_report = self._reporter_with_report()
+        # Baseline file must exist only as a path argument; loading is mocked.
+        with (
+            patch("apotrope.compare.load_baseline", return_value=baseline),
+            patch("apotrope.compare.compare_reports", return_value=diff) as cmp_mock,
+        ):
+            self._run_main(["--compare", "baseline.json"], mock_reporter)
+        cmp_mock.assert_called_once_with(baseline, mock_report)
+        mock_reporter.print_comparison.assert_called_once_with(diff)
+
+    def test_no_comparison_without_flag(self):
+        mock_reporter, _ = self._reporter_with_report()
+        self._run_main([], mock_reporter)
+        mock_reporter.print_comparison.assert_not_called()
+
+    def test_baseline_flag_saves_baseline(self):
+        mock_reporter, mock_report = self._reporter_with_report()
+        with patch("apotrope.compare.save_baseline") as save_mock:
+            self._run_main(["--baseline", "base.json"], mock_reporter)
+        save_mock.assert_called_once_with(mock_report, "base.json")
+
+    def test_no_baseline_saved_by_default(self):
+        mock_reporter, _ = self._reporter_with_report()
+        with patch("apotrope.compare.save_baseline") as save_mock:
+            self._run_main([], mock_reporter)
+        save_mock.assert_not_called()
+
+    def test_html_and_json_paths_passed_to_print_terminal(self):
+        mock_reporter, mock_report = self._reporter_with_report()
+        self._run_main(["--html", "out.html", "--json", "out.json"], mock_reporter)
+        mock_reporter.print_terminal.assert_called_once_with(
+            mock_report, html_path="out.html", json_path="out.json"
+        )
+
+    def test_fix_flag_passed_to_reporter(self):
+        from apotrope.cli import main
+
+        mock_reporter, _ = self._reporter_with_report()
+        p1, p2, p3, p4, p5 = self._patches(["--fix"], mock_reporter)
+        with p1, p2, p3 as MockReporter, p4, p5:
+            main()
+        MockReporter.assert_called_once_with(verbose=False, no_color=False, fix=True)
+
+    def test_dry_run_prints_module_names(self, capsys):
+        mock_reporter, _ = self._reporter_with_report()
+        mock_scanner = MagicMock()
+        mock_scanner.dry_run.return_value = [
+            "apotrope.checks.firewall", "apotrope.checks.smb",
+        ]
+        from apotrope.cli import main
+
+        with (
+            patch("sys.argv", ["apotrope", "--dry-run"]),
+            patch(self._SCANNER_PATH, return_value=mock_scanner),
+            patch(self._REPORTER_PATH, return_value=mock_reporter),
+            patch(self._ADMIN_PATH, return_value=False),
+            patch(self._PROFILE_PATH, return_value=MagicMock()),
+        ):
+            main()
+        out = capsys.readouterr().out
+        assert "dry run" in out
+        assert "apotrope.checks.firewall" in out
+        assert "apotrope.checks.smb" in out
+        mock_reporter.run_with_progress.assert_not_called()
+
+    def test_profile_path_forwarded_to_load_profile(self):
+        from apotrope.cli import main
+
+        mock_reporter, _ = self._reporter_with_report()
+        p1, p2, p3, p4, p5 = self._patches(
+            ["--profile", "custom.toml"], mock_reporter
+        )
+        with p1, p2, p3, p4, p5 as load_mock:
+            main()
+        load_mock.assert_called_once_with("custom.toml")
+
+
+# ---------------------------------------------------------------------------
+# python -m apotrope entry point
+# ---------------------------------------------------------------------------
+
+class TestModuleEntryPoint:
+    def test_dash_m_version_exits_zero(self, capsys):
+        import runpy
+
+        with (
+            patch("sys.argv", ["apotrope", "--version"]),
+            pytest.raises(SystemExit) as exc,
+        ):
+            runpy.run_module("apotrope", run_name="__main__")
+        assert exc.value.code == 0
+        assert "apotrope" in capsys.readouterr().out
