@@ -15,6 +15,8 @@ The exe runs on any Windows 10/11 machine without a Python installation.
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -124,18 +126,43 @@ def build(use_icon: bool = True) -> int:
         else:
             print("[build] No icon found — building without custom icon")
 
+    # --collect-submodules imports the package in an isolated subprocess that
+    # does NOT see --paths; unless apotrope is importable there (installed, or
+    # src on PYTHONPATH) it silently collects nothing and the exe ships with
+    # zero check modules.
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        p for p in (str(ROOT / "src"), env.get("PYTHONPATH")) if p
+    )
+
     print(f"[build] Running: {' '.join(cmd)}\n")
-    result = subprocess.run(cmd, cwd=str(ROOT))
+    result = subprocess.run(cmd, cwd=str(ROOT), env=env)
 
-    if result.returncode == 0:
-        exe = ROOT / "dist" / "apotrope.exe"
-        size_mb = exe.stat().st_size / 1024 / 1024 if exe.exists() else 0
-        print(f"\n[build] SUCCESS — dist/apotrope.exe ({size_mb:.1f} MB)")
-        print("[build] Test with:  dist\\apotrope.exe --version")
-    else:
+    if result.returncode != 0:
         print(f"\n[build] FAILED (exit {result.returncode})")
+        return result.returncode
 
-    return result.returncode
+    exe = ROOT / "dist" / "apotrope.exe"
+    size_mb = exe.stat().st_size / 1024 / 1024 if exe.exists() else 0
+
+    # Smoke test: a build where collect_submodules found nothing still exits 0
+    # but bundles no checks — fail loudly instead of shipping a useless exe.
+    probe = subprocess.run(
+        [str(exe), "--dry-run", "--no-color"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=120,
+    )
+    match = re.search(r"\((\d+) module\(s\) would run\)", probe.stdout)
+    bundled = int(match.group(1)) if match else 0
+    if probe.returncode != 0 or bundled == 0:
+        print("\n[build] FAILED — exe bundles no check modules "
+              "(--dry-run probe). Is apotrope importable at build time?")
+        return 1
+
+    print(f"\n[build] SUCCESS — dist/apotrope.exe ({size_mb:.1f} MB)")
+    print(f"[build] Probe: {bundled} check module(s) bundled")
+    print("[build] Test with:  dist\\apotrope.exe --version")
+    return 0
 
 
 def main() -> None:
