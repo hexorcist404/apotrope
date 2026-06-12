@@ -117,10 +117,12 @@ class Scanner:
 
         error_count = sum(1 for r in results if r.status == Status.ERROR)
         if error_count:
-            log.warning(
-                "%d check(s) could not complete — rerun as Administrator for full results.",
-                error_count,
+            hint = (
+                "run with --log-level DEBUG to see why"
+                if self.is_admin
+                else "rerun as Administrator for full results"
             )
+            log.warning("%d check(s) could not complete — %s.", error_count, hint)
 
         report = AuditReport(
             hostname=socket.gethostname(),

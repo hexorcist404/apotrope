@@ -408,9 +408,17 @@ class TestFooter:
                       json_path="report.json")
         assert "report.json written" in out
 
-    def test_error_caveat(self):
+    def test_error_caveat_admin_points_to_debug(self):
         results = [_result(name="Broken", status=Status.ERROR, severity=Severity.INFO)]
         out = _render(Reporter(), "print_terminal", _report(results, score=100))
+        assert "1 check could not complete" in out
+        assert "--log-level DEBUG" in out
+        assert "run as Administrator" not in out
+
+    def test_error_caveat_non_admin_suggests_elevation(self):
+        results = [_result(name="Broken", status=Status.ERROR, severity=Severity.INFO)]
+        out = _render(Reporter(), "print_terminal",
+                      _report(results, score=100, is_admin=False))
         assert "1 check could not complete" in out
         assert "run as Administrator" in out
 

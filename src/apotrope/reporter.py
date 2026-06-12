@@ -684,9 +684,13 @@ class Reporter:
 
         if report.error_count:
             n = report.error_count
+            hint = (
+                "see the per-check detail for the cause"
+                if report.is_admin
+                else "run as Administrator for full results"
+            )
             parts.append(
-                f"Note: {n} check{'s' if n != 1 else ''} could not complete "
-                "(run as Administrator for full results)."
+                f"Note: {n} check{'s' if n != 1 else ''} could not complete ({hint})."
             )
 
         return "  ".join(parts)
@@ -773,9 +777,13 @@ class Reporter:
 
         if report.error_count:
             n = report.error_count
+            hint = (
+                "see the per-check detail for the cause"
+                if report.is_admin
+                else "run as Administrator for full results"
+            )
             parts.append(
-                f"Note: {n} check{'s' if n != 1 else ''} could not complete "
-                "— run as Administrator for full results."
+                f"Note: {n} check{'s' if n != 1 else ''} could not complete — {hint}."
             )
 
         return Markup(" ".join(parts))
@@ -1129,10 +1137,15 @@ class Reporter:
             console.print(_text("  ", (f"{g['sep']} {json_path} written", _MUTED)))
         if report.error_count:
             n = report.error_count
+            hint = (
+                " — run with --log-level DEBUG to see why"
+                if report.is_admin
+                else " — run as Administrator for full results"
+            )
             console.print(_text(
                 "  ",
                 (f"{n} check{'s' if n != 1 else ''} could not complete", _AMBER),
-                (" — run as Administrator for full results", _MUTED),
+                (hint, _MUTED),
             ))
         if not report.is_admin:
             console.print(_text(

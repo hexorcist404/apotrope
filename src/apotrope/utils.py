@@ -10,6 +10,7 @@ from __future__ import annotations
 import ctypes
 import json
 import logging
+import os
 import subprocess
 import sys
 
@@ -26,6 +27,20 @@ _PS_CMD = [
     "Bypass",
     "-Command",
 ]
+
+
+def _child_env() -> dict[str, str]:
+    """Environment for powershell.exe children, minus ``PSModulePath``.
+
+    A PowerShell 7 parent leaves its own Core-only module paths in the
+    inherited ``PSModulePath``; Windows PowerShell 5.1 then resolves modules
+    that exist in both editions (e.g. Microsoft.PowerShell.Security, home of
+    ``Get-ExecutionPolicy``) to the PS7 copy and fails to load it. pwsh strips
+    its paths when launching powershell.exe itself, but a Python parent passes
+    the environment through raw, so we strip the variable here — powershell.exe
+    rebuilds its correct default when it is absent.
+    """
+    return {k: v for k, v in os.environ.items() if k.lower() != "psmodulepath"}
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +68,7 @@ def run_powershell(command: str, timeout: int = 30) -> str:
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=_child_env(),
         )
     except subprocess.TimeoutExpired as exc:
         raise ApotropeError(

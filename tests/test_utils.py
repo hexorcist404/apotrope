@@ -109,6 +109,19 @@ class TestRunPowershell:
             _, kwargs = mock_run.call_args
             assert kwargs["timeout"] == 5
 
+    def test_psmodulepath_stripped_from_child_env(self):
+        polluted = {
+            "PSModulePath": r"C:\Program Files\PowerShell\7\Modules",
+            "PATH": r"C:\Windows\System32",
+        }
+        with patch.dict("apotrope.utils.os.environ", polluted, clear=True):
+            with patch("apotrope.utils.subprocess.run", return_value=_mock_ps("ok")) as mock_run:
+                utils.run_powershell("Get-Date")
+                _, kwargs = mock_run.call_args
+        env = kwargs["env"]
+        assert not any(k.lower() == "psmodulepath" for k in env)
+        assert env["PATH"] == r"C:\Windows\System32"
+
 
 # ---------------------------------------------------------------------------
 # run_powershell_json
