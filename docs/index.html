@@ -284,7 +284,7 @@
       <span class="tdot t1"></span><span class="tdot t2"></span><span class="tdot t3"></span>
       <span class="ttitle">Administrator: Windows Terminal</span>
     </div>
-    <div class="term-body" id="scanTerm"><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="g-cmd">apotrope.exe --html report.html</span></span><span class="tl"> </span><span class="tl">  <span class="g-green">◈ APOTROPE</span>  <span class="g-dim">v0.1.5</span></span><span class="tl">  <span class="g-dim">Windows Security Posture Auditor</span></span><span class="tl"> </span><span class="tl" data-pause="650">  <span class="g-dim">scanning 56 controls </span><span class="g-cyan">[████████████████████]</span> <span class="g-dim">done · 21.7s</span></span><span class="tl"> </span><span class="tl">  <span class="g-rail">▌</span> <span class="g-kick">SECURITY SCORE</span>                <span class="g-dim">WORKSTATION-07</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-dim">Windows 11 Pro 23H2 · CORP.local</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl" data-pause="320">  <span class="g-rail">▌</span> <span class="g-bigD">69 / 100</span>   <span class="g-amber">D · POOR</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-amber">█████████████████</span><span class="g-box">░░░░░░░</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-green">✓ 35 pass</span>   <span class="g-red">✗ 3 fail</span>   <span class="g-amber">! 4 warn</span>   <span class="g-cyan">i 14 info</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-faint">56 checks evaluated</span></span><span class="tl"> </span><span class="tl" data-pause="280">  <span class="g-red">⚑ TOP FAILURES</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-red">HIGH </span>Public inbound = Allow     <span class="g-faint">CIS 9.3.2</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>SMB signing not required   <span class="g-faint">CIS 2.3.8.1</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>Script-block logging off   <span class="g-faint">CIS 18.9.95.1</span></span><span class="tl"> </span><span class="tl" data-pause="320">  <span class="g-green">→ report.html written</span> <span class="g-dim">· open to triage all 7 issues</span></span><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="cursor"></span></span></div>
+    <div class="term-body" id="scanTerm"><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="g-cmd">.\apotrope.exe --html report.html</span></span><span class="tl"> </span><span class="tl">  <span class="g-green">◈ APOTROPE</span>  <span class="g-dim">v0.1.5</span></span><span class="tl">  <span class="g-dim">Windows Security Posture Auditor</span></span><span class="tl"> </span><span class="tl" data-pause="650">  <span class="g-dim">scanning 56 controls </span><span class="g-cyan">[████████████████████]</span> <span class="g-dim">done · 21.7s</span></span><span class="tl"> </span><span class="tl">  <span class="g-rail">▌</span> <span class="g-kick">SECURITY SCORE</span>                <span class="g-dim">WORKSTATION-07</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-dim">Windows 11 Pro 23H2 · CORP.local</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl" data-pause="320">  <span class="g-rail">▌</span> <span class="g-bigD">69 / 100</span>   <span class="g-amber">D · POOR</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-amber">█████████████████</span><span class="g-box">░░░░░░░</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-green">✓ 35 pass</span>   <span class="g-red">✗ 3 fail</span>   <span class="g-amber">! 4 warn</span>   <span class="g-cyan">i 14 info</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-faint">56 checks evaluated</span></span><span class="tl"> </span><span class="tl" data-pause="280">  <span class="g-red">⚑ TOP FAILURES</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-red">HIGH </span>Public inbound = Allow     <span class="g-faint">CIS 9.3.2</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>SMB signing not required   <span class="g-faint">CIS 2.3.8.1</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>Script-block logging off   <span class="g-faint">CIS 18.9.95.1</span></span><span class="tl"> </span><span class="tl" data-pause="320">  <span class="g-green">→ report.html written</span> <span class="g-dim">· open to triage all 7 issues</span></span><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="cursor"></span></span></div>
   </div>
       </div>
     </div>
@@ -484,21 +484,23 @@
           <div class="step-n">3</div>
           <div>
             <h3>Go to the folder you saved it in</h3>
-            <div class="code">cd %USERPROFILE%\Downloads<button class="cp" data-copy="cd %USERPROFILE%\Downloads">copy</button></div>
+            <div class="code">cd $env:USERPROFILE\Downloads<button class="cp" data-copy="cd $env:USERPROFILE\Downloads">copy</button></div>
+            <p style="margin-top:8px">In Command Prompt: <span class="mono">cd %USERPROFILE%\Downloads</span></p>
           </div>
         </div>
         <div class="step" data-reveal>
           <div class="step-n">4</div>
           <div>
             <h3>Run a scan</h3>
-            <div class="code">apotrope.exe<button class="cp" data-copy="apotrope.exe">copy</button></div>
+            <div class="code">.\apotrope.exe<button class="cp" data-copy=".\apotrope.exe">copy</button></div>
+            <p style="margin-top:8px">The <span class="mono">.\</span> prefix is required — PowerShell doesn't run programs from the current folder by bare name. It works in Command Prompt too.</p>
           </div>
         </div>
         <div class="step" data-reveal>
           <div class="step-n">5</div>
           <div>
             <h3>Generate an HTML report</h3>
-            <div class="code">apotrope.exe --html report.html --verbose<button class="cp" data-copy="apotrope.exe --html report.html --verbose">copy</button></div>
+            <div class="code">.\apotrope.exe --html report.html --verbose<button class="cp" data-copy=".\apotrope.exe --html report.html --verbose">copy</button></div>
             <p style="margin-top:8px">Opens as a standalone file in any browser — no server required.</p>
           </div>
         </div>
@@ -506,9 +508,9 @@
           <div class="step-n">6</div>
           <div>
             <h3>Track changes over time</h3>
-            <div class="code">apotrope.exe --baseline before.json
+            <div class="code">.\apotrope.exe --baseline before.json
 # ... remediate findings ...
-apotrope.exe --compare before.json<button class="cp" data-copy="apotrope.exe --baseline before.json">copy</button></div>
+.\apotrope.exe --compare before.json<button class="cp" data-copy=".\apotrope.exe --baseline before.json">copy</button></div>
           </div>
         </div>
       </div>

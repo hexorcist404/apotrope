@@ -37,20 +37,26 @@ No Python required.
    (Right-click the Start button → *Terminal (Admin)* or search for *cmd* → *Run as administrator*)
 3. Navigate to the folder where you saved the file — for example, if it's in Downloads:
 
+```powershell
+cd $env:USERPROFILE\Downloads
 ```
-cd %USERPROFILE%\Downloads
-```
+
+(in **Command Prompt**: `cd %USERPROFILE%\Downloads`)
 
 4. Run:
 
+```powershell
+.\apotrope.exe
 ```
-apotrope.exe
-```
+
+> **Note:** the `.\` prefix is required — PowerShell doesn't run programs from the
+> current folder by bare name. `.\apotrope.exe` works in Command Prompt too
+> (where plain `apotrope.exe` is also fine).
 
 For a full HTML report:
 
-```
-apotrope.exe --html report.html
+```powershell
+.\apotrope.exe --html report.html
 ```
 
 Then open `report.html` in your browser.
