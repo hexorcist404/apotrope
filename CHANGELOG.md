@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.7] - 2026-06-12
+
+### Changed
+- **Triage view is now the default terminal output.** Every category with
+  issues gets its own box listing each FAIL/WARN finding with its fix and a
+  ready-to-paste PowerShell command — no flag needed. `--fix` is retired and
+  kept only as a hidden no-op so existing scripts don't error; `--verbose`
+  shows the same boxes for every category and check, passing ones included.
+- **Error messages no longer tell elevated users to "run as Administrator".**
+  When a check errors during an already-elevated scan, the terminal footer,
+  scanner warning, and report summaries now point to `--log-level DEBUG` /
+  per-check detail instead of suggesting elevation that wouldn't help.
+
+### Fixed
+- **PowerShell Execution Policy check no longer errors when Apotrope is
+  launched from PowerShell 7.** pwsh 7 leaves its own Core-only module paths
+  in `PSModulePath`; the Windows PowerShell 5.1 subprocesses then resolved
+  `Microsoft.PowerShell.Security` to the PS7 copy and failed to load it.
+  Apotrope now strips `PSModulePath` from check subprocesses so Windows
+  PowerShell rebuilds its correct default.
+- **`build_exe.py` can no longer ship an exe with zero check modules.**
+  PyInstaller's `--collect-submodules` silently collected nothing unless
+  apotrope was pip-installed in the build Python; the build script now puts
+  `src` on `PYTHONPATH` for the build and probes the finished exe with
+  `--dry-run`, failing loudly if no check modules are bundled.
+
+### Docs
+- All PowerShell run examples now use `.\apotrope.exe` (bare `apotrope.exe`
+  fails in PowerShell, which doesn't run programs from the current folder by
+  name) and `cd $env:USERPROFILE\Downloads` for navigation.
+- README terminal screenshots regenerated for the triage-box output.
+
+### Tests
+- Rich terminal rendering paths in the reporter are now covered end-to-end,
+  including the new admin-aware error hints and build-probe behaviors.
+
+---
+
 ## [0.1.6] - 2026-06-06
 
 ### Added
