@@ -53,9 +53,10 @@ $RECYCLE.BIN/
 # Apotrope outputs
 *.html
 *.json
+# docs/ is the published marketing site (GitHub Pages) — commit all of its HTML
 !docs/index.html
-# committed sample report served by the marketing site
 !docs/report.html
+!docs/**/*.html
 apotrope_report_*
 
 # Design review scaffolding

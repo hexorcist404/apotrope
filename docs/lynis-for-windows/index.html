@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Lynis doesn't run on Windows. Apotrope is the offline, single-exe equivalent: ~55 CIS-mapped checks, a 0-100 score, and an HTML report. Free, MIT, no agent." />
+  <title>Is There a Lynis for Windows? Meet Apotrope</title>
+
+  <link rel="canonical" href="https://apotrope.sh/lynis-for-windows/" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/favicon-512.png" sizes="512x512" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Apotrope" />
+  <meta property="og:title" content="Is There a Lynis for Windows? Meet Apotrope" />
+  <meta property="og:description" content="Lynis runs on Linux, macOS and BSD, not Windows. Apotrope is the native, offline equivalent with CIS-mapped checks." />
+  <meta property="og:url" content="https://apotrope.sh/lynis-for-windows/" />
+  <meta property="og:image" content="https://apotrope.sh/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Apotrope — security posture auditing for Windows, entirely offline." />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Is There a Lynis for Windows? Meet Apotrope" />
+  <meta name="twitter:description" content="Lynis runs on Linux, macOS and BSD, not Windows. Apotrope is the native, offline equivalent." />
+  <meta name="twitter:image" content="https://apotrope.sh/og-image.png" />
+  <meta name="twitter:image:alt" content="Apotrope — security posture auditing for Windows, entirely offline." />
+
+  <!-- Structured data: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Can Lynis run on Windows?", "acceptedAnswer": { "@type": "Answer", "text": "No. Lynis targets Unix-like systems (Linux, macOS, BSD). For Windows, use a native tool like Apotrope." } },
+      { "@type": "Question", "name": "Is Apotrope a Lynis port?", "acceptedAnswer": { "@type": "Answer", "text": "No. It shares no code with Lynis. It is an independent, native Windows auditor built on the same offline, agentless idea." } },
+      { "@type": "Question", "name": "Is Apotrope free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. MIT licensed, with no account or key." } }
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/pages.css" />
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <a class="brand" href="/">
+        <span class="dia">◈</span>
+        <span class="nm">APOTROPE</span>
+      </a>
+      <div class="nav-links">
+        <a href="/#features">Features</a>
+        <a href="/#checks">Checks</a>
+        <a href="/#scoring">Scoring</a>
+        <a href="/#report">Report</a>
+        <a href="/vs-cis-cat/">vs CIS-CAT</a>
+        <a href="/#faq">FAQ</a>
+        <a href="https://github.com/hexorcist404/apotrope">GitHub ↗</a>
+      </div>
+      <a class="nav-cta" href="https://github.com/hexorcist404/apotrope/releases/latest">↓ Download</a>
+    </div>
+  </nav>
+
+  <header class="page-head">
+    <div class="wrap">
+      <div class="crumbs"><a href="/">apotrope.sh</a> / lynis for windows</div>
+      <span class="kicker">// Comparison</span>
+      <h1>Is there a <span class="g">Lynis for Windows?</span></h1>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="wrap prose">
+      <p class="short-answer"><b>Short answer:</b> not exactly. Lynis runs on Linux, macOS, and BSD, not Windows. The closest equivalent for Windows is <b>Apotrope</b>: a single executable that audits the local machine against CIS Benchmark controls, scores it 0-100, and writes a self-contained HTML report. Offline, read-only, no agent, MIT-licensed.</p>
+
+      <p>Lynis earned its reputation by being simple and honest: one command, runs locally, no agent, tells you what's weak and how to harden it. There's never been a clean Windows counterpart. The options have been a Java assessor behind a signup, a pile of one-off PowerShell scripts, or reading a 40-tab CIS PDF by hand.</p>
+
+      <p>Apotrope is built to fill that gap. You run one <code>.exe</code> (or <code>pip install apotrope</code>) on the machine in front of you. It checks ~55 controls across 14 categories — firewall, BitLocker, SMB signing, RDP, UAC, PowerShell logging, unquoted service paths, and more — maps each to its CIS Microsoft Windows Benchmark control ID, scores the box, and hands you plain-English remediation. Nothing leaves the machine.</p>
+
+      <p>It isn't a port of Lynis and shares no code with it. It's the same idea, built natively for Windows.</p>
+
+      <h2>Lynis vs Apotrope</h2>
+      <table class="cmp">
+        <thead>
+          <tr><th></th><th>Lynis</th><th class="col-ap">Apotrope</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>Platform</th><td>Linux, macOS, BSD</td><td class="col-ap">Windows 10 / 11</td></tr>
+          <tr><th>Install</th><td>Shell script / package</td><td class="col-ap">Single <code>.exe</code> or <code>pip install</code></td></tr>
+          <tr><th>Runs offline</th><td>Yes</td><td class="col-ap">Yes</td></tr>
+          <tr><th>Agent / cloud</th><td>No</td><td class="col-ap">No</td></tr>
+          <tr><th>Benchmark mapping</th><td>CIS / various</td><td class="col-ap">CIS Microsoft Windows (Win11 v5.0.0 / Win10 v4.0.0)</td></tr>
+          <tr><th>Output</th><td>Terminal + log</td><td class="col-ap">Terminal + self-contained HTML + JSON</td></tr>
+          <tr><th>Score</th><td>Hardening index</td><td class="col-ap">0-100 score, A-F grade</td></tr>
+          <tr><th>License</th><td>GPLv3 (Enterprise tier paid)</td><td class="col-ap">MIT, free</td></tr>
+        </tbody>
+      </table>
+
+      <h2>FAQ</h2>
+      <div class="faq-list">
+        <details class="faq-item" open>
+          <summary>Can Lynis run on Windows?</summary>
+          <p>No. Lynis targets Unix-like systems (Linux, macOS, BSD). For Windows, use a native tool like Apotrope.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Is Apotrope a Lynis port?</summary>
+          <p>No. It shares no code with Lynis. It is an independent, native Windows auditor built on the same offline, agentless idea.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Is Apotrope free?</summary>
+          <p>Yes. MIT licensed, with no account or key.</p>
+        </details>
+      </div>
+
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/hexorcist404/apotrope/releases/latest">↓ Download apotrope.exe</a>
+        <a class="btn btn-ghost" href="https://github.com/hexorcist404/apotrope">View on GitHub ↗</a>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>
+        <div>
+          Released under the <a href="https://github.com/hexorcist404/apotrope/blob/main/LICENSE">MIT License</a>
+          · <a href="https://github.com/hexorcist404/apotrope">GitHub</a>
+          · <a href="/vs-cis-cat/">Apotrope vs CIS-CAT Lite</a>
+          · <a href="/">Home</a>
+        </div>
+        <div class="foot-auth">For authorized security assessment use only · <span class="nodata">No data left this machine</span></div>
+      </div>
+      <div>◈ apotrope.sh</div>
+    </div>
+  </footer>
+</body>
+</html>

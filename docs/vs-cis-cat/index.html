@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="How Apotrope compares to CIS-CAT Lite for Windows CIS auditing: single executable vs Java, no signup, MIT-licensed, Windows 10 and 11, plain-English fixes." />
+  <title>Apotrope vs CIS-CAT Lite: a Free, No-Signup Windows CIS Audit</title>
+
+  <link rel="canonical" href="https://apotrope.sh/vs-cis-cat/" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/favicon-512.png" sizes="512x512" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Apotrope" />
+  <meta property="og:title" content="Apotrope vs CIS-CAT Lite" />
+  <meta property="og:description" content="Free, no-signup Windows CIS audit. One .exe, no Java runtime, plain-English fixes, MIT-licensed." />
+  <meta property="og:url" content="https://apotrope.sh/vs-cis-cat/" />
+  <meta property="og:image" content="https://apotrope.sh/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Apotrope — security posture auditing for Windows, entirely offline." />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Apotrope vs CIS-CAT Lite" />
+  <meta name="twitter:description" content="A free, no-signup Windows CIS audit: single executable vs Java, MIT-licensed, plain-English fixes." />
+  <meta name="twitter:image" content="https://apotrope.sh/og-image.png" />
+  <meta name="twitter:image:alt" content="Apotrope — security posture auditing for Windows, entirely offline." />
+
+  <!-- Structured data: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Is Apotrope affiliated with CIS?", "acceptedAnswer": { "@type": "Answer", "text": "No. Apotrope independently references CIS Benchmark control IDs for informational purposes. It is not affiliated with, endorsed by, or sponsored by CIS." } },
+      { "@type": "Question", "name": "Do I need an account to use Apotrope?", "acceptedAnswer": { "@type": "Answer", "text": "No account, no key, no signup." } },
+      { "@type": "Question", "name": "Does Apotrope replace CIS-CAT for formal compliance?", "acceptedAnswer": { "@type": "Answer", "text": "No. For official CIS compliance artifacts, use CIS's own tooling. Apotrope is for fast posture checks and remediation guidance." } }
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/pages.css" />
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <a class="brand" href="/">
+        <span class="dia">◈</span>
+        <span class="nm">APOTROPE</span>
+      </a>
+      <div class="nav-links">
+        <a href="/#features">Features</a>
+        <a href="/#checks">Checks</a>
+        <a href="/#scoring">Scoring</a>
+        <a href="/#report">Report</a>
+        <a href="/lynis-for-windows/">Lynis for Windows</a>
+        <a href="/#faq">FAQ</a>
+        <a href="https://github.com/hexorcist404/apotrope">GitHub ↗</a>
+      </div>
+      <a class="nav-cta" href="https://github.com/hexorcist404/apotrope/releases/latest">↓ Download</a>
+    </div>
+  </nav>
+
+  <header class="page-head">
+    <div class="wrap">
+      <div class="crumbs"><a href="/">apotrope.sh</a> / apotrope vs cis-cat</div>
+      <span class="kicker">// Comparison</span>
+      <h1>Apotrope <span class="g">vs CIS-CAT Lite</span></h1>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="wrap prose">
+      <p class="short-answer"><b>Short answer:</b> both score a Windows machine against CIS Benchmarks and produce a report. CIS-CAT Lite is CIS's own free assessor. <b>Apotrope</b> is a single executable with no account, no Java runtime, plain-English remediation on every finding, and an MIT license. If you want a CIS-style score on a Windows box without signing up for anything or installing a runtime, Apotrope is the lighter path.</p>
+
+      <p>CIS-CAT is the reference assessor from the Center for Internet Security itself, so its benchmark coverage is authoritative. The full version, CIS-CAT Pro, sits behind a paid CIS SecureSuite membership. The free Lite tier covers a select subset of benchmarks and runs on a Java runtime.</p>
+
+      <p>Apotrope takes a different tack: one self-contained <code>.exe</code>, nothing to register for, no Java, and every failing check ships a concrete fix — a command or a Group Policy path — not just a control ID. It covers Windows 10 and Windows 11, selecting the right CIS benchmark version automatically from the OS build (Windows 11 v5.0.0, Windows 10 v4.0.0). It's read-only and fully offline, which keeps the trust story simple: nothing is changed, nothing is sent.</p>
+
+      <p>Where CIS-CAT wins: it's CIS's own tool, with the broadest, most authoritative benchmark coverage and formal compliance pedigree. If you need official CIS compliance artifacts, that's the canonical source. Apotrope is for a fast, honest, no-friction read on a Windows box.</p>
+
+      <h2>CIS-CAT Lite vs Apotrope</h2>
+      <table class="cmp">
+        <thead>
+          <tr><th></th><th>CIS-CAT Lite</th><th class="col-ap">Apotrope</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>Maker</th><td>Center for Internet Security</td><td class="col-ap">Independent (hexorcist404), references CIS</td></tr>
+          <tr><th>Price / license</th><td>Free Lite tier; Pro via paid SecureSuite membership</td><td class="col-ap">MIT, free</td></tr>
+          <tr><th>Runtime</th><td>Java</td><td class="col-ap">None. Single <code>.exe</code> (or pip)</td></tr>
+          <tr><th>Windows coverage</th><td>Select CIS Benchmarks (limited)</td><td class="col-ap">Windows 10 + 11, auto-selected</td></tr>
+          <tr><th>Remediation detail</th><td>Control references</td><td class="col-ap">Plain-English fix per finding</td></tr>
+          <tr><th>Output</th><td>Scored HTML report</td><td class="col-ap">Scored HTML + JSON + terminal</td></tr>
+          <tr><th>Offline / read-only</th><td>Yes</td><td class="col-ap">Yes</td></tr>
+        </tbody>
+      </table>
+      <p class="mono" style="font-size:0.78rem;color:var(--faint)">CIS-CAT details can change between releases. Confirm current Lite requirements and coverage at cisecurity.org before relying on specifics. Apotrope is not affiliated with or endorsed by CIS.</p>
+
+      <h2>FAQ</h2>
+      <div class="faq-list">
+        <details class="faq-item" open>
+          <summary>Is Apotrope affiliated with CIS?</summary>
+          <p>No. Apotrope independently references CIS Benchmark control IDs for informational purposes. It is not affiliated with, endorsed by, or sponsored by CIS.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Do I need an account to use Apotrope?</summary>
+          <p>No account, no key, no signup.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Does Apotrope replace CIS-CAT for formal compliance?</summary>
+          <p>No. For official CIS compliance artifacts, use CIS's own tooling. Apotrope is for fast posture checks and remediation guidance.</p>
+        </details>
+      </div>
+
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/hexorcist404/apotrope/releases/latest">↓ Download apotrope.exe</a>
+        <a class="btn btn-ghost" href="https://github.com/hexorcist404/apotrope">View on GitHub ↗</a>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>
+        <div>
+          Released under the <a href="https://github.com/hexorcist404/apotrope/blob/main/LICENSE">MIT License</a>
+          · <a href="https://github.com/hexorcist404/apotrope">GitHub</a>
+          · <a href="/lynis-for-windows/">Is there a Lynis for Windows?</a>
+          · <a href="/">Home</a>
+        </div>
+        <div class="foot-auth">For authorized security assessment use only · <span class="nodata">No data left this machine</span></div>
+      </div>
+      <div>◈ apotrope.sh</div>
+    </div>
+  </footer>
+</body>
+</html>

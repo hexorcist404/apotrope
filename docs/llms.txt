@@ -1,0 +1,21 @@
+# Apotrope
+
+> Apotrope is a portable, offline Windows security posture auditor. A single executable (or `pip install apotrope`) audits the local machine against CIS Microsoft Windows Benchmark controls, scores it 0-100 with an A-F grade, and writes a self-contained HTML report. It is read-only, makes no network connections, and has no agent, telemetry, or license key.
+
+## Key facts
+
+- Platform: Windows 10 and Windows 11 (also Server 2019/2022).
+- Distribution: standalone `apotrope.exe`, or `pip install apotrope` on Python 3.12+.
+- License: MIT, free and open source. No account or key.
+- Checks: ~55 across 14 categories (firewall, BitLocker, SMB, RDP, UAC, accounts, antivirus, PowerShell logging, services, network, patching, persistence, system, hardening).
+- Benchmarks: CIS Microsoft Windows 11 Enterprise v5.0.0 and Windows 10 Enterprise v4.0.0, selected automatically from the OS build.
+- Privacy: fully offline and read-only. No data leaves the machine; nothing is modified.
+- Often described as "a Lynis for Windows" — an offline, agentless, native Windows equivalent.
+
+## Pages
+
+- [Home](https://apotrope.sh/): overview, checks, scoring, and report.
+- [Sample report](https://apotrope.sh/report.html): a full self-contained HTML report.
+- [Is there a Lynis for Windows?](https://apotrope.sh/lynis-for-windows/): Lynis vs Apotrope.
+- [Apotrope vs CIS-CAT Lite](https://apotrope.sh/vs-cis-cat/): CIS-CAT Lite vs Apotrope.
+- [GitHub](https://github.com/hexorcist404/apotrope): source, releases, and issues.

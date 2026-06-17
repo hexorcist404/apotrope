@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Apotrope — portable Windows security posture auditor. Single executable, no cloud, actionable remediation." />
+  <meta name="description" content="Free, offline Windows security auditor, like Lynis but for Windows. One .exe scores your box against CIS controls with plain-English fixes. No cloud, no agent." />
   <meta name="google-site-verification" content="N68F_sJSRaPAUmW1m4vSVKj0BwJBtOEP6m9mwE1SAwA" />
   <title>Apotrope — Windows Security Posture Auditor</title>
 
@@ -19,20 +19,54 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Apotrope" />
   <meta property="og:title" content="Apotrope — Windows Security Posture Auditor" />
-  <meta property="og:description" content="A single executable that scores your Windows security configuration against CIS Benchmark controls and gives plain-English remediation steps. No cloud, no agent, no license." />
+  <meta property="og:description" content="Offline Windows security auditor. One .exe scores your box against CIS controls and gives plain-English fixes." />
   <meta property="og:url" content="https://apotrope.sh/" />
   <meta property="og:image" content="https://apotrope.sh/og-image.png" />
   <meta property="og:image:type" content="image/png" />
-  <meta property="og:image:width" content="2400" />
-  <meta property="og:image:height" content="1260" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="Apotrope — security posture auditing for Windows, entirely offline." />
 
   <!-- Twitter / X Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Apotrope — Windows Security Posture Auditor" />
-  <meta name="twitter:description" content="A single executable that scores your Windows security configuration against CIS Benchmark controls and gives plain-English remediation steps. No cloud, no agent, no license." />
+  <meta name="twitter:description" content="Offline Windows security auditor. One .exe scores your box against CIS controls and gives plain-English fixes." />
   <meta name="twitter:image" content="https://apotrope.sh/og-image.png" />
   <meta name="twitter:image:alt" content="Apotrope — security posture auditing for Windows, entirely offline." />
+
+  <!-- Structured data: SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Apotrope",
+    "applicationCategory": "SecurityApplication",
+    "operatingSystem": "Windows 10, Windows 11",
+    "description": "Portable, offline Windows security posture auditor. ~55 checks across 14 categories mapped to CIS Microsoft Windows Benchmarks (Windows 11 v5.0.0, Windows 10 v4.0.0), with a 0-100 score and a self-contained HTML report. Single executable, no cloud, no agent, read-only.",
+    "url": "https://apotrope.sh/",
+    "downloadUrl": "https://github.com/hexorcist404/apotrope/releases/latest",
+    "softwareVersion": "0.1.7",
+    "license": "https://github.com/hexorcist404/apotrope/blob/main/LICENSE",
+    "author": { "@type": "Person", "name": "hexorcist404", "url": "https://github.com/hexorcist404" },
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
+
+  <!-- Structured data: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Does Apotrope send any data off the machine?", "acceptedAnswer": { "@type": "Answer", "text": "No. Apotrope is fully offline and read-only. It makes no network connections and has no telemetry." } },
+      { "@type": "Question", "name": "Does Apotrope change my system?", "acceptedAnswer": { "@type": "Answer", "text": "No. It is read-only. It queries configuration and does not modify settings, the registry, or files." } },
+      { "@type": "Question", "name": "Which CIS Benchmark versions does it use?", "acceptedAnswer": { "@type": "Answer", "text": "CIS Microsoft Windows 11 Enterprise Benchmark v5.0.0 and Windows 10 v4.0.0, selected automatically from the OS build." } },
+      { "@type": "Question", "name": "Is Apotrope free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Free and open source under the MIT license. No account or key." } },
+      { "@type": "Question", "name": "Do I need Python?", "acceptedAnswer": { "@type": "Answer", "text": "No. The standalone apotrope.exe needs no Python. You can also install via pip on Python 3.12+." } }
+    ]
+  }
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
@@ -278,6 +312,7 @@
         <a href="#scoring">Scoring</a>
         <a href="#report">Report</a>
         <a href="#start">Get Started</a>
+        <a href="#faq">FAQ</a>
         <a href="https://github.com/hexorcist404/apotrope">GitHub ↗</a>
       </div>
       <a class="nav-cta" href="https://github.com/hexorcist404/apotrope/releases/latest">↓ Download</a>
@@ -311,7 +346,7 @@
       <span class="tdot t1"></span><span class="tdot t2"></span><span class="tdot t3"></span>
       <span class="ttitle">Administrator: Windows Terminal</span>
     </div>
-    <div class="term-body" id="scanTerm"><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="g-cmd">.\apotrope.exe --html report.html</span></span><span class="tl"> </span><span class="tl">  <span class="g-green">◈ APOTROPE</span>  <span class="g-dim">v0.1.5</span></span><span class="tl">  <span class="g-dim">Windows Security Posture Auditor</span></span><span class="tl"> </span><span class="tl" data-pause="650">  <span class="g-dim">scanning 56 controls </span><span class="g-cyan">[████████████████████]</span> <span class="g-dim">done · 21.7s</span></span><span class="tl"> </span><span class="tl">  <span class="g-rail">▌</span> <span class="g-kick">SECURITY SCORE</span>                <span class="g-dim">WORKSTATION-07</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-dim">Windows 11 Pro 23H2 · CORP.local</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl" data-pause="320">  <span class="g-rail">▌</span> <span class="g-bigD">69 / 100</span>   <span class="g-amber">D · POOR</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-amber">█████████████████</span><span class="g-box">░░░░░░░</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-green">✓ 35 pass</span>   <span class="g-red">✗ 3 fail</span>   <span class="g-amber">! 4 warn</span>   <span class="g-cyan">i 14 info</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-faint">56 checks evaluated</span></span><span class="tl"> </span><span class="tl" data-pause="280">  <span class="g-red">⚑ TOP FAILURES</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-red">HIGH </span>Public inbound = Allow     <span class="g-faint">CIS 9.3.2</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>SMB signing not required   <span class="g-faint">CIS 2.3.8.1</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>Script-block logging off   <span class="g-faint">CIS 18.9.95.1</span></span><span class="tl"> </span><span class="tl" data-pause="320">  <span class="g-green">→ report.html written</span> <span class="g-dim">· open to triage all 7 issues</span></span><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="cursor"></span></span></div>
+    <div class="term-body" id="scanTerm"><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="g-cmd">.\apotrope.exe --html report.html</span></span><span class="tl"> </span><span class="tl">  <span class="g-green">◈ APOTROPE</span>  <span class="g-dim">v0.1.7</span></span><span class="tl">  <span class="g-dim">Windows Security Posture Auditor</span></span><span class="tl"> </span><span class="tl" data-pause="650">  <span class="g-dim">scanning 56 controls </span><span class="g-cyan">[████████████████████]</span> <span class="g-dim">done · 21.7s</span></span><span class="tl"> </span><span class="tl">  <span class="g-rail">▌</span> <span class="g-kick">SECURITY SCORE</span>                <span class="g-dim">WORKSTATION-07</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-dim">Windows 11 Pro 23H2 · CORP.local</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl" data-pause="320">  <span class="g-rail">▌</span> <span class="g-bigD">69 / 100</span>   <span class="g-amber">D · POOR</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-amber">█████████████████</span><span class="g-box">░░░░░░░</span></span><span class="tl">  <span class="g-rail">▌</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-green">✓ 35 pass</span>   <span class="g-red">✗ 3 fail</span>   <span class="g-amber">! 4 warn</span>   <span class="g-cyan">i 14 info</span></span><span class="tl">  <span class="g-rail">▌</span> <span class="g-faint">56 checks evaluated</span></span><span class="tl"> </span><span class="tl" data-pause="280">  <span class="g-red">⚑ TOP FAILURES</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-red">HIGH </span>Public inbound = Allow     <span class="g-faint">CIS 9.3.2</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>SMB signing not required   <span class="g-faint">CIS 2.3.8.1</span></span><span class="tl">  <span class="g-red">✗</span> <span class="g-amber">MED  </span>Script-block logging off   <span class="g-faint">CIS 18.9.95.1</span></span><span class="tl"> </span><span class="tl" data-pause="320">  <span class="g-green">→ report.html written</span> <span class="g-dim">· open to triage all 7 issues</span></span><span class="tl">  <span class="g-prompt">PS C:\&gt;</span> <span class="cursor"></span></span></div>
   </div>
       </div>
     </div>
@@ -334,8 +369,8 @@
     <div class="wrap">
       <div class="sec-head" data-reveal>
         <span class="kicker">// Features</span>
-        <h2>Everything you need for a fast, credible assessment.</h2>
-        <p>No setup, no accounts, no data leaving the machine — just an honest read on the box in front of you.</p>
+        <h2>A fast, honest read on the box in front of you.</h2>
+        <p>No setup, no accounts, no data leaving the machine. Run one executable and get a prioritised, fixable list.</p>
       </div>
       <div class="feat-grid">
         <div class="feat" data-reveal>
@@ -396,20 +431,20 @@
         <div class="bignum">~22s<small>Per scan</small></div>
       </div>
       <div class="cat-grid">
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Access Control</span><span class="cc">4 checks</span></div><div class="cl">UAC elevation prompts, admin approval mode, secure desktop.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Accounts</span><span class="cc">6 checks</span></div><div class="cl">Local accounts, guest status, password &amp; lockout policy.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Antivirus</span><span class="cc">4 checks</span></div><div class="cl">Defender real-time protection, signature age, tamper protection.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Encryption</span><span class="cc">2 checks</span></div><div class="cl">BitLocker drive encryption status, per volume.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">File Sharing</span><span class="cc">4 checks</span></div><div class="cl">SMB signing, legacy SMBv1, and exposed shares.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Firewall</span><span class="cc">6 checks</span></div><div class="cl">Domain, private &amp; public profile state and inbound posture.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Hardening</span><span class="cc">5 checks</span></div><div class="cl">LSA protection, autorun, and miscellaneous OS hardening.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Network</span><span class="cc">4 checks</span></div><div class="cl">Protocol hardening, discovery, and exposure reduction.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Patching</span><span class="cc">3 checks</span></div><div class="cl">Windows Update health, pending updates &amp; reboots.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Persistence</span><span class="cc">2 checks</span></div><div class="cl">Startup programs and autorun entries.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">PowerShell</span><span class="cc">5 checks</span></div><div class="cl">Script-block / module logging and execution policy.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Remote Access</span><span class="cc">3 checks</span></div><div class="cl">RDP exposure and Network Level Authentication.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Services</span><span class="cc">2 checks</span></div><div class="cl">Risky or unnecessary running services.</div></div>
-        <div class="cat-card" data-reveal><div class="ch"><span class="cn">System</span><span class="cc">6 checks</span></div><div class="cl">OS edition, build number, and support lifecycle.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Access Control</span><span class="cc">4 checks</span></div><div class="cl">UAC enabled, admin &amp; standard consent prompts, secure desktop.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Accounts</span><span class="cc">6 checks</span></div><div class="cl">Built-in admin &amp; guest state, local-admin count, password complexity, length &amp; lockout.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Antivirus</span><span class="cc">4 checks</span></div><div class="cl">Defender real-time, signature age, tamper protection, registered AV.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Encryption</span><span class="cc">per drive</span></div><div class="cl">BitLocker drive-encryption status, per fixed drive.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">File Sharing</span><span class="cc">3 checks</span></div><div class="cl">SMB signing, SMB encryption, legacy SMBv1 disabled.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Firewall</span><span class="cc">6 checks</span></div><div class="cl">Domain, private &amp; public profile state and default inbound action.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Hardening</span><span class="cc">5 checks</span></div><div class="cl">Audit policy, AutoPlay, screen-lock timeout, Spectre/Meltdown, WinRM.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Network</span><span class="cc">5 checks</span></div><div class="cl">LLMNR &amp; NetBIOS, IPv6, listening &amp; risky ports.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Patching</span><span class="cc">3 checks</span></div><div class="cl">Update-service health, pending updates, time since last update.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Persistence</span><span class="cc">2 checks</span></div><div class="cl">Startup programs and non-Microsoft scheduled tasks.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">PowerShell</span><span class="cc">5 checks</span></div><div class="cl">Script-block &amp; module logging, execution policy, Constrained Language Mode, PSv2.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Remote Access</span><span class="cc">3 checks</span></div><div class="cl">RDP exposure, Network Level Authentication, RDP port.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">Services</span><span class="cc">2 checks</span></div><div class="cl">Risky services and unquoted service paths.</div></div>
+        <div class="cat-card" data-reveal><div class="ch"><span class="cn">System</span><span class="cc">6 checks</span></div><div class="cl">OS version &amp; end-of-support, Secure Boot, TPM, uptime, domain membership.</div></div>
       </div>
     </div>
   </section>
@@ -544,6 +579,51 @@
     </div>
   </section>
 
+  <!-- ── FAQ ─────────────────────────────────────────────────────────────── -->
+  <style>
+  .faq-list { display:grid; gap:10px; margin-top:8px; }
+  .faq-item { border:1px solid var(--line); background:var(--panel); border-radius:var(--r); }
+  .faq-item > summary { cursor:pointer; list-style:none; padding:16px 46px 16px 20px; font-weight:600;
+    color:var(--bright); position:relative; }
+  .faq-item > summary::-webkit-details-marker { display:none; }
+  .faq-item > summary::after { content:"+"; position:absolute; right:20px; top:15px; color:var(--accent);
+    font-family:"IBM Plex Mono",monospace; transition:transform .2s; }
+  .faq-item[open] > summary::after { content:"\2212"; }
+  .faq-item > p { padding:0 20px 16px; color:var(--text); }
+  </style>
+  <section id="faq">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <span class="kicker">// FAQ</span>
+        <h2>Questions, answered straight.</h2>
+        <p>The things people ask before running an unknown binary on a machine they care about.</p>
+      </div>
+      <div class="faq-list" data-reveal>
+        <details class="faq-item">
+          <summary>Does Apotrope send any data off the machine?</summary>
+          <p>No. Apotrope is fully offline and read-only. It makes no network connections and has no telemetry.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Does Apotrope change my system?</summary>
+          <p>No. It is read-only. It queries configuration and does not modify settings, the registry, or files.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Which CIS Benchmark versions does it use?</summary>
+          <p>CIS Microsoft Windows 11 Enterprise Benchmark v5.0.0 and Windows 10 v4.0.0, selected automatically from the OS build.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Is Apotrope free?</summary>
+          <p>Yes. Free and open source under the MIT license. No account or key.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Do I need Python?</summary>
+          <p>No. The standalone apotrope.exe needs no Python. You can also install via pip on Python 3.12+.</p>
+        </details>
+      </div>
+      <p style="margin-top:22px;color:var(--muted)">How it compares: <a href="/lynis-for-windows/">Is there a Lynis for Windows?</a> · <a href="/vs-cis-cat/">Apotrope vs CIS-CAT Lite</a></p>
+    </div>
+  </section>
+
   <!-- ── Footer ──────────────────────────────────────────────────────────── -->
   <footer>
     <div class="wrap">
@@ -553,6 +633,8 @@
           · <a href="https://github.com/hexorcist404/apotrope">GitHub</a>
           · <a href="https://github.com/hexorcist404/apotrope/releases">Releases</a>
           · <a href="https://github.com/hexorcist404/apotrope/issues">Issues</a>
+          · <a href="/lynis-for-windows/">Lynis for Windows</a>
+          · <a href="/vs-cis-cat/">vs CIS-CAT Lite</a>
         </div>
         <div class="foot-auth">For authorized security assessment use only · <span class="nodata">No data left this machine</span></div>
       </div>
