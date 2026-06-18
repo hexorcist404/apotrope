@@ -1,8 +1,12 @@
 # Apotrope
 
-**Portable Windows security posture auditor.** Runs entirely on the machine it's
-auditing, talks to no network, and hands back a scored terminal report — or a
-self-contained HTML report you can send to someone who wasn't in the room.
+**Portable Windows security posture auditor. A Lynis for Windows.** A single
+executable (or `pip install apotrope`, MIT-licensed) that runs entirely on the
+machine it audits, talks to no network, and is read-only. It checks ~55 controls
+across 14 categories against CIS Microsoft Windows Benchmarks (Windows 11 v5.0.0,
+Windows 10 v4.0.0), scores the box 0 to 100, and hands back a scored terminal
+report or a self-contained HTML report you can send to someone who wasn't in the
+room.
 
 [![Tests](https://github.com/hexorcist404/apotrope/actions/workflows/test.yml/badge.svg)](https://github.com/hexorcist404/apotrope/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/apotrope.svg)](https://pypi.org/project/apotrope/)
@@ -25,6 +29,20 @@ ready-to-paste PowerShell command for every issue.
 
 Run it as Administrator for the full picture. It works without admin too; a handful
 of checks (BitLocker, some policy reads) just come back limited.
+
+### How Apotrope compares
+
+| | Apotrope | CIS-CAT Lite | HardeningKitty | Lynis |
+|---|---|---|---|---|
+| Platform | Windows 10/11 | Windows (+others) | Windows | Linux/macOS/BSD |
+| Install | Single `.exe` or `pip` | Java app | PowerShell module | Shell script |
+| Account / signup | None | Yes¹ | None | None |
+| Mode | Read-only audit | Read-only audit | Audit **and** apply¹ | Read-only audit |
+| CIS mapping | CIS Win11 v5.0.0 / Win10 v4.0.0 | CIS (authoritative) | CIS / Microsoft / BSI¹ | CIS / various |
+| Output | Score + HTML + JSON | Scored HTML | CSV¹ | Terminal + log |
+| License | MIT | Free tier / paid Pro | MIT¹ | GPLv3 |
+
+¹ Verify current details with each project before relying on them. Lynis is listed for context; it does not run on Windows.
 
 ---
 
