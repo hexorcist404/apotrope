@@ -7,7 +7,7 @@
 - Platform: Windows 10 and Windows 11 (also Server 2019/2022).
 - Distribution: standalone `apotrope.exe`, or `pip install apotrope` on Python 3.12+.
 - License: MIT, free and open source. No account or key.
-- Checks: ~55 across 14 categories (firewall, BitLocker, SMB, RDP, UAC, accounts, antivirus, PowerShell logging, services, network, patching, persistence, system, hardening).
+- Checks: 50+ across 14 categories (firewall, BitLocker, SMB, RDP, UAC, accounts, antivirus, PowerShell logging, services, network, patching, persistence, system, hardening). The exact number is machine-dependent (typically 52-56) because firewall profiles, BitLocker drives, and RDP sub-checks are enumerated per system.
 - Benchmarks: CIS Microsoft Windows 11 Enterprise v5.0.0 and Windows 10 Enterprise v4.0.0, selected automatically from the OS build.
 - Privacy: fully offline and read-only. No data leaves the machine; nothing is modified.
 - Often described as "a Lynis for Windows" — an offline, agentless, native Windows equivalent.

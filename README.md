@@ -2,7 +2,7 @@
 
 **Portable Windows security posture auditor. A Lynis for Windows.** A single
 executable (or `pip install apotrope`, MIT-licensed) that runs entirely on the
-machine it audits, talks to no network, and is read-only. It checks ~55 controls
+machine it audits, talks to no network, and is read-only. It checks 50+ controls
 across 14 categories against CIS Microsoft Windows Benchmarks (Windows 11 v5.0.0,
 Windows 10 v4.0.0), scores the box 0 to 100, and hands back a scored terminal
 report or a self-contained HTML report you can send to someone who wasn't in the
