@@ -71,7 +71,9 @@ from __future__ import annotations
 from enum import Enum
 
 # CIS Benchmark editions these IDs are verified against, by OS family.
-# Windows 11 uses the v5.0.0 benchmark; Windows 10 / Server 2019 uses v4.0.0.
+# Windows 11 uses the v5.0.0 benchmark; Windows 10 uses v4.0.0. The Server
+# families (2016/2019/2022) ride the v4.0.0 ID set as a best-effort baseline
+# (each flagged with a caveat) until their own official benchmarks are sourced.
 CIS_VERSION_WIN11 = "v5.0.0"
 CIS_VERSION_WIN10 = "v4.0.0"
 
@@ -81,22 +83,48 @@ class OSFamily(Enum):
 
     WIN10 = "Windows 10"
     WIN11 = "Windows 11"
+    SERVER_2016 = "Windows Server 2016"
     SERVER_2019 = "Windows Server 2019"
     SERVER_2022 = "Windows Server 2022"
 
 
-def family_for_build(build: int) -> OSFamily:
+# Win32_OperatingSystem.ProductType values that denote a server SKU (vs. a
+# client workstation, which is 1). 2 = Domain Controller, 3 = Server.
+_SERVER_PRODUCT_TYPES = frozenset({2, 3})
+
+# Server builds that share a number with a client Windows release, keyed by
+# build → the server family ProductType disambiguates them into.
+_SHARED_SERVER_BUILDS: dict[int, OSFamily] = {
+    17763: OSFamily.SERVER_2019,  # also Windows 10 1809
+    14393: OSFamily.SERVER_2016,  # also Windows 10 1607
+}
+
+
+def family_for_build(build: int, product_type: int | None = None) -> OSFamily:
     """Classify a Windows build number into an :class:`OSFamily`.
 
-    Note: build numbers do NOT uniquely identify server vs client. Build 17763
-    is shared by Windows 10 1809 and Server 2019, and 14393 by Win10 1607 and
-    Server 2016 — so those server editions cannot be told apart from client
-    Windows 10 by build alone (that needs ``Win32_OperatingSystem.ProductType``).
-    Build 20348 is unambiguous (no client Windows uses it) → Server 2022.
-    Anything else below 22000 is treated as the Windows 10 / v4.0.0 family.
+    Build numbers do NOT uniquely identify server vs client: build 17763 is
+    shared by Windows 10 1809 and Server 2019, and 14393 by Win10 1607 and
+    Server 2016. ``Win32_OperatingSystem.ProductType`` (1 = Workstation,
+    2 = Domain Controller, 3 = Server) is what tells them apart, so callers that
+    can read it pass it as *product_type*. Build 20348 is unambiguous (no client
+    Windows uses it) → Server 2022, classified even when *product_type* is
+    unknown. Anything else below 22000 is treated as the Windows 10 / v4.0.0
+    family.
+
+    Args:
+        build:        Windows build number (the trailing field of the OS version).
+        product_type: ``Win32_OperatingSystem.ProductType``, or ``None`` when it
+                      could not be read (e.g. WMI unavailable). Without it, the
+                      shared server builds fall back to the Win10 baseline.
+
+    Returns:
+        The matching :class:`OSFamily`.
     """
     if build == 20348:
         return OSFamily.SERVER_2022
+    if product_type in _SERVER_PRODUCT_TYPES and build in _SHARED_SERVER_BUILDS:
+        return _SHARED_SERVER_BUILDS[build]
     if build >= 22000:
         return OSFamily.WIN11
     return OSFamily.WIN10
@@ -117,21 +145,34 @@ _WIN10_OVERRIDES: dict[str, str] = {
     "SMB Encryption":                   "",   # not present in Win10 v4.0.0
 }
 
+
+def _server_baseline_caveat(server_name: str) -> str:
+    """Best-effort caveat for a Server family ridden on the Win10 v4.0.0 baseline.
+
+    A server family that borrows the Windows 10 v4.0.0 ID set is an
+    approximation; the caveat keeps the report honest about it instead of
+    silently stamping a Win10 edition. Drops to ``""`` once the family's own
+    official benchmark IDs are sourced.
+    """
+    return (
+        f"Windows 10 v4.0.0 baseline — {server_name} control IDs are best-effort; "
+        f"verify against the CIS Microsoft {server_name} Benchmark."
+    )
+
+
 # Additive family → benchmark registry: (cis_version, overrides_map, caveat).
-# Each family is one self-contained entry. To support a real CIS Server 2022
-# Benchmark later, swap that one tuple for
+# Each family is one self-contained entry. Server 2016/2019/2022 all ride the
+# Windows 10 v4.0.0 ID set as a best-effort baseline and carry a caveat so their
+# reports are honest about the approximation. To support a real CIS Server 2022
+# Benchmark later, source the official document, add a ``CIS_VERSION_SERVER_2022``
+# constant and a ``_SERVER2022_OVERRIDES`` map, then swap that one tuple for
 # ``(CIS_VERSION_SERVER_2022, _SERVER2022_OVERRIDES, "")`` — no call site changes.
-# Server 2019/2022 ride the Windows 10 v4.0.0 ID set as a best-effort baseline;
-# Server 2022 also carries a caveat so its report is honest about the approximation.
-_SERVER2022_CAVEAT = (
-    "Windows 10 v4.0.0 baseline — Server 2022 control IDs are best-effort; "
-    "verify against the CIS Microsoft Windows Server 2022 Benchmark."
-)
 _FAMILY_BENCHMARKS: dict[OSFamily, tuple[str, dict[str, str], str]] = {
     OSFamily.WIN11:       (CIS_VERSION_WIN11, {},               ""),
     OSFamily.WIN10:       (CIS_VERSION_WIN10, _WIN10_OVERRIDES, ""),
-    OSFamily.SERVER_2019: (CIS_VERSION_WIN10, _WIN10_OVERRIDES, ""),
-    OSFamily.SERVER_2022: (CIS_VERSION_WIN10, _WIN10_OVERRIDES, _SERVER2022_CAVEAT),
+    OSFamily.SERVER_2016: (CIS_VERSION_WIN10, _WIN10_OVERRIDES, _server_baseline_caveat("Windows Server 2016")),
+    OSFamily.SERVER_2019: (CIS_VERSION_WIN10, _WIN10_OVERRIDES, _server_baseline_caveat("Windows Server 2019")),
+    OSFamily.SERVER_2022: (CIS_VERSION_WIN10, _WIN10_OVERRIDES, _server_baseline_caveat("Windows Server 2022")),
 }
 
 
