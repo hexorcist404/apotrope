@@ -20,6 +20,7 @@ from apotrope.models import AuditReport, CheckResult, Status, Severity
 from apotrope.scoring import calculate_score
 
 if TYPE_CHECKING:
+    from apotrope import cis_map
     from apotrope.profile import Profile
 
 log = logging.getLogger(__name__)
@@ -96,17 +97,17 @@ class Scanner:
             module_results = self._run_module(module)
             results.extend(module_results)
 
-        # Apply CIS references from the central map.
-        # Build numbers < 22000 are Windows 10 / Server 2019; use Win10 IDs.
+        # Apply CIS references from the central map, keyed on OS family.
         try:
             build = int(platform.version().split(".")[-1])
         except (ValueError, IndexError):
             build = 0
-        is_win10 = build < 22000
-        self._apply_cis_references(results, is_win10=is_win10)
-
         from apotrope import cis_map
-        cis_version = cis_map.benchmark_version(is_win10=is_win10)
+        family = cis_map.family_for_build(build)
+        self._apply_cis_references(results, family=family)
+
+        cis_version = cis_map.benchmark_version(family)
+        cis_caveat = cis_map.benchmark_caveat(family)
 
         # Apply profile transforms (disabled checks, severity overrides)
         if self.profile:
@@ -133,6 +134,7 @@ class Scanner:
             score=score,
             is_admin=self.is_admin,
             cis_version=cis_version,
+            cis_caveat=cis_caveat,
         )
         log.info(
             "Scan complete: %d results, score=%d, duration=%.2fs",
@@ -254,12 +256,15 @@ class Scanner:
         return results
 
     @staticmethod
-    def _apply_cis_references(results: list[CheckResult], is_win10: bool = False) -> None:
+    def _apply_cis_references(
+        results: list[CheckResult], family: "cis_map.OSFamily | None" = None
+    ) -> None:
         """Populate the cis_reference field on results that don't already have one."""
         from apotrope import cis_map
+        fam = family or cis_map.OSFamily.WIN11
         for r in results:
             if not r.cis_reference:
-                r.cis_reference = cis_map.lookup(r.check_name, is_win10=is_win10)
+                r.cis_reference = cis_map.lookup(r.check_name, fam)
 
     def _apply_profile(self, results: list[CheckResult]) -> list[CheckResult]:
         """Apply profile transforms: disabled_checks filter and severity_overrides."""

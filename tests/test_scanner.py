@@ -22,15 +22,16 @@ def _make_module(
     run_raises: Exception | None = None,
 ) -> ModuleType:
     """Return a minimal fake check module."""
+    # setattr (not mod.attr =) so mypy accepts dynamic attributes on ModuleType.
     mod = ModuleType(name)
-    mod.CATEGORY = category
+    setattr(mod, "CATEGORY", category)
     if requires_admin:
-        mod.REQUIRES_ADMIN = True
+        setattr(mod, "REQUIRES_ADMIN", True)
 
     if run_raises is not None:
         def _run():
             raise run_raises
-        mod.run = _run
+        setattr(mod, "run", _run)
     else:
         _results = results or [CheckResult(
             category=category,
@@ -40,7 +41,7 @@ def _make_module(
             description="desc",
             details="ok",
         )]
-        mod.run = lambda: _results
+        setattr(mod, "run", lambda: _results)
 
     return mod
 

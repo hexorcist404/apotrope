@@ -141,10 +141,13 @@ class TestRunPowershellJson:
             result = utils.run_powershell_json("... | ConvertTo-Json")
         assert result == [{"Port": 80}, {"Port": 443}]
 
-    def test_empty_output_raises(self):
+    def test_empty_output_returns_empty_list(self):
+        # Zero pipeline objects -> empty stdout is a valid "no rows" result,
+        # not an error: the helper returns [] so callers' "none found" paths
+        # stay reachable (test_malformed_json_raises covers real bad JSON).
         with patch("apotrope.utils.subprocess.run", return_value=_mock_ps("")):
-            with pytest.raises(ApotropeError, match="empty output"):
-                utils.run_powershell_json("Get-Nothing | ConvertTo-Json")
+            result = utils.run_powershell_json("Get-Nothing | ConvertTo-Json")
+        assert result == []
 
     def test_malformed_json_raises(self):
         with patch("apotrope.utils.subprocess.run", return_value=_mock_ps("{not valid json}")):

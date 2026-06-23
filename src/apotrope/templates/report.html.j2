@@ -567,7 +567,7 @@
 
     <!-- ── Footer ──────────────────────────────────────────────────────── -->
     <div class="foot">
-      <span class="auth">For authorized security assessment use only · <strong style="color:var(--green);font-weight:600;text-shadow:0 0 9px rgba(43,255,136,0.45)">No data left this machine</strong> · CIS Benchmark {{ cis_version }}</span>
+      <span class="auth">For authorized security assessment use only · <strong style="color:var(--green);font-weight:600;text-shadow:0 0 9px rgba(43,255,136,0.45)">No data left this machine</strong> · CIS Benchmark {{ cis_version }}{% if cis_caveat %} · <span class="cis-caveat" style="color:#ffb23d">{{ cis_caveat }}</span>{% endif %}</span>
       <span>apotrope.sh · <a href="https://github.com/hexorcist404/apotrope">github.com/hexorcist404/apotrope</a> · MIT</span>
     </div>
 

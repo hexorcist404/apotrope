@@ -102,12 +102,26 @@ class TestCompareReports:
         diff = compare_reports(baseline, current)
         assert len(diff.new_findings) == 1
 
-    def test_check_removed_from_current(self):
-        """A failing check in baseline but absent in current → resolved."""
+    def test_check_removed_from_current_is_missing_not_resolved(self):
+        """A failing check absent from current is coverage lost, NOT resolved.
+
+        Absence can be a narrower --category set, a disabled/admin-gated check,
+        an import failure, or a rename — none of which is remediation.
+        """
         baseline = _make_report([_make_result("OldCheck", Status.FAIL)])
         current  = _make_report([])
         diff = compare_reports(baseline, current)
+        assert len(diff.missing_findings) == 1
+        assert diff.missing_findings[0].check_name == "OldCheck"
+        assert diff.resolved_findings == []
+
+    def test_genuinely_remediated_check_is_resolved(self):
+        """A check present in BOTH scans that left FAIL/WARN is truly resolved."""
+        baseline = _make_report([_make_result("Firewall", Status.FAIL)])
+        current  = _make_report([_make_result("Firewall", Status.PASS)])
+        diff = compare_reports(baseline, current)
         assert len(diff.resolved_findings) == 1
+        assert diff.missing_findings == []
 
     def test_pass_to_pass_unchanged(self):
         baseline = _make_report([_make_result("X", Status.PASS)])
