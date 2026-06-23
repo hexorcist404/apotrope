@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from apotrope import checks as checks_pkg
 from apotrope.models import AuditReport, CheckResult, Status, Severity
 from apotrope.scoring import calculate_score
+from apotrope.utils import get_wmi_object
 
 if TYPE_CHECKING:
     from apotrope import cis_map
@@ -103,7 +104,7 @@ class Scanner:
         except (ValueError, IndexError):
             build = 0
         from apotrope import cis_map
-        family = cis_map.family_for_build(build)
+        family = cis_map.family_for_build(build, self._detect_product_type())
         self._apply_cis_references(results, family=family)
 
         cis_version = cis_map.benchmark_version(family)
@@ -254,6 +255,23 @@ class Scanner:
             r.check_duration = duration
         log.debug("%s finished in %.2fs", module.__name__, duration)
         return results
+
+    @staticmethod
+    def _detect_product_type() -> int | None:
+        """Return ``Win32_OperatingSystem.ProductType``, or ``None`` if unreadable.
+
+        ProductType (1 = Workstation, 2 = Domain Controller, 3 = Server) is what
+        distinguishes a server SKU from client Windows on the build numbers they
+        share (17763 = Win10 1809 / Server 2019; 14393 = Win10 1607 / Server
+        2016). Returns ``None`` when WMI yields nothing — non-Windows, access
+        denied, or a missing/non-integer value — so ``family_for_build`` falls
+        back to build-only classification.
+        """
+        rows = get_wmi_object("Win32_OperatingSystem", properties=["ProductType"])
+        if not rows:
+            return None
+        product_type = rows[0].get("ProductType")
+        return product_type if isinstance(product_type, int) else None
 
     @staticmethod
     def _apply_cis_references(

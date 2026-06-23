@@ -48,6 +48,35 @@ class TestBenchmarkVersion:
         assert cis_map.family_for_build(22000) == cis_map.OSFamily.WIN11
         assert cis_map.family_for_build(19045) == cis_map.OSFamily.WIN10
 
+    def test_family_for_build_disambiguates_server_by_product_type(self):
+        # Builds 17763 / 14393 are shared by client Windows and a Server SKU.
+        # ProductType (1=Workstation, 2=Domain Controller, 3=Server) is what
+        # tells them apart — without it, both look like the Win10 baseline.
+        assert cis_map.family_for_build(17763, 1) == cis_map.OSFamily.WIN10
+        assert cis_map.family_for_build(17763, 2) == cis_map.OSFamily.SERVER_2019
+        assert cis_map.family_for_build(17763, 3) == cis_map.OSFamily.SERVER_2019
+        assert cis_map.family_for_build(14393, 1) == cis_map.OSFamily.WIN10
+        assert cis_map.family_for_build(14393, 2) == cis_map.OSFamily.SERVER_2016
+        assert cis_map.family_for_build(14393, 3) == cis_map.OSFamily.SERVER_2016
+
+    def test_family_for_build_product_type_none_falls_back_to_build(self):
+        # No ProductType available → shared server builds classify as Win10.
+        assert cis_map.family_for_build(17763) == cis_map.OSFamily.WIN10
+        assert cis_map.family_for_build(14393) == cis_map.OSFamily.WIN10
+
+    def test_family_for_build_20348_is_server_2022_regardless_of_product_type(self):
+        # 20348 ships only on Server 2022 — unambiguous with or without ProductType.
+        assert cis_map.family_for_build(20348, None) == cis_map.OSFamily.SERVER_2022
+        assert cis_map.family_for_build(20348, 1) == cis_map.OSFamily.SERVER_2022
+        assert cis_map.family_for_build(20348, 3) == cis_map.OSFamily.SERVER_2022
+
+    def test_server_2016_2019_are_v4_baseline_with_caveat(self):
+        # Both ride the Win10 v4.0.0 baseline as a best-effort and must say so —
+        # a reachable server family with no caveat would be a silent Win10 stamp.
+        for fam in (cis_map.OSFamily.SERVER_2016, cis_map.OSFamily.SERVER_2019):
+            assert cis_map.benchmark_version(fam) == "v4.0.0"
+            assert cis_map.benchmark_caveat(fam)  # non-empty best-effort caveat
+
     def test_constants_match(self):
         assert cis_map.CIS_VERSION_WIN11 == "v5.0.0"
         assert cis_map.CIS_VERSION_WIN10 == "v4.0.0"
@@ -87,10 +116,13 @@ def _fake_module() -> ModuleType:
     return mod
 
 
-def _run_with_build(build_version: str) -> AuditReport:
+def _run_with_build(build_version: str, product_type: int | None = 1) -> AuditReport:
+    # product_type defaults to 1 (Workstation) so the existing client-Windows
+    # cases are unaffected; server cases pass 2 (Domain Controller) or 3 (Server).
     scanner = Scanner()
     with patch("apotrope.scanner.platform.version", return_value=build_version), \
-         patch.object(scanner, "_discover_modules", return_value=[_fake_module()]):
+         patch.object(scanner, "_discover_modules", return_value=[_fake_module()]), \
+         patch.object(scanner, "_detect_product_type", return_value=product_type):
         return scanner.run()
 
 
@@ -111,6 +143,43 @@ class TestScannerStampsVersion:
         report = _run_with_build("10.0.20348")  # Server 2022 (unambiguous build)
         assert report.cis_version == "v4.0.0"
         assert report.cis_caveat  # honest best-effort caveat, not a silent Win10 stamp
+
+    def test_server_2019_build_stamps_v4_with_caveat(self):
+        # Same build as Win10 1809 — ProductType 3 (Server) is what makes it 2019.
+        report = _run_with_build("10.0.17763", product_type=3)
+        assert report.cis_version == "v4.0.0"
+        assert report.cis_caveat  # best-effort, not a silent Win10 stamp
+
+    def test_win10_1809_same_build_no_caveat(self):
+        # Build 17763 with Workstation ProductType stays client Win10 (exact, no caveat).
+        report = _run_with_build("10.0.17763", product_type=1)
+        assert report.cis_version == "v4.0.0"
+        assert not report.cis_caveat
+
+    def test_server_2016_build_stamps_v4_with_caveat(self):
+        # Build 14393 with Domain Controller ProductType → Server 2016 best-effort.
+        report = _run_with_build("10.0.14393", product_type=2)
+        assert report.cis_version == "v4.0.0"
+        assert report.cis_caveat
+
+
+# ---------------------------------------------------------------------------
+# Scanner._detect_product_type — WMI ProductType used to disambiguate servers
+# ---------------------------------------------------------------------------
+
+class TestDetectProductType:
+    def test_returns_int_product_type(self):
+        with patch("apotrope.scanner.get_wmi_object", return_value=[{"ProductType": 3}]):
+            assert Scanner._detect_product_type() == 3
+
+    def test_none_when_wmi_returns_no_rows(self):
+        # get_wmi_object returns [] on non-Windows / access-denied / class-missing.
+        with patch("apotrope.scanner.get_wmi_object", return_value=[]):
+            assert Scanner._detect_product_type() is None
+
+    def test_none_when_product_type_absent_or_non_int(self):
+        with patch("apotrope.scanner.get_wmi_object", return_value=[{"ProductType": None}]):
+            assert Scanner._detect_product_type() is None
 
 
 # ---------------------------------------------------------------------------
