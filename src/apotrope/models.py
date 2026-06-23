@@ -78,6 +78,8 @@ class AuditReport:
     score: int = 0
     is_admin: bool = False
     cis_version: str = ""  # CIS Benchmark edition used (e.g. "v5.0.0" / "v4.0.0")
+    cis_caveat: str = ""   # Best-effort note when the edition is an approximation
+                           # (e.g. Server 2022 mapped onto the Win10 v4.0.0 baseline)
 
     # ------------------------------------------------------------------
     # Convenience helpers

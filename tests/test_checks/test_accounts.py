@@ -84,6 +84,17 @@ class TestCheckBuiltinAdmin:
         assert r.status == Status.INFO
         assert "not found" in r.details.lower()
 
+    def test_renamed_admin_empty_stdout_is_info(self):
+        # Regression: a renamed/absent Administrator produces empty PowerShell
+        # stdout. Exercise the REAL run_powershell_json (patch the lower-level
+        # run_powershell) to prove empty output surfaces as INFO "not found",
+        # not a confusing Status.ERROR. This failed before the empty-output fix.
+        with patch("apotrope.utils.run_powershell", return_value=""):
+            results = accounts._check_builtin_admin()
+        r = results[0]
+        assert r.status == Status.INFO
+        assert "not found" in r.details.lower()
+
     def test_list_data_uses_first_element(self):
         results = self._run([{"Name": "Administrator", "Enabled": False}])
         assert results[0].status == Status.PASS

@@ -191,10 +191,12 @@ def _check_netbios() -> list[CheckResult]:
     # Normalise to plain ints
     opt_ints = []
     for o in options:
-        try:
-            opt_ints.append(int(o))
-        except (TypeError, ValueError):
-            pass
+        # Elements come from JSON (dict | list | scalar); only coerce scalars.
+        if isinstance(o, (int, str)):
+            try:
+                opt_ints.append(int(o))
+            except (TypeError, ValueError):
+                pass
 
     if not opt_ints:
         return [CheckResult(

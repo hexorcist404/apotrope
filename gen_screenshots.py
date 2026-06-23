@@ -12,7 +12,6 @@ Usage:  python gen_screenshots.py <outdir>
 
 from __future__ import annotations
 
-import dataclasses
 import io
 import sys
 from pathlib import Path
@@ -21,9 +20,8 @@ from unittest import mock
 from rich.console import Console
 from rich.terminal_theme import TerminalTheme
 
-from apotrope import __version__
 from apotrope.models import Status
-from apotrope.reporter import Reporter, _text, _GREEN, _MUTED, _CYAN, _BRIGHT
+from apotrope.reporter import Reporter, _text, _MUTED, _CYAN, _BRIGHT
 from apotrope.scanner import Scanner
 from apotrope.utils import is_admin
 

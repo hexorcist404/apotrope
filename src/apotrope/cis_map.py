@@ -2,9 +2,9 @@
 
 Maps check_name values to CIS Microsoft Windows Benchmark control IDs.
 The base map (_PREFIX_MAP) uses CIS Microsoft Windows 11 Enterprise Benchmark
-v5.0.0 IDs.  When running on Windows 10, pass ``is_win10=True`` to ``lookup``
-and the eight IDs that differ in CIS Microsoft Windows 10 Enterprise Benchmark
-v4.0.0 will be substituted from ``_WIN10_OVERRIDES`` automatically.
+v5.0.0 IDs.  For Windows 10 / Server families, pass the matching ``OSFamily``
+to ``lookup`` and the IDs that differ in CIS Microsoft Windows 10 Enterprise
+Benchmark v4.0.0 are substituted from ``_WIN10_OVERRIDES`` automatically.
 
 References are approximate — always verify against the current official
 benchmark for your specific OS version and edition before use in a formal
@@ -68,23 +68,38 @@ NEEDS MANUAL REVIEW (no direct CIS admin template control in v5.0.0):
 
 from __future__ import annotations
 
+from enum import Enum
+
 # CIS Benchmark editions these IDs are verified against, by OS family.
 # Windows 11 uses the v5.0.0 benchmark; Windows 10 / Server 2019 uses v4.0.0.
 CIS_VERSION_WIN11 = "v5.0.0"
 CIS_VERSION_WIN10 = "v4.0.0"
 
 
-def benchmark_version(is_win10: bool = False) -> str:
-    """Return the CIS Benchmark edition string for the audited OS family.
+class OSFamily(Enum):
+    """Operating-system family used to select a CIS Benchmark edition + ID set."""
 
-    Args:
-        is_win10: ``True`` for Windows 10 / Server 2019 hosts (build < 22000),
-                  ``False`` for Windows 11.
+    WIN10 = "Windows 10"
+    WIN11 = "Windows 11"
+    SERVER_2019 = "Windows Server 2019"
+    SERVER_2022 = "Windows Server 2022"
 
-    Returns:
-        ``"v4.0.0"`` for Windows 10, ``"v5.0.0"`` for Windows 11.
+
+def family_for_build(build: int) -> OSFamily:
+    """Classify a Windows build number into an :class:`OSFamily`.
+
+    Note: build numbers do NOT uniquely identify server vs client. Build 17763
+    is shared by Windows 10 1809 and Server 2019, and 14393 by Win10 1607 and
+    Server 2016 — so those server editions cannot be told apart from client
+    Windows 10 by build alone (that needs ``Win32_OperatingSystem.ProductType``).
+    Build 20348 is unambiguous (no client Windows uses it) → Server 2022.
+    Anything else below 22000 is treated as the Windows 10 / v4.0.0 family.
     """
-    return CIS_VERSION_WIN10 if is_win10 else CIS_VERSION_WIN11
+    if build == 20348:
+        return OSFamily.SERVER_2022
+    if build >= 22000:
+        return OSFamily.WIN11
+    return OSFamily.WIN10
 
 
 # Win10 v4.0.0 IDs that differ from the Win11 v5.0.0 base map.
@@ -101,6 +116,34 @@ _WIN10_OVERRIDES: dict[str, str] = {
     "Pending Windows Updates":          "CIS 18.10.93.2.1",
     "SMB Encryption":                   "",   # not present in Win10 v4.0.0
 }
+
+# Additive family → benchmark registry: (cis_version, overrides_map, caveat).
+# Each family is one self-contained entry. To support a real CIS Server 2022
+# Benchmark later, swap that one tuple for
+# ``(CIS_VERSION_SERVER_2022, _SERVER2022_OVERRIDES, "")`` — no call site changes.
+# Server 2019/2022 ride the Windows 10 v4.0.0 ID set as a best-effort baseline;
+# Server 2022 also carries a caveat so its report is honest about the approximation.
+_SERVER2022_CAVEAT = (
+    "Windows 10 v4.0.0 baseline — Server 2022 control IDs are best-effort; "
+    "verify against the CIS Microsoft Windows Server 2022 Benchmark."
+)
+_FAMILY_BENCHMARKS: dict[OSFamily, tuple[str, dict[str, str], str]] = {
+    OSFamily.WIN11:       (CIS_VERSION_WIN11, {},               ""),
+    OSFamily.WIN10:       (CIS_VERSION_WIN10, _WIN10_OVERRIDES, ""),
+    OSFamily.SERVER_2019: (CIS_VERSION_WIN10, _WIN10_OVERRIDES, ""),
+    OSFamily.SERVER_2022: (CIS_VERSION_WIN10, _WIN10_OVERRIDES, _SERVER2022_CAVEAT),
+}
+
+
+def benchmark_version(family: OSFamily = OSFamily.WIN11) -> str:
+    """Return the CIS Benchmark edition string for an OS *family*."""
+    return _FAMILY_BENCHMARKS[family][0]
+
+
+def benchmark_caveat(family: OSFamily = OSFamily.WIN11) -> str:
+    """Return a best-effort caveat for *family*, or ``""`` when the mapping is exact."""
+    return _FAMILY_BENCHMARKS[family][2]
+
 
 # Maps check_name prefix → CIS control ID.
 # Prefix matching allows one entry to cover dynamically-named checks
@@ -207,7 +250,7 @@ _PREFIX_MAP: dict[str, str] = {
 }
 
 
-def lookup(check_name: str, is_win10: bool = False) -> str:
+def lookup(check_name: str, family: OSFamily = OSFamily.WIN11) -> str:
     """Return the CIS Benchmark control ID for *check_name*, or ``''`` if unknown.
 
     Matching is done by prefix so that dynamically-named checks (e.g.
@@ -215,17 +258,17 @@ def lookup(check_name: str, is_win10: bool = False) -> str:
 
     Args:
         check_name: The ``check_name`` field from a ``CheckResult``.
-        is_win10:   Set to ``True`` when auditing a Windows 10 host so that
-                    IDs from ``_WIN10_OVERRIDES`` are substituted where the
-                    v4.0.0 and v5.0.0 benchmarks differ.
+        family:     The audited :class:`OSFamily`.  Families on the v4.0.0
+                    baseline (Win10 / Server 2019 / Server 2022) substitute IDs
+                    from their override map where v4.0.0 and v5.0.0 differ.
 
     Returns:
         CIS control ID string (e.g. ``"CIS 9.1.1"``), or empty string.
     """
-    if is_win10:
-        for prefix, cis_id in _WIN10_OVERRIDES.items():
-            if check_name.startswith(prefix):
-                return cis_id
+    overrides = _FAMILY_BENCHMARKS[family][1]
+    for prefix, cis_id in overrides.items():
+        if check_name.startswith(prefix):
+            return cis_id
     for prefix, cis_id in _PREFIX_MAP.items():
         if check_name.startswith(prefix):
             return cis_id

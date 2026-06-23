@@ -13,7 +13,7 @@ import json
 import logging
 import textwrap
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from apotrope.scanner import Scanner
@@ -140,8 +140,10 @@ def _cis_version_for(report: AuditReport) -> str:
         return report.cis_version
     m = re.search(r"(\d{3,})\s*$", (report.os_version or "").strip())
     build = int(m.group(1)) if m else 0
-    # Match scanner.run's test, but treat an unparseable build as current (Win11).
-    return cis_map.benchmark_version(is_win10=bool(build) and build < 22000)
+    # Treat an unparseable build as current (Win11); otherwise key on OS family.
+    if not build:
+        return cis_map.benchmark_version(cis_map.OSFamily.WIN11)
+    return cis_map.benchmark_version(cis_map.family_for_build(build))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -398,10 +400,11 @@ class Reporter:
         console.print(f"  {sep * 65}")
 
         sections: list[tuple[str, str, list]] = [
-            ("green",  "Resolved", diff.resolved_findings),
-            ("red",    "New",      diff.new_findings),
-            ("yellow", "Worsened", diff.worsened_findings),
-            ("yellow", "Ongoing",  diff.unchanged_bad),
+            ("green",   "Resolved", diff.resolved_findings),
+            ("magenta", "Not scanned (coverage lost)", diff.missing_findings),
+            ("red",     "New",      diff.new_findings),
+            ("yellow",  "Worsened", diff.worsened_findings),
+            ("yellow",  "Ongoing",  diff.unchanged_bad),
         ]
 
         any_printed = False
@@ -425,6 +428,7 @@ class Reporter:
         console.print(f"  {sep * 65}")
         console.print(
             f"  Resolved: {len(diff.resolved_findings)}  |  "
+            f"Not scanned: {len(diff.missing_findings)}  |  "
             f"New: {len(diff.new_findings)}  |  "
             f"Worsened: {len(diff.worsened_findings)}  |  "
             f"Unchanged: {diff.unchanged_count}"
@@ -512,7 +516,7 @@ class Reporter:
         category_bars = sorted(
             ({"name": c["name"], "slug": c["slug"],
               "score": c["score"], "band": c["band"]} for c in category_data),
-            key=lambda c: c["score"],
+            key=lambda c: cast(int, c["score"]),  # score is always an int at runtime
         )
 
         # ── Top issues: FAIL/WARN with remediation, CRITICAL/HIGH or any FAIL ─
@@ -603,6 +607,7 @@ class Reporter:
             "n_cats":             len(category_data),
             "top_issues":         top_issues,
             "cis_version":        _cis_version_for(report),
+            "cis_caveat":         report.cis_caveat,
         }
 
     def _build_executive_summary(self, report: AuditReport) -> str:

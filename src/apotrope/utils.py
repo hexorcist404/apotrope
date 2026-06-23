@@ -101,17 +101,23 @@ def run_powershell_json(command: str, timeout: int = 30) -> dict | list:
         timeout: Seconds before the subprocess is killed (default 30).
 
     Returns:
-        Parsed Python ``dict`` or ``list``.
+        Parsed Python ``dict`` or ``list``.  An **empty list** is returned
+        when the command produces no output: a PowerShell pipeline matching
+        zero objects emits empty stdout after ``ConvertTo-Json``, which is a
+        valid "nothing found" result — not an error (mirrors
+        :func:`get_wmi_object`).  Callers should treat a falsy result as
+        "none found".
 
     Raises:
-        ApotropeError: On PowerShell failure, empty output, or invalid JSON.
+        ApotropeError: On PowerShell failure or invalid (non-empty) JSON.
     """
     output = run_powershell(command, timeout=timeout)
 
+    # Zero pipeline objects -> empty stdout. Treat as "no rows" ([]) so that
+    # callers' graceful "none found" paths are reachable on real machines;
+    # only *malformed* non-empty JSON below is a genuine error.
     if not output:
-        raise ApotropeError(
-            "PowerShell command returned empty output (expected JSON)"
-        )
+        return []
 
     try:
         return json.loads(output)

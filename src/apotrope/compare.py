@@ -38,7 +38,13 @@ class ScanDiff:
         current_score:     Security score from the current scan.
         score_delta:       current_score − baseline_score (positive = improved).
         new_findings:      Checks that are FAIL/WARN now but were not in baseline.
-        resolved_findings: Checks that were FAIL/WARN in baseline but are now PASS/INFO.
+        resolved_findings: Checks that were FAIL/WARN in baseline but are now PASS/INFO
+                           (present in BOTH scans — genuinely remediated).
+        missing_findings:  Checks that were FAIL/WARN in baseline but ABSENT from the
+                           current scan. This is coverage lost (a narrower --category,
+                           a disabled/admin-gated check, an import failure, or a rename)
+                           — NOT proof of remediation. Tracked separately so a reduced
+                           scan is never mistaken for fixed risk.
         worsened_findings: Checks that were PASS/INFO in baseline but are now FAIL/WARN.
         unchanged_bad:     Checks that were FAIL/WARN in both scans.
         unchanged_count:   Total number of checks with the same status in both scans.
@@ -52,6 +58,7 @@ class ScanDiff:
     worsened_findings: list[CheckResult]
     unchanged_bad: list[CheckResult]
     unchanged_count: int
+    missing_findings: list[CheckResult] = dataclasses.field(default_factory=list)
 
 
 def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
@@ -75,6 +82,7 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
 
     new_findings: list[CheckResult] = []
     resolved_findings: list[CheckResult] = []
+    missing_findings: list[CheckResult] = []
     worsened_findings: list[CheckResult] = []
     unchanged_bad: list[CheckResult] = []
     unchanged_count = 0
@@ -90,9 +98,12 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
             else:
                 unchanged_count += 1
         elif c is None and b is not None:
-            # Only in baseline (check no longer running)
+            # Only in baseline: this check did not run in the current scan.
+            # A bad check vanishing is NOT remediation — it can be a narrower
+            # --category set, a disabled/admin-gated check, an import failure,
+            # or a rename. Bucket it as coverage lost, never as resolved.
             if b.status in _BAD:
-                resolved_findings.append(b)
+                missing_findings.append(b)
             else:
                 unchanged_count += 1
         else:
@@ -117,6 +128,7 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
         score_delta=score_delta,
         new_findings=new_findings,
         resolved_findings=resolved_findings,
+        missing_findings=missing_findings,
         worsened_findings=worsened_findings,
         unchanged_bad=unchanged_bad,
         unchanged_count=unchanged_count,

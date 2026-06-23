@@ -82,6 +82,16 @@ class TestCheckScheduledTasks:
         r = self._run([])[0]
         assert "No non-Microsoft" in r.details
 
+    def test_no_tasks_empty_stdout_is_info(self):
+        # Regression: a clean machine can have zero non-Microsoft scheduled
+        # tasks, yielding empty PowerShell stdout. Exercise the REAL
+        # run_powershell_json (patch lower-level run_powershell) to prove the
+        # "none found" INFO path is reachable, not a Status.ERROR.
+        with patch("apotrope.utils.run_powershell", return_value=""):
+            r = startup._check_scheduled_tasks()[0]
+        assert r.status == Status.INFO
+        assert "No non-Microsoft" in r.details
+
     def test_tasks_reported(self):
         r = self._run([self._task("BackupJob"), self._task("Updater")])[0]
         assert "2" in r.details

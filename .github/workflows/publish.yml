@@ -25,6 +25,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install package and dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        # Gate publication on the tagged commit passing tests. test.yml does
+        # NOT run on tags, so without this gate a v* tag could publish untested
+        # code. This is a representative gate (ubuntu / Python 3.12), not the
+        # full windows+ubuntu x 3.12+3.13 matrix that test.yml runs on PRs.
+        run: pytest tests/ -q --tb=short --cov --cov-fail-under=95
+
       - name: Build sdist and wheel
         run: |
           python -m pip install --upgrade build twine
