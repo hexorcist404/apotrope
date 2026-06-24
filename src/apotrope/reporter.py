@@ -350,9 +350,30 @@ class Reporter:
             log.error("Could not load HTML template: %s", exc)
             return
 
-        html = template.render(**self._build_template_context(report))
+        ctx = self._build_template_context(report)
+        ctx["logo_data_uri"] = self._encode_logo_data_uri(template_dir)
+        html = template.render(**ctx)
         Path(path).write_text(html, encoding="utf-8")
         log.info("HTML report saved to %s", path)
+
+    @staticmethod
+    def _encode_logo_data_uri(template_dir: Path) -> str | None:
+        """Return the brand mark as a base64 ``data:`` URI, or ``None`` if absent.
+
+        The HTML report is self-contained, so the eye-mark (shipped beside the
+        template as ``apotrope-mark.png``) is embedded inline rather than linked.
+        Returns ``None`` when the asset can't be read, so the template falls back
+        to the ``◈`` glyph and the report still renders.
+        """
+        import base64
+
+        mark = template_dir / "apotrope-mark.png"
+        try:
+            data = mark.read_bytes()
+        except OSError:
+            log.warning("Brand mark not found at %s — using glyph fallback", mark)
+            return None
+        return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
 
     def generate_json_report(self, report: AuditReport, path: str) -> None:
         """Serialize the AuditReport to a JSON file.

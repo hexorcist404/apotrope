@@ -47,7 +47,7 @@ apotrope = "apotrope.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-apotrope = ["templates/*.j2"]
+apotrope = ["templates/*.j2", "templates/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

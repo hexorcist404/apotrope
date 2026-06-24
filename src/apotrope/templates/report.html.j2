@@ -169,7 +169,7 @@
   .topbar { display:flex; align-items:center; justify-content:space-between; gap:24px;
             padding:20px 0 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
   .brand { display:flex; align-items:center; gap:13px; }
-  .brand .diamond { color:var(--accent); font-size:22px; filter:drop-shadow(0 0 7px var(--accent)); }
+  .brand .diamond { width:26px; height:26px; display:block; filter:drop-shadow(0 0 6px rgba(43,255,136,0.4)); }
   .brand .name { font-size:19px; font-weight:700; letter-spacing:0.42em; color:var(--bright);
                  text-transform:uppercase; }
   .brand .ver { font-size:10.5px; color:var(--muted); letter-spacing:0.12em; align-self:flex-end; padding-bottom:3px; }
@@ -379,7 +379,7 @@
     <!-- ── Header ──────────────────────────────────────────────────────── -->
     <div class="topbar">
       <div class="brand">
-        <span class="diamond">◈</span>
+        {% if logo_data_uri %}<img class="diamond" src="{{ logo_data_uri }}" width="26" height="26" alt="Apotrope">{% else %}<span class="diamond">◈</span>{% endif %}
         <span class="name">APOTROPE</span>
         <span class="ver">v{{ version }}</span>
       </div>
