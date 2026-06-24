@@ -5,6 +5,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.8] - 2026-06-24
+
+### Added
+- **Windows Server 2019 and 2016 are now detected via `ProductType`.** Builds
+  shared by client and server SKUs — 17763 (Win10 1809 / Server 2019) and 14393
+  (Win10 1607 / Server 2016) — previously always fell back to the Windows 10
+  baseline. The scanner now reads `Win32_OperatingSystem.ProductType`
+  (1 = Workstation, 2 = Domain Controller, 3 = Server) and threads it into
+  `cis_map.family_for_build`, so these builds classify correctly. Server 2022
+  (build 20348) still short-circuits and resolves even when WMI is unavailable.
+  Backed by a new `OSFamily.SERVER_2016` and a `_SHARED_SERVER_BUILDS` table.
+
+### Changed
+- **Brand mark.** The ◈ diamond glyph is replaced by the transparent eye-mark
+  logo across the website nav, the terminal banner, and the HTML report header.
+  Reports embed the mark as a base64 data URI so they stay fully self-contained,
+  with a graceful fallback to the ◈ glyph if the asset is missing.
+- **OS family detection refactor.** The `is_win10` boolean is replaced by an
+  `OSFamily` enum and an additive family registry. Server 2016/2019/2022 now
+  carry an honest best-effort caveat noting they ride the Windows 10 v4.0.0 CIS
+  baseline, rather than being silently stamped as a Windows 10 edition. Server
+  2022's dedicated CIS mapping stays deferred — the official benchmark is
+  registration-gated, so no control IDs were fabricated.
+- **Scan comparison distinguishes remediated checks from lost coverage.** A
+  baseline-only FAIL/WARN that is absent from the current scan now lands in a new
+  `ScanDiff.missing_findings` bucket ("Not scanned (coverage lost)") instead of
+  being mislabeled "Resolved".
+
+### Fixed
+- **`run_powershell_json` no longer treats empty output as fatal.** A PowerShell
+  pipeline that matches zero rows now returns `[]` (mirroring `get_wmi_object`),
+  so checks' "none found" paths are reachable. Renaming the built-in
+  Administrator account (a CIS hardening step) now reports INFO instead of a
+  confusing ERROR.
+
+### CI
+- **`publish.yml` runs the test suite before building and uploading.** Because
+  `test.yml` does not run on tags, a `v*` tag could previously publish untested
+  code; publication is now gated on the tagged commit passing tests.
+
+### Docs
+- SEO/GEO content, JSON-LD structured data, and accuracy fixes for apotrope.sh;
+  added Open Graph / Twitter Card meta tags and a favicon.
+- Standardized the check-count claim on "50+ checks across 14 categories" across
+  all copy; dropped an outdated WinPosture repo-slug note from the changelog.
+
+---
+
 ## [0.1.7] - 2026-06-12
 
 ### Changed
