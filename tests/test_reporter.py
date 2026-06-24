@@ -7,6 +7,7 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 
 from apotrope.models import AuditReport, CheckResult, Severity, Status
@@ -120,6 +121,24 @@ class TestGenerateHtmlReport:
         assert "cdn." not in html
         assert "googleapis.com" not in html
         assert "<script src" not in html
+
+    def test_brand_mark_embedded(self):
+        """The eye-mark ships inline as a base64 data URI (report stays self-contained)."""
+        html = self._generate(_make_report())
+        assert "data:image/png;base64," in html
+        assert '<img class="diamond"' in html
+
+    def test_brand_mark_falls_back_to_glyph_when_missing(self):
+        """If the mark asset can't be read, the header still renders the ◈ glyph."""
+        with patch.object(Reporter, "_encode_logo_data_uri", return_value=None):
+            html = self._generate(_make_report())
+        assert "data:image/png;base64," not in html
+        assert '<span class="diamond">◈</span>' in html
+
+    def test_encode_logo_data_uri_missing_returns_none(self):
+        """_encode_logo_data_uri returns None when the PNG is absent (graceful fallback)."""
+        with tempfile.TemporaryDirectory() as td:
+            assert Reporter._encode_logo_data_uri(Path(td)) is None
 
     def test_print_css_present(self):
         html = self._generate(_make_report())
