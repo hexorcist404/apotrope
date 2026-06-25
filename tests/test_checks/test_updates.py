@@ -93,21 +93,36 @@ class TestCheckLastUpdate:
 # ---------------------------------------------------------------------------
 
 class TestCheckWuService:
-    def test_running_service_returns_pass(self):
-        with patch("apotrope.checks.updates.run_powershell", return_value="Running"):
+    def test_automatic_running_returns_pass(self):
+        with patch("apotrope.checks.updates.run_powershell", return_value="Automatic|Running"):
+            results = updates._check_wu_service()
+        assert results[0].status == Status.PASS
+        assert results[0].remediation == ""
+        assert results[0].command == ""
+
+    def test_automatic_stopped_returns_pass(self):
+        # The fix: a normally-idle (Stopped) Automatic service is NOT a finding.
+        with patch("apotrope.checks.updates.run_powershell", return_value="Automatic|Stopped"):
             results = updates._check_wu_service()
         assert results[0].status == Status.PASS
 
-    def test_stopped_service_returns_warn(self):
-        with patch("apotrope.checks.updates.run_powershell", return_value="Stopped"):
+    def test_manual_stopped_returns_pass(self):
+        with patch("apotrope.checks.updates.run_powershell", return_value="Manual|Stopped"):
+            results = updates._check_wu_service()
+        assert results[0].status == Status.PASS
+
+    def test_disabled_returns_warn(self):
+        with patch("apotrope.checks.updates.run_powershell", return_value="Disabled|Stopped"):
             results = updates._check_wu_service()
         assert results[0].status == Status.WARN
+        assert results[0].severity == Severity.HIGH
         assert results[0].remediation != ""
+        assert "Set-Service" in results[0].command
 
-    def test_case_insensitive_running(self):
-        with patch("apotrope.checks.updates.run_powershell", return_value="running"):
+    def test_disabled_case_insensitive(self):
+        with patch("apotrope.checks.updates.run_powershell", return_value="disabled|Stopped"):
             results = updates._check_wu_service()
-        assert results[0].status == Status.PASS
+        assert results[0].status == Status.WARN
 
     def test_empty_output_returns_error(self):
         with patch("apotrope.checks.updates.run_powershell", return_value=""):
@@ -120,10 +135,11 @@ class TestCheckWuService:
             results = updates._check_wu_service()
         assert results[0].status == Status.ERROR
 
-    def test_details_include_service_status(self):
-        with patch("apotrope.checks.updates.run_powershell", return_value="Stopped"):
+    def test_details_include_start_type_and_state(self):
+        with patch("apotrope.checks.updates.run_powershell", return_value="Automatic|Stopped"):
             results = updates._check_wu_service()
         assert "Stopped" in results[0].details
+        assert "Automatic" in results[0].details
 
 
 # ---------------------------------------------------------------------------
@@ -172,21 +188,21 @@ class TestCheckPendingUpdates:
 class TestUpdatesRun:
     def test_returns_three_results(self):
         with patch("apotrope.checks.updates.run_powershell",
-                   side_effect=[_date_str(5), "Running", "0"]), \
+                   side_effect=[_date_str(5), "Automatic|Running", "0"]), \
              patch("apotrope.checks.updates._now", return_value=_REF):
             results = updates.run()
         assert len(results) == 3
 
     def test_all_results_have_category_patching(self):
         with patch("apotrope.checks.updates.run_powershell",
-                   side_effect=[_date_str(5), "Running", "0"]), \
+                   side_effect=[_date_str(5), "Automatic|Running", "0"]), \
              patch("apotrope.checks.updates._now", return_value=_REF):
             results = updates.run()
         assert all(r.category == "Patching" for r in results)
 
     def test_error_in_one_check_does_not_stop_others(self):
         with patch("apotrope.checks.updates.run_powershell",
-                   side_effect=[ApotropeError("fail"), "Running", "0"]), \
+                   side_effect=[ApotropeError("fail"), "Automatic|Running", "0"]), \
              patch("apotrope.checks.updates._now", return_value=_REF):
             results = updates.run()
         assert len(results) == 3

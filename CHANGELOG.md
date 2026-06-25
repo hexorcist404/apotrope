@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.1.9] - 2026-06-25
+
+### Fixed
+- **Terminal output now renders the brand colors and wordmark correctly in
+  cmd.exe and PowerShell.** The packaged exe puts the console into UTF-8 +
+  virtual-terminal mode and emits true 24-bit color instead of falling back to
+  Rich's legacy 16-color Windows path, which downsampled the brand green
+  (`#2bff88`) into cyan and could leave the wordmark glyph as a missing-glyph
+  box under a legacy console code page. The live terminal now matches the
+  generated screenshots.
+- **The Windows Update Service check is deterministic.** It keys off the
+  service *start type* rather than its momentary run state: a normally-idle
+  (Stopped) Automatic/Manual `wuauserv` reports PASS, and only a **Disabled**
+  start type is a WARN. Previously the service's normal idle-stop produced a
+  shell- and timing-dependent WARN that changed the overall score between runs.
+
+### Changed
+- The terminal brand wordmark uses the filled-circle glyph (U+25CF), which is
+  present in the default Windows console font (Consolas) so it renders without
+  relying on font fallback; the ASCII fallback for legacy terminals is unchanged.
+
+---
+
 ## [0.1.8] - 2026-06-24
 
 ### Added
