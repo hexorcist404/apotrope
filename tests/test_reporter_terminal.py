@@ -705,6 +705,70 @@ class TestMakeConsole:
         assert Reporter()._make_console().no_color is False
 
 
+class TestMakeConsoleModern:
+    def test_truecolor_forced_on_real_terminal(self):
+        with mock.patch("rich.console.Console.is_terminal",
+                        new_callable=mock.PropertyMock, return_value=True), \
+             mock.patch("apotrope.reporter._modernize_windows_console") as modernize:
+            console = Reporter(no_color=False)._make_console()
+            assert console.color_system == "truecolor"
+            assert console.legacy_windows is False
+        modernize.assert_called_once()
+
+    def test_not_a_terminal_skips_truecolor_and_modernize(self):
+        with mock.patch("rich.console.Console.is_terminal",
+                        new_callable=mock.PropertyMock, return_value=False), \
+             mock.patch("apotrope.reporter._modernize_windows_console") as modernize:
+            console = Reporter(no_color=False)._make_console()
+        assert console.no_color is False
+        modernize.assert_not_called()
+
+    def test_no_color_skips_truecolor_and_modernize(self):
+        with mock.patch("rich.console.Console.is_terminal",
+                        new_callable=mock.PropertyMock, return_value=True), \
+             mock.patch("apotrope.reporter._modernize_windows_console") as modernize:
+            console = Reporter(no_color=True)._make_console()
+        assert console.no_color is True
+        modernize.assert_not_called()
+
+
+class TestModernizeWindowsConsole:
+    def test_noop_on_non_windows(self):
+        from apotrope.reporter import _modernize_windows_console
+        with mock.patch.object(sys, "platform", "linux"):
+            _modernize_windows_console()  # no windll on Linux → must not raise
+
+    def test_enables_vt_and_utf8_on_windows(self):
+        from apotrope import reporter
+        k32 = mock.MagicMock()
+        k32.GetConsoleMode.return_value = 1   # a console is attached
+        windll = mock.MagicMock(kernel32=k32)
+        with mock.patch.object(sys, "platform", "win32"), \
+             mock.patch("ctypes.windll", windll, create=True):
+            reporter._modernize_windows_console()
+        k32.SetConsoleMode.assert_called_once()
+        k32.SetConsoleOutputCP.assert_called_once_with(65001)
+
+    def test_bails_when_stdout_redirected(self):
+        from apotrope import reporter
+        k32 = mock.MagicMock()
+        k32.GetConsoleMode.return_value = 0   # no console handle
+        windll = mock.MagicMock(kernel32=k32)
+        with mock.patch.object(sys, "platform", "win32"), \
+             mock.patch("ctypes.windll", windll, create=True):
+            reporter._modernize_windows_console()
+        k32.SetConsoleMode.assert_not_called()
+        k32.SetConsoleOutputCP.assert_not_called()
+
+    def test_swallows_api_exception(self):
+        from apotrope import reporter
+        windll = mock.MagicMock()
+        windll.kernel32.GetStdHandle.side_effect = OSError("boom")
+        with mock.patch.object(sys, "platform", "win32"), \
+             mock.patch("ctypes.windll", windll, create=True):
+            reporter._modernize_windows_console()  # must not raise
+
+
 class TestGlyphHelpers:
     def test_console_is_unicode_for_utf8(self):
         assert _console_is_unicode(SimpleNamespace(encoding="utf-8")) is True

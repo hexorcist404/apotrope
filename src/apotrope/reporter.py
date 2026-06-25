@@ -163,7 +163,7 @@ def _glyphs(console) -> dict[str, str]:
     """Resolve the glyph set for *console*, falling back to ASCII when needed."""
     if _console_is_unicode(console):
         return {
-            "brand": "◈", "rail": "▌", "bar_full": "█", "bar_empty": "░",
+            "brand": "●", "rail": "▌", "bar_full": "█", "bar_empty": "░",
             "pass": "✓", "fail": "✗", "warn": "!", "info": "i", "error": "·",
             "flag": "⚑", "arrow": "→", "sep": "·",
             "box_tl": "┌", "box_tr": "┐", "box_bl": "└", "box_br": "┘",
@@ -176,6 +176,42 @@ def _glyphs(console) -> dict[str, str]:
         "box_tl": "+", "box_tr": "+", "box_bl": "+", "box_br": "+",
         "box_h": "-", "box_v": "|",
     }
+
+
+def _modernize_windows_console() -> None:
+    """Put the Windows console into UTF-8 + VT mode, like PowerShell does.
+
+    Two best-effort, idempotent kernel32 calls on the stdout console handle:
+
+    * ``ENABLE_VIRTUAL_TERMINAL_PROCESSING`` so 24-bit ANSI color sequences are
+      honored instead of downsampled through Rich's legacy 16-color Windows
+      path (the brand green ``#2bff88`` otherwise collides into cyan).
+    * ``SetConsoleOutputCP(65001)`` so byte output is interpreted as UTF-8 and
+      glyphs such as the brand wordmark render via the console's font fallback
+      instead of a missing-glyph box — mirroring ``[Console]::OutputEncoding``.
+
+    No-op on non-Windows, when stdout is redirected (no console handle), or on
+    any API error. ``import ctypes`` is deferred past the platform guard so the
+    module imports cleanly where ``ctypes.windll`` is absent (e.g. Linux CI).
+    """
+    import sys
+
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        std_output_handle = -11
+        enable_vt_processing = 0x0004
+        handle = kernel32.GetStdHandle(std_output_handle)
+        mode = ctypes.c_uint32()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return  # redirected / no console attached
+        kernel32.SetConsoleMode(handle, mode.value | enable_vt_processing)
+        kernel32.SetConsoleOutputCP(65001)
+    except Exception:
+        return
 
 
 def _text(*segments):
@@ -819,15 +855,29 @@ class Reporter:
 
         from rich.console import Console
 
-        # Check data (details/remediation) may contain characters a non-UTF-8
-        # console (e.g. cp1252) cannot encode; degrade them to '?' rather than
-        # letting the report crash mid-render.
+        # Force UTF-8 stdout so brand glyphs (e.g. the wordmark) emit as clean
+        # UTF-8 regardless of the locale code page, and degrade any unencodable
+        # check data to '?' rather than crashing mid-render. Under UTF-8 every
+        # glyph we emit is encodable, so 'replace' never actually fires.
         try:
-            enc = (getattr(sys.stdout, "encoding", None) or "utf-8").lower()
-            if "utf" not in enc.replace("-", ""):
-                sys.stdout.reconfigure(errors="replace")
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
+
+        # On a real terminal with color allowed, put the Windows console into
+        # the same UTF-8 + VT mode PowerShell uses and force Rich onto its
+        # truecolor path. Otherwise Rich takes the legacy 16-color Windows path,
+        # which downsamples the brand palette (green #2bff88 → cyan) and mangles
+        # the wordmark glyph. Redirected/piped stdout and --no-color/NO_COLOR
+        # fall through to Rich's defaults so no escape codes leak into files.
+        if not self.no_color and Console().is_terminal:
+            _modernize_windows_console()
+            return Console(
+                no_color=False,
+                highlight=False,
+                color_system="truecolor",
+                legacy_windows=False,
+            )
         return Console(no_color=self.no_color, highlight=False)
 
     def _print_non_admin_warning(self, console) -> None:

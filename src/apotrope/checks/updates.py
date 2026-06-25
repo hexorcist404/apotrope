@@ -39,8 +39,13 @@ _PS_LAST_HOTFIX = (
     "if ($hf) { $hf.InstalledOn.ToString('yyyy-MM-dd') } else { 'NONE' }"
 )
 
+# Emit "<StartType>|<Status>" e.g. "Automatic|Stopped". StartType is the stable
+# config signal: wuauserv starts on demand/trigger and idles to Stopped on
+# modern Windows, so a momentary Stopped state is normal, not a finding — only a
+# Disabled start type actually blocks updates.
 _PS_WU_SERVICE = (
-    "(Get-Service -Name wuauserv -ErrorAction SilentlyContinue).Status"
+    "$s = Get-Service -Name wuauserv -ErrorAction SilentlyContinue; "
+    "if ($s) { \"$($s.StartType)|$($s.Status)\" }"
 )
 
 # Query pending updates via COM. Returns count or 'UNAVAILABLE' on failure.
@@ -188,24 +193,46 @@ def _check_wu_service() -> list[CheckResult]:
             remediation="Verify the service exists: Get-Service -Name wuauserv",
         )]
 
-    running = output.lower() == "running"
+    start_type, _, status = output.partition("|")
+    start_type = start_type.strip()
+    status = status.strip()
+
+    if start_type.lower() == "disabled":
+        return [CheckResult(
+            category=CATEGORY,
+            check_name="Windows Update Service",
+            status=Status.WARN,
+            severity=Severity.HIGH,
+            description="Checks whether the Windows Update (wuauserv) service can run.",
+            details=(
+                f"Windows Update service start type is Disabled "
+                f"(current state: {status or 'unknown'}). The service cannot "
+                "start, so the system will not receive updates."
+            ),
+            remediation=(
+                "Set the Windows Update service to start automatically (or on "
+                "demand) so updates can install."
+            ),
+            command="Set-Service -Name wuauserv -StartupType Automatic",
+        )]
+
+    # Automatic or Manual, any current Status. wuauserv is started on
+    # demand/trigger and idles to Stopped on modern Windows, so a Stopped state
+    # is normal and deterministic across runs — flagging it produced a
+    # shell-dependent false positive. Only a Disabled start type is a finding.
     return [CheckResult(
         category=CATEGORY,
         check_name="Windows Update Service",
-        status=Status.PASS if running else Status.WARN,
+        status=Status.PASS,
         severity=Severity.HIGH,
-        description="Checks whether the Windows Update (wuauserv) service is running.",
-        details=f"Windows Update service status: {output}.",
-        remediation=(
-            "" if running else
-            "Start the Windows Update service, and set it to start automatically "
-            "if it has been disabled."
+        description="Checks whether the Windows Update (wuauserv) service can run.",
+        details=(
+            f"Windows Update service start type is {start_type or 'unknown'} "
+            f"(current state: {status or 'unknown'}); it starts on demand when "
+            "updates are needed."
         ),
-        command=(
-            "" if running else
-            "Start-Service -Name wuauserv\n"
-            "Set-Service -Name wuauserv -StartupType Automatic"
-        ),
+        remediation="",
+        command="",
     )]
 
 
