@@ -14,13 +14,14 @@ from apotrope.models import Status, Severity
 # Shared mock data
 # ---------------------------------------------------------------------------
 
-def _defender(am=True, rtp=True, av=True, tamper=True, sig_age=1) -> dict:
+def _defender(am=True, rtp=True, av=True, tamper=True, sig_age=1, running_mode="Normal") -> dict:
     return {
         "AMServiceEnabled": am,
         "RealTimeProtectionEnabled": rtp,
         "AntivirusEnabled": av,
         "IsTamperProtected": tamper,
         "AntivirusSignatureAge": sig_age,
+        "AMRunningMode": running_mode,
     }
 
 
@@ -107,13 +108,41 @@ class TestCheckDefender:
         sig = next(r for r in results if "Signature" in r.check_name)
         assert sig.status == Status.PASS
 
-    def test_all_fields_false_rtp_is_still_critical_fail(self):
+    def test_genuinely_disabled_rtp_is_still_critical_fail(self):
+        """Real data (cmdlet succeeded) reporting RTP off is a genuine CRITICAL fail —
+        distinct from the unavailable-provider case below."""
         with patch("apotrope.checks.antivirus.run_powershell_json",
                    return_value=_defender(am=False, rtp=False, av=False, tamper=False, sig_age=999)):
             results = antivirus._check_defender()
+        assert len(results) == 3
         rtp = next(r for r in results if "Real-Time" in r.check_name)
         assert rtp.status == Status.FAIL
         assert rtp.severity == Severity.CRITICAL
+
+    def test_unavailable_provider_returns_single_info(self):
+        """A {"_QueryError": true} marker (cmdlet unavailable) must report unknown, not FAIL."""
+        with patch("apotrope.checks.antivirus.run_powershell_json",
+                   return_value={"_QueryError": True}):
+            results = antivirus._check_defender()
+        assert len(results) == 1
+        assert results[0].status == Status.INFO
+        assert "could not be determined" in results[0].details.lower()
+
+    def test_passive_mode_returns_single_info(self):
+        """Passive Defender (a third-party AV is the active provider) is expected, not a CRITICAL fail."""
+        with patch("apotrope.checks.antivirus.run_powershell_json",
+                   return_value=_defender(rtp=False, running_mode="Passive")):
+            results = antivirus._check_defender()
+        assert len(results) == 1
+        assert results[0].status == Status.INFO
+        assert "passive" in results[0].details.lower()
+
+    def test_empty_response_treated_as_unavailable(self):
+        """Empty output (no JSON at all) is unknown, not a disabled Defender."""
+        with patch("apotrope.checks.antivirus.run_powershell_json", return_value=[]):
+            results = antivirus._check_defender()
+        assert len(results) == 1
+        assert results[0].status == Status.INFO
 
 
 # ---------------------------------------------------------------------------
@@ -142,12 +171,22 @@ class TestCheckSecurityCenter:
         assert "Windows Defender" in results[0].details
         assert "Malwarebytes" in results[0].details
 
-    def test_no_av_registered_returns_critical_fail(self):
-        with patch("apotrope.checks.antivirus.run_powershell_json", return_value=[]):
+    def test_no_av_registered_on_client_returns_critical_fail(self):
+        with patch("apotrope.checks.antivirus.run_powershell_json", return_value=[]), \
+             patch("apotrope.checks.antivirus._is_server_sku", return_value=False):
             results = antivirus._check_security_center()
         assert results[0].status == Status.FAIL
         assert results[0].severity == Severity.CRITICAL
         assert results[0].remediation != ""
+
+    def test_no_av_on_server_sku_returns_info_not_fail(self):
+        """Empty SecurityCenter2 on a Server SKU is expected (it's a client-only feature),
+        so it must report INFO, not a spurious 'no AV registered' CRITICAL."""
+        with patch("apotrope.checks.antivirus.run_powershell_json", return_value=[]), \
+             patch("apotrope.checks.antivirus._is_server_sku", return_value=True):
+            results = antivirus._check_security_center()
+        assert results[0].status == Status.INFO
+        assert results[0].severity == Severity.INFO
 
     def test_ps_error_returns_error(self):
         with patch("apotrope.checks.antivirus.run_powershell_json",
@@ -160,6 +199,32 @@ class TestCheckSecurityCenter:
         with patch("apotrope.checks.antivirus.run_powershell_json", return_value=single):
             results = antivirus._check_security_center()
         assert results[0].status == Status.INFO
+
+
+# ---------------------------------------------------------------------------
+# _is_server_sku
+# ---------------------------------------------------------------------------
+
+class TestIsServerSku:
+    def test_server_product_type_is_server(self):
+        with patch("apotrope.checks.antivirus.get_wmi_object", return_value=[{"ProductType": 3}]):
+            assert antivirus._is_server_sku() is True
+
+    def test_domain_controller_is_server(self):
+        with patch("apotrope.checks.antivirus.get_wmi_object", return_value=[{"ProductType": 2}]):
+            assert antivirus._is_server_sku() is True
+
+    def test_workstation_is_not_server(self):
+        with patch("apotrope.checks.antivirus.get_wmi_object", return_value=[{"ProductType": 1}]):
+            assert antivirus._is_server_sku() is False
+
+    def test_unreadable_product_type_is_not_server(self):
+        with patch("apotrope.checks.antivirus.get_wmi_object", return_value=[]):
+            assert antivirus._is_server_sku() is False
+
+    def test_non_int_product_type_is_not_server(self):
+        with patch("apotrope.checks.antivirus.get_wmi_object", return_value=[{"ProductType": None}]):
+            assert antivirus._is_server_sku() is False
 
 
 # ---------------------------------------------------------------------------

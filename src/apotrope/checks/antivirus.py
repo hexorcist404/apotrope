@@ -6,7 +6,7 @@ import logging
 
 from apotrope.exceptions import ApotropeError
 from apotrope.models import CheckResult, Severity, Status
-from apotrope.utils import run_powershell_json
+from apotrope.utils import get_wmi_object, run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -14,15 +14,19 @@ CATEGORY = "Antivirus"
 
 _SIGNATURE_WARN_DAYS = 7
 
-# Try Defender first; catch handles Server SKUs where Get-MpComputerStatus is absent.
+# Query Windows Defender via Get-MpComputerStatus. The catch fires when the cmdlet is
+# unavailable — Server Core without the Defender module, the module failing to load, or
+# access denied — and emits a distinct {"_QueryError":true} marker, so the Python layer
+# reports "status unknown" instead of mistaking an unreadable provider for a genuinely
+# disabled Defender. AMRunningMode further distinguishes passive mode (a third-party AV
+# is the active provider) from Defender actually being off.
 _PS_DEFENDER = (
     "try { "
     "Get-MpComputerStatus | Select-Object "
     "AMServiceEnabled, RealTimeProtectionEnabled, AntivirusEnabled, "
-    "IsTamperProtected, AntivirusSignatureAge "
+    "IsTamperProtected, AntivirusSignatureAge, AMRunningMode "
     "| ConvertTo-Json -Compress "
-    "} catch { '{\"AMServiceEnabled\":false,\"RealTimeProtectionEnabled\":false,"
-    "\"AntivirusEnabled\":false,\"IsTamperProtected\":false,\"AntivirusSignatureAge\":999}' }"
+    "} catch { '{\"_QueryError\":true}' }"
 )
 
 # SecurityCenter2 lists all registered AV products (requires desktop SKU).
@@ -48,7 +52,13 @@ def run() -> list[CheckResult]:
 
 
 def _check_defender() -> list[CheckResult]:
-    """Check Windows Defender via Get-MpComputerStatus."""
+    """Check Windows Defender via Get-MpComputerStatus.
+
+    Distinguishes three states the build previously conflated into a CRITICAL fail:
+    the provider being unreadable (status unknown), Defender running passively behind
+    a third-party AV (expected, not a finding), and Defender being the active AV (the
+    real-time-protection / signature / tamper checks).
+    """
     try:
         data = run_powershell_json(_PS_DEFENDER)
     except ApotropeError as exc:
@@ -56,6 +66,39 @@ def _check_defender() -> list[CheckResult]:
 
     if isinstance(data, list):
         data = data[0] if data else {}
+
+    if not data or data.get("_QueryError"):
+        return [CheckResult(
+            category=CATEGORY,
+            check_name="Windows Defender",
+            status=Status.INFO,
+            severity=Severity.INFO,
+            description="Reports Windows Defender real-time protection, signatures, and tamper protection.",
+            details=(
+                "Windows Defender status could not be determined — Get-MpComputerStatus "
+                "is unavailable on this system (e.g. Server Core without the Defender "
+                "module, the module failed to load, or access was denied). This is not "
+                "the same as Defender being disabled; see Registered AV Products below "
+                "for whether another antivirus is active."
+            ),
+            remediation="",
+        )]
+
+    running_mode = str(data.get("AMRunningMode") or "").strip()
+    if "passive" in running_mode.lower():
+        return [CheckResult(
+            category=CATEGORY,
+            check_name="Windows Defender",
+            status=Status.INFO,
+            severity=Severity.INFO,
+            description="Reports Windows Defender real-time protection, signatures, and tamper protection.",
+            details=(
+                f"Microsoft Defender is in passive mode ({running_mode}); a third-party "
+                "antivirus is the active provider, so Defender's own real-time protection "
+                "is expected to be off. See Registered AV Products for the active product."
+            ),
+            remediation="",
+        )]
 
     am_enabled = bool(data.get("AMServiceEnabled", False))
     rtp_enabled = bool(data.get("RealTimeProtectionEnabled", False))
@@ -135,6 +178,21 @@ def _check_defender() -> list[CheckResult]:
     return results
 
 
+def _is_server_sku() -> bool:
+    """Return True if this looks like a server SKU (ProductType 2 or 3).
+
+    Windows Security Center (root\\SecurityCenter2) is a client-only feature, so an
+    empty result there is expected on servers and must not be reported as "no AV". When
+    ProductType is unreadable this returns False, falling back to the stricter client
+    behaviour (better a false CRITICAL prompting investigation than a silent miss).
+    """
+    rows = get_wmi_object("Win32_OperatingSystem", properties=["ProductType"])
+    if not rows:
+        return False
+    product_type = rows[0].get("ProductType")
+    return isinstance(product_type, int) and product_type in (2, 3)
+
+
 def _check_security_center() -> list[CheckResult]:
     """List antivirus products registered with Windows Security Center."""
     try:
@@ -145,6 +203,21 @@ def _check_security_center() -> list[CheckResult]:
     products = data if isinstance(data, list) else ([data] if data else [])
 
     if not products:
+        if _is_server_sku():
+            return [CheckResult(
+                category=CATEGORY,
+                check_name="Registered AV Products",
+                status=Status.INFO,
+                severity=Severity.INFO,
+                description="Lists antivirus products registered with Windows Security Center.",
+                details=(
+                    "Windows Security Center (root\\SecurityCenter2) is a client-only "
+                    "feature and is not present on Server SKUs, so registered antivirus "
+                    "products cannot be enumerated here. Check the Windows Defender status "
+                    "above for this machine's protection state."
+                ),
+                remediation="",
+            )]
         return [CheckResult(
             category=CATEGORY,
             check_name="Registered AV Products",
