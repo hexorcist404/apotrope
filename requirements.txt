@@ -1,3 +1,7 @@
+# Pinned convenience install (runtime + test). The authoritative dependency
+# source is pyproject.toml; CI uses `pip install -e ".[dev]"`. Release tools
+# (build, twine) live in the pyproject [dev] extra, not here.
+
 # Runtime dependencies (pinned for reproducibility)
 rich==13.9.4
 jinja2==3.1.6
