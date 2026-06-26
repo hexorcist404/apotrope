@@ -209,30 +209,39 @@ class TestGenerateHtmlReport:
         assert "<!DOCTYPE html>" in html
 
     def test_html_special_chars_escaped(self):
-        """Regression: autoescape=True must escape user-controlled fields.
+        """Regression: autoescape=True must escape user-controlled fields everywhere.
 
         select_autoescape(["html"]) silently returned False for .j2 templates
-        because it checks the last extension (.j2, not .html). Verify that a
-        future change cannot re-introduce raw output.
+        because it checks the last extension (.j2, not .html). Verify a future
+        change cannot re-introduce raw output — in details, remediation, OR the
+        command field, including attribute-context (the data-text search index)
+        injection via a quote breakout.
         """
-        xss_payload = '<script>alert(1)</script>'
+        xss = '<script>alert(1)</script>'
+        attr_breakout = '"><img src=x onerror=alert(2)>'
         report = AuditReport(
-            hostname=f"HOST-{xss_payload}",
+            hostname=f"HOST-{xss}",
             os_version="10.0.22631",
             scan_timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
             scan_duration=1.0,
             results=[
                 CheckResult(
                     "Security", "XSS Check", Status.FAIL, Severity.HIGH,
-                    "desc", f"Details: {xss_payload}", "Remediate",
+                    "desc", f"Details: {xss} {attr_breakout}",
+                    f"Remediate {xss}", f"Set-Item {xss} {attr_breakout}",
                 ),
             ],
             score=50,
             is_admin=False,
         )
         html = self._generate(report)
+        # No raw executable markup survives in any field or in attribute context
         assert "<script>alert(1)</script>" not in html
+        assert "<img src=x" not in html
+        assert '"><img' not in html
+        # Escaped forms are present, proving the payloads were rendered (and escaped)
         assert "&lt;script&gt;" in html
+        assert "&lt;img" in html
 
 
 # ---------------------------------------------------------------------------

@@ -333,6 +333,8 @@
   .code .copy:hover { color:var(--accent); border-color:var(--accent); }
   .code-cmd { font-family:"IBM Plex Mono","Cascadia Code","Consolas",monospace; font-size:12.5px;
               color:var(--green); white-space:pre-wrap; word-break:break-word; padding:11px 13px; margin:0; }
+  .code-warn { font-size:10.5px; line-height:1.5; color:#ffb23d; padding:6px 13px; margin:0;
+               background:rgba(255,178,61,0.06); border-top:1px solid rgba(255,178,61,0.18); }
   .cis { display:inline-flex; align-items:center; gap:6px; font-size:11px; letter-spacing:0.06em;
          color:var(--cyan); border:1px solid rgba(68,224,230,0.28); background:rgba(68,224,230,0.05);
          padding:3px 9px; border-radius:2px; }
@@ -344,6 +346,7 @@
           display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap;
           font-size:11.5px; color:var(--muted); letter-spacing:0.05em; }
   .foot .auth { color:var(--faint); }
+  .foot .share-warn { flex-basis:100%; order:9; color:#ffb23d; opacity:0.92; font-size:11px; }
   .foot a { color:var(--muted); border-bottom:1px dashed transparent; }
   .foot a:hover { color:var(--accent); border-bottom-color:var(--accent); }
 
@@ -553,6 +556,7 @@
                     <button class="copy" type="button">copy</button>
                   </div>
                   <pre class="code-cmd">{{ f.command }}</pre>
+                  <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 {% endif %}
               </div></div>
@@ -569,6 +573,7 @@
     <div class="foot">
       <span class="auth">For authorized security assessment use only · <strong style="color:var(--green);font-weight:600;text-shadow:0 0 9px rgba(43,255,136,0.45)">No data left this machine</strong> · CIS Benchmark {{ cis_version }}{% if cis_caveat %} · <span class="cis-caveat" style="color:#ffb23d">{{ cis_caveat }}</span>{% endif %}</span>
       <span>apotrope.sh · <a href="https://github.com/hexorcist404/apotrope">github.com/hexorcist404/apotrope</a> · MIT</span>
+      <span class="share-warn">⚠ This report contains this machine's hostname, account names, services, and configuration. Review and redact before sharing it outside your organization.</span>
     </div>
 
   </div>
