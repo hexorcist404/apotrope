@@ -17,8 +17,12 @@ from apotrope.models import Status
 
 def _os_json(caption: str = "Microsoft Windows 11 Pro",
              build: str = "22631",
-             version: str = "10.0.22631") -> dict:
-    return {"Caption": caption, "BuildNumber": build, "Version": version}
+             version: str = "10.0.22631",
+             product_type: int | None = 1) -> dict:
+    data: dict = {"Caption": caption, "BuildNumber": build, "Version": version}
+    if product_type is not None:
+        data["ProductType"] = product_type
+    return data
 
 
 def _domain_json(part_of_domain: bool = False,
@@ -41,12 +45,26 @@ _REF_DATE = datetime(2026, 3, 17, tzinfo=timezone.utc)
 
 class TestCheckOsBuild:
     def test_supported_build_returns_pass(self):
-        """Build 22631 (Win11 23H2, EOL Nov 2026) should PASS on ref date."""
-        with patch("apotrope.checks.os_info.run_powershell_json", return_value=_os_json(build="22631")), \
+        """Build 26100 (Win11 24H2, Home/Pro EOL 2026-10-13) should PASS on ref date Mar 2026."""
+        with patch("apotrope.checks.os_info.run_powershell_json", return_value=_os_json(build="26100")), \
              patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
             results = os_info._check_os_build()
         eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
         assert eol.status == Status.PASS
+        assert "24H2" in eol.details
+
+    def test_win11_23h2_eol_under_home_pro_dates(self):
+        """Build 22631 (Win11 23H2) Home/Pro support ended 2025-11-11, so it FAILs on ref date Mar 2026.
+
+        Regression guard for the Fugu/Codex finding: the table previously held 23H2's
+        Enterprise date (2026-11-10), which wrongly reported a consumer box as supported.
+        """
+        with patch("apotrope.checks.os_info.run_powershell_json", return_value=_os_json(build="22631")), \
+             patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
+            results = os_info._check_os_build()
+        eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
+        assert eol.status == Status.FAIL
+        assert "23H2" in eol.details
 
     def test_eol_build_returns_fail(self):
         """Build 19045 (Win10 22H2, EOL Oct 2025) should FAIL on ref date Mar 2026."""
@@ -74,14 +92,101 @@ class TestCheckOsBuild:
         eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
         assert eol.status == Status.WARN
 
-    def test_post_ga_cu_build_resolves_via_range(self):
-        """Build 26200 (post-24H2 CU) should resolve to Windows 11 24H2 and PASS."""
+    def test_25h2_build_resolves(self):
+        """Build 26200 is Windows 11 25H2 (an exact entry), not 24H2 via a range fallback."""
         with patch("apotrope.checks.os_info.run_powershell_json", return_value=_os_json(build="26200")), \
              patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
             results = os_info._check_os_build()
         eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
         assert eol.status == Status.PASS
+        assert "25H2" in eol.details
+        assert "24H2" not in eol.details
+
+    def test_intermediate_build_resolves_to_nearest_lower_base(self):
+        """A build between known bases (e.g. a post-GA CU 26150) resolves to its base release (24H2)."""
+        with patch("apotrope.checks.os_info.run_powershell_json", return_value=_os_json(build="26150")), \
+             patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
+            results = os_info._check_os_build()
+        eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
+        assert eol.status == Status.PASS
         assert "24H2" in eol.details
+
+    def test_26h1_build_resolves(self):
+        """Build 28000 is Windows 11 26H1."""
+        with patch("apotrope.checks.os_info.run_powershell_json", return_value=_os_json(build="28000")), \
+             patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
+            results = os_info._check_os_build()
+        eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
+        assert eol.status == Status.PASS
+        assert "26H1" in eol.details
+
+    def test_server_2025_resolves_distinct_from_client_24h2(self):
+        """Build 26100 is shared: ProductType 3 -> Windows Server 2025; ProductType 1 -> Windows 11 24H2.
+
+        Headline disambiguation test — without ProductType the server was mislabelled as
+        the Win11 client edition with the wrong (much earlier) support date.
+        """
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=_os_json(caption="Microsoft Windows Server 2025",
+                                         build="26100", product_type=3)), \
+             patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
+            server = os_info._check_os_build()
+        server_eol = next(r for r in server if r.check_name == "OS End-of-Support Status")
+        assert "Server 2025" in server_eol.details
+        assert "24H2" not in server_eol.details
+
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=_os_json(build="26100", product_type=1)), \
+             patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
+            client = os_info._check_os_build()
+        client_eol = next(r for r in client if r.check_name == "OS End-of-Support Status")
+        assert "24H2" in client_eol.details
+        assert "Server" not in client_eol.details
+
+    def test_unknown_future_build_warns(self):
+        """A build newer than the whole table must WARN, not silently inherit the newest release."""
+        with patch("apotrope.checks.os_info.run_powershell_json", return_value=_os_json(build="30000")), \
+             patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
+            results = os_info._check_os_build()
+        eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
+        assert eol.status == Status.WARN
+        assert "newer" in eol.details.lower()
+        assert "2026-06-26" in eol.details  # _LAST_VERIFIED stamp
+
+    def test_edition_date_correctness_pins_home_pro_policy(self):
+        """24H2 client between Home/Pro (2026-10-13) and Enterprise (2027-10-12) EOL must FAIL.
+
+        Pins the Home/Pro policy: if the table ever reverted to Enterprise dates this would
+        wrongly PASS.
+        """
+        between = datetime(2026, 12, 1, tzinfo=timezone.utc)
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=_os_json(build="26100", product_type=1)), \
+             patch("apotrope.checks.os_info._now", return_value=between):
+            results = os_info._check_os_build()
+        eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
+        assert eol.status == Status.FAIL
+
+    def test_product_type_none_falls_back_to_client(self):
+        """Missing ProductType resolves the shared 26100 build to the client edition (24H2)."""
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=_os_json(build="26100", product_type=None)), \
+             patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
+            results = os_info._check_os_build()
+        eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
+        assert eol.status == Status.PASS
+        assert "24H2" in eol.details
+
+    def test_server_only_build_resolves_as_server_without_product_type(self):
+        """Build 20348 exists only as Windows Server 2022, so it resolves server-side even without ProductType."""
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=_os_json(caption="Microsoft Windows Server 2022",
+                                         build="20348", product_type=None)), \
+             patch("apotrope.checks.os_info._now", return_value=_REF_DATE):
+            results = os_info._check_os_build()
+        eol = next(r for r in results if r.check_name == "OS End-of-Support Status")
+        assert eol.status == Status.PASS
+        assert "Server 2022" in eol.details
 
     def test_os_version_result_is_info(self):
         with patch("apotrope.checks.os_info.run_powershell_json", return_value=_os_json()), \
