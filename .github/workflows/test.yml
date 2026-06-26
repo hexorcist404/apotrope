@@ -34,3 +34,38 @@ jobs:
         # Branch coverage is enabled in pyproject.toml ([tool.coverage.run]).
         # The threshold can only ratchet up — raise it as coverage improves.
         run: pytest tests/ -q --tb=short --cov --cov-report=term-missing --cov-fail-under=95
+
+  build-exe:
+    name: Build Windows exe (smoke test)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package, dev deps, and PyInstaller
+        run: pip install -e ".[dev]" pyinstaller
+
+      - name: Build apotrope.exe
+        # build_exe.py runs its own --dry-run probe and FAILS if the frozen exe
+        # bundles zero check modules, so this step is itself the smoke test for
+        # the most likely silent failure (collect-submodules finding nothing).
+        run: python build_exe.py --no-icon
+
+      - name: Verify exe --version
+        run: .\dist\apotrope.exe --version
+
+      - name: Verify exe --dry-run
+        run: .\dist\apotrope.exe --dry-run --no-color
+
+      - name: Upload exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apotrope-exe
+          path: dist/apotrope.exe

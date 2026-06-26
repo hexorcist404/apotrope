@@ -29,6 +29,8 @@ MANIFEST
 # PyInstaller
 *.spec
 dist/
+.pyinstaller/
+build/pyinstaller/
 
 # Windows
 Thumbs.db

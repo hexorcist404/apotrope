@@ -5,7 +5,7 @@ Usage:
     python build_exe.py [--no-icon]
 
 The resulting exe is written to dist/apotrope.exe and bundles:
-  - All Python dependencies (rich, jinja2, psutil, ...)
+  - All Python dependencies (rich, jinja2, ...)
   - The Jinja2 HTML template (src/apotrope/templates/report.html.j2)
   - A Windows shield application icon (assets/icon.ico)
 
@@ -107,6 +107,11 @@ def build(use_icon: bool = True) -> int:
         print(f"[build] ERROR: entry point not found at {entry}")
         return 1
 
+    # Keep PyInstaller's intermediate work dir and generated spec OUT of the repo
+    # root: its default workpath is ./build, and a top-level build/ directory
+    # shadows the PyPA `build` package when running `python -m build` from the
+    # repo root. Nest both under .pyinstaller/ (gitignored) so the root stays clean.
+    work_dir = ROOT / ".pyinstaller"
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--onefile",
@@ -114,6 +119,8 @@ def build(use_icon: bool = True) -> int:
         "--add-data", f"{templates_src};templates",
         "--paths", str(ROOT / "src"),
         "--collect-submodules", "apotrope.checks",
+        "--workpath", str(work_dir),
+        "--specpath", str(work_dir),
         "--noconfirm",
         "--clean",
         str(entry),
