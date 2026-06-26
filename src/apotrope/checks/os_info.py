@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from apotrope.exceptions import ApotropeError
@@ -13,62 +14,131 @@ log = logging.getLogger(__name__)
 
 CATEGORY = "System"
 
-# Build number → (friendly name, end-of-support date)
-# Uses Home/Pro dates (most restrictive). Server editions noted where the build overlaps.
+# Windows lifecycle data, reconciled against Microsoft release-health on the date
+# below. Client rows carry Home/Pro (consumer) end-of-servicing dates — the most
+# conservative choice for a posture auditor; the Enterprise/Education date is kept
+# alongside (unused today) so switching policy or going SKU-aware later is a one-line
+# change. Server rows carry the extended-support end date (when security updates stop).
+# Builds shared by a client and a server release (14393, 17763, 26100) appear under
+# BOTH channels and are disambiguated by ProductType, so a server is never labelled a
+# client edition (and vice versa).
 # Source: https://learn.microsoft.com/en-us/windows/release-health/
-_EOL_TABLE: dict[int, tuple[str, datetime]] = {
-    10240: ("Windows 10 1507",               datetime(2017,  5,  9, tzinfo=timezone.utc)),
-    10586: ("Windows 10 1511",               datetime(2017, 10, 10, tzinfo=timezone.utc)),
-    14393: ("Windows 10 1607 / Server 2016", datetime(2027,  1, 12, tzinfo=timezone.utc)),
-    15063: ("Windows 10 1703",               datetime(2018, 10,  9, tzinfo=timezone.utc)),
-    16299: ("Windows 10 1709",               datetime(2019,  4,  9, tzinfo=timezone.utc)),
-    17134: ("Windows 10 1803",               datetime(2019, 11, 12, tzinfo=timezone.utc)),
-    17763: ("Windows 10 1809 / Server 2019", datetime(2029,  1,  9, tzinfo=timezone.utc)),
-    18362: ("Windows 10 1903",               datetime(2020, 12,  8, tzinfo=timezone.utc)),
-    18363: ("Windows 10 1909",               datetime(2021,  5, 11, tzinfo=timezone.utc)),
-    19041: ("Windows 10 2004",               datetime(2021, 12, 14, tzinfo=timezone.utc)),
-    19042: ("Windows 10 20H2",               datetime(2022,  5, 10, tzinfo=timezone.utc)),
-    19043: ("Windows 10 21H1",               datetime(2022, 12, 13, tzinfo=timezone.utc)),
-    19044: ("Windows 10 21H2",               datetime(2023,  6, 13, tzinfo=timezone.utc)),
-    19045: ("Windows 10 22H2",               datetime(2025, 10, 14, tzinfo=timezone.utc)),
-    20348: ("Windows Server 2022",           datetime(2031, 10, 14, tzinfo=timezone.utc)),
-    22000: ("Windows 11 21H2",               datetime(2024, 10,  8, tzinfo=timezone.utc)),
-    22621: ("Windows 11 22H2",               datetime(2025, 10, 14, tzinfo=timezone.utc)),
-    22631: ("Windows 11 23H2",               datetime(2026, 11, 10, tzinfo=timezone.utc)),
-    26100: ("Windows 11 24H2",               datetime(2027, 10, 12, tzinfo=timezone.utc)),
+_LAST_VERIFIED = datetime(2026, 6, 26, tzinfo=timezone.utc)
+
+# Win32_OperatingSystem.ProductType: 1 = Workstation, 2 = Domain Controller, 3 = Server.
+_SERVER_PRODUCT_TYPES = frozenset({2, 3})
+
+
+def _d(year: int, month: int, day: int) -> datetime:
+    return datetime(year, month, day, tzinfo=timezone.utc)
+
+
+@dataclass(frozen=True)
+class _Release:
+    """A Windows release and the date it stops receiving security updates."""
+
+    name: str
+    eol: datetime
+    is_server: bool = False
+    eol_enterprise: datetime | None = None  # client-only; reserved for a SKU-aware policy
+
+    def eol_date(self) -> datetime:
+        return self.eol
+
+
+# (channel, base build) -> release. channel is "client" or "server".
+_RELEASES: dict[tuple[str, int], _Release] = {
+    # Windows 10 client (Home/Pro end of servicing)
+    ("client", 10240): _Release("Windows 10 1507", _d(2017, 5, 9)),
+    ("client", 10586): _Release("Windows 10 1511", _d(2017, 10, 10)),
+    ("client", 14393): _Release("Windows 10 1607", _d(2018, 4, 10)),
+    ("client", 15063): _Release("Windows 10 1703", _d(2018, 10, 9)),
+    ("client", 16299): _Release("Windows 10 1709", _d(2019, 4, 9)),
+    ("client", 17134): _Release("Windows 10 1803", _d(2019, 11, 12)),
+    ("client", 17763): _Release("Windows 10 1809", _d(2020, 11, 10)),
+    ("client", 18362): _Release("Windows 10 1903", _d(2020, 12, 8)),
+    ("client", 18363): _Release("Windows 10 1909", _d(2021, 5, 11)),
+    ("client", 19041): _Release("Windows 10 2004", _d(2021, 12, 14)),
+    ("client", 19042): _Release("Windows 10 20H2", _d(2022, 5, 10)),
+    ("client", 19043): _Release("Windows 10 21H1", _d(2022, 12, 13)),
+    ("client", 19044): _Release("Windows 10 21H2", _d(2023, 6, 13)),
+    ("client", 19045): _Release("Windows 10 22H2", _d(2025, 10, 14)),
+    # Windows 11 client (Home/Pro end of servicing; Enterprise/Education kept for reference)
+    ("client", 22000): _Release("Windows 11 21H2", _d(2023, 10, 10), eol_enterprise=_d(2024, 10, 8)),
+    ("client", 22621): _Release("Windows 11 22H2", _d(2024, 10, 8), eol_enterprise=_d(2025, 10, 14)),
+    ("client", 22631): _Release("Windows 11 23H2", _d(2025, 11, 11), eol_enterprise=_d(2026, 11, 10)),
+    ("client", 26100): _Release("Windows 11 24H2", _d(2026, 10, 13), eol_enterprise=_d(2027, 10, 12)),
+    ("client", 26200): _Release("Windows 11 25H2", _d(2027, 10, 12), eol_enterprise=_d(2028, 10, 10)),
+    ("client", 28000): _Release("Windows 11 26H1", _d(2028, 3, 14), eol_enterprise=_d(2029, 3, 13)),
+    # Windows Server (extended-support end = security updates stop)
+    ("server", 14393): _Release("Windows Server 2016", _d(2027, 1, 12), is_server=True),
+    ("server", 17763): _Release("Windows Server 2019", _d(2029, 1, 9), is_server=True),
+    ("server", 20348): _Release("Windows Server 2022", _d(2031, 10, 14), is_server=True),
+    ("server", 26100): _Release("Windows Server 2025", _d(2034, 11, 14), is_server=True),
 }
 
-# Cumulative updates can push build numbers past the base release build.
-# These ranges catch e.g. 26200 (post-24H2 CU) mapping to "Windows 11 24H2".
-# Sorted descending so the first match wins.
-_EOL_RANGES: list[tuple[int, tuple[str, datetime]]] = [
-    (26100, ("Windows 11 24H2",               datetime(2027, 10, 12, tzinfo=timezone.utc))),
-    (22631, ("Windows 11 23H2",               datetime(2026, 11, 10, tzinfo=timezone.utc))),
-    (22621, ("Windows 11 22H2",               datetime(2025, 10, 14, tzinfo=timezone.utc))),
-    (22000, ("Windows 11 21H2",               datetime(2024, 10,  8, tzinfo=timezone.utc))),
-    (20348, ("Windows Server 2022",           datetime(2031, 10, 14, tzinfo=timezone.utc))),
-    (19041, ("Windows 10 20xx",               datetime(2025, 10, 14, tzinfo=timezone.utc))),
-]
+# Highest known base build per channel, used by the "newer than anything we know" guard.
+_KNOWN_BUILDS: dict[str, list[int]] = {
+    "client": sorted(b for (ch, b) in _RELEASES if ch == "client"),
+    "server": sorted(b for (ch, b) in _RELEASES if ch == "server"),
+}
 
 
-def _lookup_eol(build: int) -> tuple[str, datetime] | None:
-    """Return (friendly_name, eol_date) for a build number, using range fallback.
+class _NewerThanKnown:
+    """Sentinel type: a build newer than every known release on its channel."""
 
-    Tries exact match first, then falls back to the largest known base build
-    that is <= the given build (handles post-GA cumulative update builds).
+
+# A build newer than the whole table must NOT be silently mapped to the newest known
+# release (that would report an unsupported future build as "supported"); callers WARN.
+_NEWER_THAN_KNOWN = _NewerThanKnown()
+
+
+def _channel_for(product_type: int | None, build: int) -> str:
+    """Pick the client/server lifecycle track for a build.
+
+    A build that exists only as a server release always resolves as server. Otherwise
+    ProductType decides; when it is unavailable we assume client, which both matches the
+    historical desktop-only behaviour and fails closed — a server briefly mislabelled as
+    a client reports the *earlier* client EOL rather than a false "supported".
     """
-    if build in _EOL_TABLE:
-        return _EOL_TABLE[build]
-    for min_build, entry in _EOL_RANGES:
-        if build >= min_build:
-            return entry
-    return None
+    if ("server", build) in _RELEASES and ("client", build) not in _RELEASES:
+        return "server"
+    if product_type in _SERVER_PRODUCT_TYPES:
+        return "server"
+    return "client"
+
+
+def _lookup_eol(
+    build: int,
+    product_type: int | None = None,
+    edition: str | None = None,
+) -> tuple[str, datetime] | _NewerThanKnown | None:
+    """Resolve a build to (friendly_name, eol_date), a sentinel, or None.
+
+    Returns ``(name, date)`` for a known release; ``_NEWER_THAN_KNOWN`` when the build is
+    newer than every known release on its channel (caller should WARN rather than assume
+    support); or ``None`` when it is below all known releases. Exact base-build hits win;
+    otherwise the nearest lower base on the same channel resolves it (post-GA cumulative
+    update tolerance). ``edition`` is accepted for a future SKU-aware policy but unused today.
+    """
+    channel = _channel_for(product_type, build)
+    known = _KNOWN_BUILDS[channel]  # always non-empty: both channels are populated
+    if (channel, build) in _RELEASES:
+        rel = _RELEASES[(channel, build)]
+        return (rel.name, rel.eol_date())
+    if build > known[-1]:
+        return _NEWER_THAN_KNOWN
+    base = max((b for b in known if b <= build), default=None)
+    if base is None:
+        return None
+    rel = _RELEASES[(channel, base)]
+    return (rel.name, rel.eol_date())
 
 _UPTIME_WARN_DAYS = 30
 
 _PS_OS = (
     "Get-CimInstance Win32_OperatingSystem "
-    "| Select-Object Caption, BuildNumber, Version "
+    "| Select-Object Caption, BuildNumber, Version, ProductType "
     "| ConvertTo-Json -Compress"
 )
 _PS_UPTIME = (
@@ -127,6 +197,10 @@ def _check_os_build() -> list[CheckResult]:
     except ValueError:
         build = 0
 
+    product_type = data.get("ProductType")
+    if not isinstance(product_type, int) or isinstance(product_type, bool):
+        product_type = None
+
     version_result = CheckResult(
         category=CATEGORY,
         check_name="OS Version",
@@ -138,8 +212,14 @@ def _check_os_build() -> list[CheckResult]:
     )
 
     now = _now()
-    eol_entry = _lookup_eol(build)
-    if eol_entry is not None:
+    eol_entry = _lookup_eol(build, product_type)
+    description = "Checks whether the installed Windows build is still supported by Microsoft."
+    confirm_command = (
+        "[System.Environment]::OSVersion.Version\n"
+        "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').DisplayVersion"
+    )
+
+    if isinstance(eol_entry, tuple):
         friendly_name, eol_date = eol_entry
         if now > eol_date:
             eol_result = CheckResult(
@@ -147,22 +227,21 @@ def _check_os_build() -> list[CheckResult]:
                 check_name="OS End-of-Support Status",
                 status=Status.FAIL,
                 severity=Severity.HIGH,
-                description="Checks whether the installed Windows build is still supported by Microsoft.",
+                description=description,
                 details=(
                     f"{friendly_name} reached end of support on "
                     f"{eol_date.strftime('%Y-%m-%d')}. "
                     f"This build no longer receives security updates."
                 ),
                 remediation=(
-                    "Upgrade to a supported build (Windows 10 22H2) or Windows 11 — "
-                    "the upgrade itself has no single command. Confirm the current "
-                    "build first, then run Windows Update or the Installation Assistant."
+                    "Upgrade to a currently supported Windows release — the upgrade "
+                    "itself has no single command. Confirm the current build first, "
+                    "then run Windows Update or the Installation Assistant."
                 ),
                 command=(
                     "# There is no in-place command for the upgrade — use Windows Update or the\n"
                     "# Windows Installation Assistant. Confirm the current build first:\n"
-                    "[System.Environment]::OSVersion.Version\n"
-                    "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').DisplayVersion"
+                    f"{confirm_command}"
                 ),
             )
         else:
@@ -172,7 +251,7 @@ def _check_os_build() -> list[CheckResult]:
                 check_name="OS End-of-Support Status",
                 status=Status.PASS,
                 severity=Severity.HIGH,
-                description="Checks whether the installed Windows build is still supported by Microsoft.",
+                description=description,
                 details=(
                     f"{friendly_name} is supported until "
                     f"{eol_date.strftime('%Y-%m-%d')} "
@@ -180,13 +259,31 @@ def _check_os_build() -> list[CheckResult]:
                 ),
                 remediation="",
             )
+    elif eol_entry is _NEWER_THAN_KNOWN:
+        eol_result = CheckResult(
+            category=CATEGORY,
+            check_name="OS End-of-Support Status",
+            status=Status.WARN,
+            severity=Severity.HIGH,
+            description=description,
+            details=(
+                f"Build {build_str} is newer than Apotrope's known Windows lifecycle "
+                f"table (last verified {_LAST_VERIFIED.strftime('%Y-%m-%d')}). Confirm "
+                "its support status on the Microsoft release-health page."
+            ),
+            remediation=(
+                "Update Apotrope, or confirm this build's support status on the "
+                "Microsoft release-health page."
+            ),
+            command=confirm_command,
+        )
     else:
         eol_result = CheckResult(
             category=CATEGORY,
             check_name="OS End-of-Support Status",
             status=Status.WARN,
             severity=Severity.HIGH,
-            description="Checks whether the installed Windows build is still supported by Microsoft.",
+            description=description,
             details=(
                 f"Build {build_str} is not in the known support table. "
                 "Verify this is a current supported release."
@@ -195,10 +292,7 @@ def _check_os_build() -> list[CheckResult]:
                 "Confirm the current build and verify it is a supported release on the "
                 "Microsoft support lifecycle page."
             ),
-            command=(
-                "[System.Environment]::OSVersion.Version\n"
-                "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').DisplayVersion"
-            ),
+            command=confirm_command,
         )
 
     return [version_result, eol_result]

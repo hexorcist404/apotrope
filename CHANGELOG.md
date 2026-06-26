@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **OS End-of-Support check is now edition- and SKU-aware and uses the correct
+  consumer (Home/Pro) lifecycle dates.** The build→lifecycle table previously
+  carried Enterprise/Education end-of-servicing dates under a "Home/Pro" label,
+  so a Windows 11 24H2 Home/Pro machine was reported supported until 2027-10-12
+  instead of 2026-10-13, and 23H2 was shown supported roughly a year past its
+  actual consumer end of servicing. It also mapped any build ≥ 26100 to "Windows
+  11 24H2", mislabelling Windows 11 25H2 (build 26200), 26H1 (28000), and Windows
+  Server 2025 (build 26100, which shares 24H2's build). The check now resolves a
+  `(client|server, build)` key using `Win32_OperatingSystem.ProductType`, carries
+  Home/Pro dates for client releases and extended-support dates for server
+  releases, and adds 25H2, 26H1, and Windows Server 2025. Builds newer than the
+  known table now WARN ("verify on the Microsoft release-health page") instead of
+  silently inheriting the newest known release's support date.
+
+---
+
 ## [0.1.9] - 2026-06-25
 
 ### Fixed
