@@ -240,6 +240,12 @@ class TestConfigure:
         updates.configure({"max_update_age_warn": "45"})
         assert updates._WARN_DAYS == 45
 
+    def test_reset_restores_defaults(self):
+        updates.configure({"max_update_age_warn": 45, "max_update_age_fail": 90})
+        updates.reset()
+        assert updates._WARN_DAYS == updates._DEFAULT_WARN_DAYS
+        assert updates._FAIL_DAYS == updates._DEFAULT_FAIL_DAYS
+
 
 class TestNowHelper:
     def test_now_returns_utc_aware_datetime(self):

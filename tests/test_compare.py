@@ -210,6 +210,32 @@ class TestBaselineSerialization:
             os.unlink(path)
 
 
+class TestBaselineTimestampParsing:
+    """load_baseline must convert offset timestamps to UTC, not relabel them (finding #7)."""
+
+    def _load_with_timestamp(self, ts_string: str) -> AuditReport:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+            json.dump({"hostname": "PC", "scan_timestamp": ts_string}, f)
+            path = f.name
+        try:
+            return load_baseline(path)
+        finally:
+            os.unlink(path)
+
+    def test_naive_timestamp_assumed_utc(self):
+        loaded = self._load_with_timestamp("2026-06-25T10:00:00")
+        assert loaded.scan_timestamp == datetime(2026, 6, 25, 10, 0, tzinfo=timezone.utc)
+
+    def test_utc_timestamp_unchanged(self):
+        loaded = self._load_with_timestamp("2026-06-25T10:00:00+00:00")
+        assert loaded.scan_timestamp == datetime(2026, 6, 25, 10, 0, tzinfo=timezone.utc)
+
+    def test_offset_timestamp_converted_not_relabeled(self):
+        # 10:00 at -04:00 is 14:00 UTC; the instant must be converted, not relabeled to 10:00Z.
+        loaded = self._load_with_timestamp("2026-06-25T10:00:00-04:00")
+        assert loaded.scan_timestamp == datetime(2026, 6, 25, 14, 0, tzinfo=timezone.utc)
+
+
 # ---------------------------------------------------------------------------
 # One-sided good results count as unchanged
 # ---------------------------------------------------------------------------

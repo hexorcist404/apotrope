@@ -13,21 +13,37 @@ log = logging.getLogger(__name__)
 
 CATEGORY = "Patching"
 
-_FAIL_DAYS = 60   # CRITICAL: no updates installed in this many days
-_WARN_DAYS = 30   # HIGH: no updates installed in this many days
+_DEFAULT_FAIL_DAYS = 60   # CRITICAL: no updates installed in this many days
+_DEFAULT_WARN_DAYS = 30   # HIGH: no updates installed in this many days
+
+_FAIL_DAYS = _DEFAULT_FAIL_DAYS
+_WARN_DAYS = _DEFAULT_WARN_DAYS
 
 
 def configure(thresholds: dict) -> None:
     """Apply profile threshold overrides for this module.
 
     Recognised keys: ``max_update_age_warn`` (int days), ``max_update_age_fail`` (int days).
-    Called by the scanner when a profile with thresholds is active.
+    Called by the scanner before run() when a profile with thresholds is active. The
+    scanner calls :func:`reset` afterwards, so an override never leaks into a later scan
+    in the same process.
     """
     global _WARN_DAYS, _FAIL_DAYS  # noqa: PLW0603
     if "max_update_age_warn" in thresholds:
         _WARN_DAYS = int(thresholds["max_update_age_warn"])
     if "max_update_age_fail" in thresholds:
         _FAIL_DAYS = int(thresholds["max_update_age_fail"])
+
+
+def reset() -> None:
+    """Restore the default thresholds, undoing any prior :func:`configure` call.
+
+    The scanner calls this after running the module so a profile's thresholds do not
+    persist into a subsequent scan that uses a different profile or none at all.
+    """
+    global _WARN_DAYS, _FAIL_DAYS  # noqa: PLW0603
+    _WARN_DAYS = _DEFAULT_WARN_DAYS
+    _FAIL_DAYS = _DEFAULT_FAIL_DAYS
 
 # Get the most recently installed hotfix with a valid date.
 # Some hotfixes have a null InstalledOn; filter those out.

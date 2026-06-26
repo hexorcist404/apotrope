@@ -183,7 +183,11 @@ def load_baseline(path: str) -> AuditReport:
             )
             for r in data.get("results", [])
         ]
-        ts = datetime.fromisoformat(data["scan_timestamp"]).replace(tzinfo=timezone.utc)
+        ts = datetime.fromisoformat(data["scan_timestamp"])
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)   # assume naive timestamps are UTC
+        else:
+            ts = ts.astimezone(timezone.utc)        # convert offset timestamps, don't relabel
         return AuditReport(
             hostname=data["hostname"],
             os_version=data.get("os_version", ""),

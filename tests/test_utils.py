@@ -240,6 +240,16 @@ class TestReadRegistry:
         assert "HKLM:\\SOFTWARE\\Test" in called_command
         assert "MyValue" in called_command
 
+    def test_single_quotes_in_path_and_value_are_escaped(self):
+        """A quote in the path or value name is doubled so it can't break out of the PS literal."""
+        with patch("apotrope.utils.subprocess.run", return_value=_mock_ps("")) as mock_run:
+            utils.read_registry("HKLM", "SOFTWARE\\It's", "Quote'Name")
+            called_command = mock_run.call_args[0][0][-1]
+        assert "It''s" in called_command
+        assert "Quote''Name" in called_command
+        # no single (un-doubled) quote sequence survives in the interpolated value
+        assert "Quote'Name" not in called_command
+
 
 # ---------------------------------------------------------------------------
 # get_wmi_object
@@ -299,6 +309,14 @@ class TestGetWmiObject:
             utils.get_wmi_object("SoftwareLicensingProduct", namespace="root\\cimv2")
             called_command = mock_run.call_args[0][0][-1]
         assert "root\\cimv2" in called_command
+
+    def test_single_quotes_in_class_and_properties_are_escaped(self):
+        """Quotes in the class name or a property name are doubled so they can't break the literal."""
+        with patch("apotrope.utils.subprocess.run", return_value=_mock_ps("")) as mock_run:
+            utils.get_wmi_object("Win32_O'Brien", properties=["Wei'rd", "Name"])
+            called_command = mock_run.call_args[0][0][-1]
+        assert "Win32_O''Brien" in called_command
+        assert "Wei''rd" in called_command
 
     def test_class_not_found_returns_empty_list(self):
         with patch(

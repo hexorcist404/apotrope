@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Report-sharing safety guidance.** The README gains a "Sharing reports safely" note,
+  and the HTML report footer now warns that a report embeds the host's name, account
+  names, services, and configuration — review/redact before sharing it outside your
+  organization. Apotrope still never uploads anything; this is about the saved file.
+- **Caution banner on remediation commands.** Each copy-paste PowerShell command in the
+  HTML report now carries a "review before running — runs elevated and can change system
+  settings or require a reboot/maintenance window" note next to its copy button.
+
+### Changed
+- **`psutil` removed from runtime dependencies.** It was declared in `pyproject.toml`
+  but imported nowhere, needlessly inflating the install and the PyInstaller bundle.
+  `build` and `twine` (used by the release workflow) are now declared in the `[dev]`
+  extra so the dev toolchain is described where it is used.
+- **PyInstaller no longer writes a top-level `build/` directory.** `build_exe.py` nests
+  its work directory and generated spec under `.pyinstaller/`, so a local exe build no
+  longer shadows the PyPA `build` package when running `python -m build` from the repo
+  root.
+
 ### Fixed
 - **OS End-of-Support check is now edition- and SKU-aware and uses the correct
   consumer (Home/Pro) lifecycle dates.** The build→lifecycle table previously
@@ -21,6 +40,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   releases, and adds 25H2, 26H1, and Windows Server 2025. Builds newer than the
   known table now WARN ("verify on the Microsoft release-health page") instead of
   silently inheriting the newest known release's support date.
+- **Profile update-age thresholds no longer leak between scans in one process.**
+  `updates.configure()` mutated module-level globals that were never restored, so a
+  `Scanner` reused as library code (or a second `Scanner` with a different profile) could
+  silently keep a previous scan's thresholds. The scanner now restores a module's
+  thresholds after each run via a new `updates.reset()`.
+- **Imported baseline timestamps with a non-UTC offset are converted, not relabeled.**
+  `compare.load_baseline()` used `.replace(tzinfo=utc)`, which preserved the wall-clock
+  and shifted the instant (e.g. `10:00-04:00` became `10:00Z` instead of `14:00Z`).
+  Offset-aware timestamps are now converted with `astimezone(utc)`; naive timestamps are
+  still assumed UTC.
+- **Shared PowerShell helpers escape interpolated string arguments.** `read_registry()`
+  and `get_wmi_object()` now double single quotes in registry paths/value names and WMI
+  class/namespace/property names before building the command, so a quote in a (future,
+  dynamic) argument cannot break out of the PowerShell string literal.
+- **Windows Defender / AV status now distinguishes "unknown" from "disabled."** When
+  `Get-MpComputerStatus` is unavailable (Server Core without the Defender module, the
+  module fails to load, or access is denied) the check reports a single INFO "status could
+  not be determined" instead of a synthetic all-disabled result that surfaced as a CRITICAL
+  real-time-protection failure. Defender running in **passive mode** (a third-party AV is
+  the active provider, detected via `AMRunningMode`) is likewise reported as INFO, not a
+  CRITICAL fail. And an empty Windows Security Center result on a **Server SKU** — where
+  `root\SecurityCenter2` is a client-only feature — now reports INFO rather than a spurious
+  "no antivirus registered" CRITICAL. A genuinely disabled Defender (the cmdlet succeeds and
+  reports protection off) still correctly fails CRITICAL.
+
+### CI
+- **A `build-exe` job builds and smoke-tests `apotrope.exe` on `windows-latest`**
+  (`build_exe.py --no-icon`, then `--version` and `--dry-run`) and uploads the exe as a
+  workflow artifact. This catches a broken or empty frozen build on every PR; it
+  complements — and does not replace — the manual on-hardware check before a release,
+  which CI cannot perform (console color/glyph rendering).
+
+### Tests
+- The HTML XSS-escaping regression test now also covers the `remediation` and `command`
+  fields and an attribute-context (quote-breakout) payload, not just hostname/details.
 
 ---
 

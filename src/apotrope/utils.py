@@ -128,6 +128,24 @@ def run_powershell_json(command: str, timeout: int = 30) -> dict | list:
 
 
 # ---------------------------------------------------------------------------
+# PowerShell string-literal escaping
+# ---------------------------------------------------------------------------
+
+
+def _ps_single_quote(value: str) -> str:
+    """Escape a string for safe interpolation inside a single-quoted PowerShell literal.
+
+    PowerShell escapes a single quote inside a single-quoted string by doubling it
+    (``'`` -> ``''``). Apply this to any caller-supplied value (registry paths, value
+    names, WMI class/namespace, property names) before building a command string, so a
+    stray quote cannot break out of the literal and inject PowerShell. The structured
+    helpers below build scripts from typed arguments and are the right chokepoint for
+    this; ``run_powershell`` itself intentionally does not escape — it is the raw runner.
+    """
+    return value.replace("'", "''")
+
+
+# ---------------------------------------------------------------------------
 # Registry reader
 # ---------------------------------------------------------------------------
 
@@ -159,12 +177,13 @@ def read_registry(hive: str, path: str, value_name: str) -> str | int | None:
             f"Supported: {', '.join(sorted(_SUPPORTED_HIVES))}"
         )
 
-    ps_path = f"{hive_upper}:\\{path}"
+    ps_path = _ps_single_quote(f"{hive_upper}:\\{path}")
+    safe_value = _ps_single_quote(value_name)
     # Emit nothing (exit 0) when key/value is absent; print the value otherwise
     script = (
         f"$p = Get-ItemProperty -LiteralPath '{ps_path}' "
-        f"-Name '{value_name}' -ErrorAction SilentlyContinue; "
-        f"if ($null -ne $p) {{ $p.'{value_name}' }}"
+        f"-Name '{safe_value}' -ErrorAction SilentlyContinue; "
+        f"if ($null -ne $p) {{ $p.'{safe_value}' }}"
     )
 
     try:
@@ -209,9 +228,16 @@ def get_wmi_object(
         treat an empty list as "could not retrieve data" and produce an
         appropriate ``Status.ERROR`` result.
     """
-    select = ", ".join(properties) if properties else "*"
+    if properties:
+        # Quote each property name so it is a literal Select-Object argument and any
+        # quote in a (future, caller-supplied) name cannot break out of the literal.
+        select = ", ".join(f"'{_ps_single_quote(p)}'" for p in properties)
+    else:
+        select = "*"
+    safe_class = _ps_single_quote(wmi_class)
+    safe_namespace = _ps_single_quote(namespace)
     script = (
-        f"Get-CimInstance -ClassName '{wmi_class}' -Namespace '{namespace}' "
+        f"Get-CimInstance -ClassName '{safe_class}' -Namespace '{safe_namespace}' "
         f"| Select-Object {select} "
         f"| ConvertTo-Json -Depth 3 -Compress"
     )
