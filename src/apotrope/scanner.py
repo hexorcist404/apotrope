@@ -219,7 +219,11 @@ class Scanner:
                 remediation="",
             )]
 
-        # Pass profile thresholds to modules that declare configure()
+        # Pass profile thresholds to modules that declare configure(). Track whether we
+        # applied an override so we can undo it after run() via reset() — otherwise a
+        # profile's thresholds would leak into a later scan in the same process, since
+        # Scanner is reusable library code, not only a one-shot CLI.
+        configured = False
         if (
             self.profile
             and self.profile.thresholds
@@ -227,6 +231,7 @@ class Scanner:
         ):
             try:
                 module.configure(self.profile.thresholds)
+                configured = True
             except Exception as exc:
                 log.warning("configure() on %s failed: %s", module.__name__, exc)
 
@@ -249,6 +254,13 @@ class Scanner:
                 details=str(exc),
                 remediation="Run with --log-level DEBUG for more detail.",
             )]
+        finally:
+            # Undo any per-scan threshold override so it cannot leak into a later scan.
+            if configured and callable(getattr(module, "reset", None)):
+                try:
+                    module.reset()
+                except Exception as exc:
+                    log.warning("reset() on %s failed: %s", module.__name__, exc)
 
         duration = time.monotonic() - t_start
         for r in results:

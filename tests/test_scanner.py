@@ -54,6 +54,80 @@ def _pass_result(category: str = "Test") -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# Profile threshold configuration must not leak across runs (finding #2)
+# ---------------------------------------------------------------------------
+
+class TestThresholdConfigureReset:
+    def _configurable_module(self, calls: list) -> ModuleType:
+        """A fake module that records its configure/run/reset call order."""
+        mod = ModuleType("configurable_mod")
+        setattr(mod, "CATEGORY", "Configurable")
+
+        def _configure(thresholds):
+            calls.append(("configure", dict(thresholds)))
+
+        def _reset():
+            calls.append(("reset", None))
+
+        def _run():
+            calls.append(("run", None))
+            return []
+
+        setattr(mod, "configure", _configure)
+        setattr(mod, "reset", _reset)
+        setattr(mod, "run", _run)
+        return mod
+
+    def test_configure_then_run_then_reset_in_order(self):
+        from apotrope.profile import Profile
+        calls: list = []
+        module = self._configurable_module(calls)
+        scanner = Scanner(profile=Profile(thresholds={"max_update_age_fail": 90}))
+        scanner._run_module(module)
+        assert [c[0] for c in calls] == ["configure", "run", "reset"]
+
+    def test_no_profile_means_no_configure_or_reset(self):
+        calls: list = []
+        module = self._configurable_module(calls)
+        scanner = Scanner(profile=None)
+        scanner._run_module(module)
+        assert [c[0] for c in calls] == ["run"]
+
+    def test_reset_failure_is_swallowed(self):
+        """A module whose reset() raises must not break the scan."""
+        from apotrope.profile import Profile
+        calls: list = []
+        module = self._configurable_module(calls)
+
+        def _bad_reset():
+            raise RuntimeError("boom")
+
+        setattr(module, "reset", _bad_reset)
+        scanner = Scanner(profile=Profile(thresholds={"max_update_age_fail": 90}))
+        results = scanner._run_module(module)  # must not raise
+        assert isinstance(results, list)
+        assert [c[0] for c in calls] == ["configure", "run"]
+
+    def test_real_updates_thresholds_do_not_leak_after_run(self):
+        """The real updates module's profile thresholds must be reset after it runs, so a
+        later scan in the same process is not silently using the previous profile's values."""
+        from apotrope.checks import updates
+        from apotrope.profile import Profile
+        default_fail, default_warn = updates._DEFAULT_FAIL_DAYS, updates._DEFAULT_WARN_DAYS
+        scanner = Scanner(profile=Profile(thresholds={
+            "max_update_age_fail": default_fail + 30,
+            "max_update_age_warn": default_warn + 30,
+        }))
+        try:
+            with patch("apotrope.checks.updates.run_powershell", return_value="NONE"):
+                scanner._run_module(updates)
+            assert updates._FAIL_DAYS == default_fail
+            assert updates._WARN_DAYS == default_warn
+        finally:
+            updates.reset()
+
+
+# ---------------------------------------------------------------------------
 # Basic construction
 # ---------------------------------------------------------------------------
 
