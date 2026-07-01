@@ -136,13 +136,14 @@
                text-transform:uppercase; color:var(--bright); }
   .nav-links { display:flex; align-items:center; gap:26px; }
   .nav-links a { font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:0.12em; color:var(--muted);
-                 text-transform:uppercase; transition:color .15s; }
+                 text-transform:uppercase; transition:color .15s; white-space:nowrap; }
   .nav-links a:hover, .nav-links a.active { color:var(--bright); }
   .nav-links a.active { color:var(--accent); }
   .nav-cta { font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:0.08em; font-weight:600;
              color:var(--void); background:var(--accent); padding:8px 15px; border-radius:2px;
              box-shadow:0 0 16px rgba(43,255,136,0.3); transition:transform .12s; white-space:nowrap; }
   .nav-cta:hover { transform:translateY(-1px); }
+  @media (max-width:1140px){ .nav-links .nav-compare { display:none; } }
   @media (max-width:760px){ .nav-links { display:none; } }
 
   /* ── Hero ────────────────────────────────────────────────────────────────── */
@@ -313,6 +314,8 @@
         <a href="#checks">Checks</a>
         <a href="#scoring">Scoring</a>
         <a href="#report">Report</a>
+        <a class="nav-compare" href="/lynis-for-windows/">vs Lynis</a>
+        <a class="nav-compare" href="/vs-cis-cat/">vs CIS-CAT</a>
         <a href="#start">Get Started</a>
         <a href="#faq">FAQ</a>
         <a href="https://github.com/hexorcist404/apotrope">GitHub ↗</a>
