@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="How Apotrope compares to HotCakeX's Harden Windows Security: read-only CIS Benchmark auditing vs applying a hardened baseline. Different jobs that compose — audit, harden, re-audit." />
+  <title>Apotrope vs Harden Windows Security (HotCakeX): Audit vs Apply</title>
+
+  <link rel="canonical" href="https://apotrope.sh/vs-harden-windows-security/" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/favicon-512.png" sizes="512x512" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Apotrope" />
+  <meta property="og:title" content="Apotrope vs Harden Windows Security (HotCakeX)" />
+  <meta property="og:description" content="Different jobs that compose: Harden Windows Security applies a hardened baseline; Apotrope audits read-only against CIS Benchmarks. Audit, harden, re-audit." />
+  <meta property="og:url" content="https://apotrope.sh/vs-harden-windows-security/" />
+  <meta property="og:image" content="https://apotrope.sh/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Apotrope — security posture auditing for Windows, entirely offline." />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Apotrope vs Harden Windows Security (HotCakeX)" />
+  <meta name="twitter:description" content="Harden Windows Security applies a hardened baseline; Apotrope audits read-only against CIS Benchmarks. Different jobs — they compose." />
+  <meta name="twitter:image" content="https://apotrope.sh/og-image.png" />
+  <meta name="twitter:image:alt" content="Apotrope — security posture auditing for Windows, entirely offline." />
+
+  <!-- Structured data: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Should I use Apotrope or Harden Windows Security?", "acceptedAnswer": { "@type": "Answer", "text": "Both, if you like — they do different jobs. Harden Windows Security applies a hardened baseline to your machine; Apotrope is a read-only auditor that scores any Windows box against CIS Benchmarks. Audit with Apotrope, harden with Harden Windows Security or Group Policy, then re-audit." } },
+      { "@type": "Question", "name": "Does Apotrope apply fixes like Harden Windows Security does?", "acceptedAnswer": { "@type": "Answer", "text": "No. Apotrope never changes the machine. Every finding ships with a copy-paste PowerShell fix you review and apply yourself. If you want a tool that applies a full hardened baseline for you, HotCakeX's Harden System Security is the best free option." } },
+      { "@type": "Question", "name": "Is Apotrope affiliated with HotCakeX, Microsoft, or CIS?", "acceptedAnswer": { "@type": "Answer", "text": "No. Apotrope is an independent, MIT-licensed open-source project. Harden Windows Security is an unrelated project by Violet Hansen (HotCakeX). Apotrope references CIS Benchmark control IDs for informational purposes and is not affiliated with or endorsed by CIS." } }
+    ]
+  }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/pages.css" />
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <a class="brand" href="/">
+        <span class="dia">◈</span>
+        <span class="nm">APOTROPE</span>
+      </a>
+      <div class="nav-links">
+        <a href="/#features">Features</a>
+        <a href="/#checks">Checks</a>
+        <a href="/#scoring">Scoring</a>
+        <a href="/vs-cis-cat/">vs CIS-CAT</a>
+        <a href="/lynis-for-windows/">Lynis for Windows</a>
+        <a href="/#faq">FAQ</a>
+        <a href="https://github.com/hexorcist404/apotrope">GitHub ↗</a>
+      </div>
+      <a class="nav-cta" href="https://github.com/hexorcist404/apotrope/releases/latest">↓ Download</a>
+    </div>
+  </nav>
+
+  <header class="page-head">
+    <div class="wrap">
+      <div class="crumbs"><a href="/">apotrope.sh</a> / apotrope vs harden windows security</div>
+      <span class="kicker">// Comparison</span>
+      <h1>Apotrope <span class="g">vs Harden Windows Security</span></h1>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="wrap prose">
+      <p class="short-answer"><b>Short answer:</b> different job. <b>Harden Windows Security</b> <i>changes</i> your machine — it applies a hardened baseline using only official Microsoft features, and it's excellent at that. <b>Apotrope</b> never changes anything: it's a read-only assessor that scores any Windows box against CIS Benchmarks and hands you a report with plain-English fixes. Audit with Apotrope, harden with Harden Windows Security or Group Policy, then re-audit. They compose.</p>
+
+      <p><a href="https://github.com/HotCakeX/Harden-Windows-Security">Harden Windows Security</a>, by Microsoft MVP Violet Hansen (HotCakeX), ships two signed MSIX apps on the Microsoft Store. <b>Harden System Security</b> applies hardening to Windows using only built-in Microsoft features, then verifies workstation compliance against its baseline and reports a security score. <b>AppControl Manager</b> is the deepest free WDAC / App Control for Business tooling around. Its supply-chain posture — SLSA build attestations, signed releases, a relentless release cadence — is a genuine strength.</p>
+
+      <p>Apotrope solves the other half of the problem: knowing where a box stands against a published external benchmark. It's one portable <code>.exe</code> (or <code>pip install apotrope</code>), read-only by design — no install, no registry writes, no network — and it scores against an external yardstick: the CIS Microsoft Windows Benchmarks (Windows 11 v5.0.0 / Windows 10 v4.0.0, selected automatically from the OS build). That matters most when the machine isn't yours to change: a client box during an assessment, a fleet you're only allowed to measure, an audit deliverable that needs a recognized benchmark behind it.</p>
+
+      <p>If you want your own machine hardened and kept hardened, use Harden Windows Security — it's the best free option for that job, and Apotrope deliberately doesn't compete with it. If you need to <i>measure</i> a machine against a published benchmark without touching it, that's Apotrope: drop one exe on the box, get a scored, CIS-mapped, emailable report, leave nothing behind. Then hand the fixing to Harden Windows Security, Group Policy, or the paste-ready PowerShell in Apotrope's own report — and re-audit to prove it worked.</p>
+
+      <h2>Harden Windows Security vs Apotrope</h2>
+      <table class="cmp">
+        <thead>
+          <tr><th></th><th>Harden Windows Security</th><th class="col-ap">Apotrope</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>Maker</th><td>Violet Hansen (HotCakeX), Microsoft MVP</td><td class="col-ap">Independent (hexorcist404)</td></tr>
+          <tr><th>What it does</th><td><b>Applies</b> a hardened baseline; verifies compliance against its baseline</td><td class="col-ap"><b>Audits</b> read-only against CIS Benchmarks</td></tr>
+          <tr><th>Install</th><td>Microsoft Store (signed MSIX apps)</td><td class="col-ap">None — single portable <code>.exe</code>, or pip</td></tr>
+          <tr><th>Benchmark frame</th><td>Its own baseline, built on official Microsoft features</td><td class="col-ap">CIS Win11 v5.0.0 / Win10 v4.0.0, auto-selected</td></tr>
+          <tr><th>System changes</th><td>Yes — that's the job</td><td class="col-ap">None — no writes, no network</td></tr>
+          <tr><th>Automation</th><td>GUI + headless CLI (JSON report, exit codes)</td><td class="col-ap">JSON, exit codes, baseline diff, TOML profiles</td></tr>
+          <tr><th>Output</th><td>GUI score; CLI JSON export</td><td class="col-ap">Scored terminal + HTML + JSON</td></tr>
+          <tr><th>License</th><td>MIT, free</td><td class="col-ap">MIT, free</td></tr>
+        </tbody>
+      </table>
+      <p class="mono" style="font-size:0.78rem;color:var(--faint)">Harden Windows Security releases fast and gains capabilities often — confirm current details at its GitHub before relying on them. Apotrope is not affiliated with HotCakeX, Microsoft, or CIS.</p>
+
+      <h2>FAQ</h2>
+      <div class="faq-list">
+        <details class="faq-item" open>
+          <summary>Should I use Apotrope or Harden Windows Security?</summary>
+          <p>Both, if you like — they do different jobs. Harden Windows Security applies a hardened baseline to your machine; Apotrope is a read-only auditor that scores any Windows box against CIS Benchmarks. Audit with Apotrope, harden with Harden Windows Security or Group Policy, then re-audit.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Does Apotrope apply fixes like Harden Windows Security does?</summary>
+          <p>No. Apotrope never changes the machine. Every finding ships with a copy-paste PowerShell fix you review and apply yourself. If you want a tool that applies a full hardened baseline for you, HotCakeX's Harden System Security is the best free option.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Is Apotrope affiliated with HotCakeX, Microsoft, or CIS?</summary>
+          <p>No. Apotrope is an independent, MIT-licensed open-source project. Harden Windows Security is an unrelated project by Violet Hansen (HotCakeX). Apotrope references CIS Benchmark control IDs for informational purposes and is not affiliated with or endorsed by CIS.</p>
+        </details>
+      </div>
+
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/hexorcist404/apotrope/releases/latest">↓ Download apotrope.exe</a>
+        <a class="btn btn-ghost" href="https://github.com/hexorcist404/apotrope">View on GitHub ↗</a>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>
+        <div>
+          Released under the <a href="https://github.com/hexorcist404/apotrope/blob/main/LICENSE">MIT License</a>
+          · <a href="https://github.com/hexorcist404/apotrope">GitHub</a>
+          · <a href="/vs-cis-cat/">Apotrope vs CIS-CAT Lite</a>
+          · <a href="/lynis-for-windows/">Is there a Lynis for Windows?</a>
+          · <a href="/">Home</a>
+        </div>
+        <div class="foot-auth">For authorized security assessment use only · <span class="nodata">No data left this machine</span></div>
+      </div>
+      <div>◈ apotrope.sh</div>
+    </div>
+  </footer>
+</body>
+</html>
