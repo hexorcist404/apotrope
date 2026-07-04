@@ -88,8 +88,11 @@ no extra flags needed.
 ## Verify Your Download
 
 `apotrope.exe` is not yet Authenticode-signed (no code-signing certificate yet —
-expect a SmartScreen warning on first run). Instead of asking you to trust a
-bare binary, releases are verifiable two ways.
+expect a SmartScreen warning on first run). PyInstaller-packaged executables
+also sometimes trip antivirus machine-learning heuristics, so a few generic
+detections on VirusTotal are expected for this class of binary; if your AV
+quarantines the exe, `pip install apotrope` is the alternative channel.
+Instead of asking you to trust a bare binary, releases are verifiable two ways.
 
 **1. Verify build provenance** — releases **from v0.1.10 onward** are built on
 GitHub-hosted CI and attested at build time. Requires the
