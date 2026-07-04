@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.1.10] - 2026-07-04
 
 ### Added
 - **Report-sharing safety guidance.** The README gains a "Sharing reports safely" note,

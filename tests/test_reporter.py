@@ -243,6 +243,28 @@ class TestGenerateHtmlReport:
         assert "&lt;script&gt;" in html
         assert "&lt;img" in html
 
+    def test_remediation_caution_banner_rendered(self):
+        """A finding with a command renders the review-before-running banner."""
+        with_command = CheckResult(
+            "Firewall", "Public Profile Cmd", Status.FAIL, Severity.HIGH,
+            "desc", "off", "Enable it",
+            "Set-NetFirewallProfile -Profile Public -Enabled True",
+        )
+        html = self._generate(_make_report(extra_results=[with_command]))
+        assert (
+            "Review before running — these commands run elevated and can change "
+            "system settings, or require a reboot or maintenance window." in html
+        )
+
+    def test_share_warning_rendered_in_footer(self):
+        """The footer warns that the report embeds machine-identifying detail."""
+        html = self._generate(_make_report())
+        assert (
+            "This report contains this machine's hostname, account names, "
+            "services, and configuration. Review and redact before sharing it "
+            "outside your organization." in html
+        )
+
 
 # ---------------------------------------------------------------------------
 # JSON report generation
