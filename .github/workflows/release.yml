@@ -1,0 +1,173 @@
+name: Release (Windows exe)
+
+# On v* tag push: runs tests on Windows, builds apotrope.exe on a clean
+# GitHub-hosted runner, attests its build provenance (Sigstore, via GitHub
+# OIDC), generates SHA256SUMS, and creates a DRAFT GitHub release with both
+# attached. The maintainer then downloads the exe FROM THE DRAFT, verifies
+# console rendering (colors/glyphs) on a live machine — the mandatory
+# pre-release gate — and publishes the draft by hand.
+#
+# INVARIANT: the published asset must remain the CI-built exe, byte for byte.
+# Never replace it with a locally built exe — the attestation is bound to the
+# CI build's SHA-256 digest, and `gh attestation verify` would fail for every
+# user who follows the README. The workflow enforces this on its side too: it
+# refuses to touch a release once it has been published (draft-only refresh).
+#
+# workflow_dispatch is a dry-run: build + smoke test + artifact upload only
+# (no attestation, no release).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  build-attest-draft:
+    name: Build, attest, draft release
+    runs-on: windows-latest
+    permissions:
+      contents: write      # create the draft release + upload assets
+      id-token: write      # OIDC identity used to Sigstore-sign the attestation
+      attestations: write  # persist the attestation to the repo's store
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package, dev deps, and PyInstaller
+        run: pip install -e ".[dev]" pyinstaller
+
+      - name: Run tests
+        # Same rationale as publish.yml's gate: test.yml does NOT run on tags.
+        # Deliberately duplicated here on Windows — the OS this exe ships for.
+        run: pytest tests/ -q --tb=short --cov --cov-fail-under=95
+
+      - name: Ensure release icon is present
+        # assets/icon.ico is committed. build_exe.py silently builds WITHOUT
+        # an icon if it is missing (Pillow is not installed here to regenerate
+        # it). Fail loudly rather than ship an iconless release exe.
+        shell: bash
+        run: test -f assets/icon.ico
+
+      - name: Build apotrope.exe (with icon)
+        # No --no-icon: unlike the CI smoke build in test.yml, the released
+        # exe embeds assets/icon.ico. build_exe.py already runs its own
+        # --dry-run probe and fails if zero check modules were bundled.
+        run: python build_exe.py
+
+      - name: Smoke-test exe (--version)
+        # Separate steps so a non-zero exit from either command fails the job;
+        # pwsh only checks the exit code of a step's final native command.
+        run: .\dist\apotrope.exe --version
+
+      - name: Smoke-test exe (--dry-run)
+        run: .\dist\apotrope.exe --dry-run --no-color
+
+      - name: Check exe version matches tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          # tr strips the \r a Windows exe emits; exact token match (not
+          # substring) so tag v0.1.1 can never pass against version 0.1.10.
+          got="$(./dist/apotrope.exe --version | tr -d '\r')"
+          got_ver="${got##* }"
+          echo "tag version: $want / exe reports: $got"
+          if [ "$got_ver" != "$want" ]; then
+            echo "::error::exe --version ('$got') does not report exactly '$want'." \
+                 "Did you forget to bump version in pyproject.toml before tagging?"
+            exit 1
+          fi
+
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd dist
+          sha256sum apotrope.exe > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest build provenance
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v4
+        with:
+          # Attest the checksums file too, so it has the same trust anchor as
+          # the exe rather than only the release page it ships from.
+          subject-path: |
+            dist/apotrope.exe
+            dist/SHA256SUMS
+
+      - name: Upload workflow artifact (dry-run inspection)
+        uses: actions/upload-artifact@v4
+        with:
+          name: apotrope-release
+          path: |
+            dist/apotrope.exe
+            dist/SHA256SUMS
+
+      - name: Create draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          sha="$(cut -d' ' -f1 dist/SHA256SUMS)"
+
+          cat > release_notes.md <<EOF
+          ## Verify your download
+
+          \`\`\`
+          SHA-256 (apotrope.exe): $sha
+          \`\`\`
+
+          Provenance (proves this exe was built by CI in this repo):
+
+          \`\`\`
+          gh attestation verify apotrope.exe --repo $GITHUB_REPOSITORY
+          \`\`\`
+
+          Hash check — PowerShell: \`Get-FileHash .\apotrope.exe -Algorithm SHA256\`
+          or cmd.exe: \`certutil -hashfile apotrope.exe SHA256\` — compare
+          against SHA256SUMS attached below (hex case differs between tools;
+          the comparison is case-insensitive).
+          EOF
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            isdraft="$(gh release view "$tag" --json isDraft --jq .isDraft)"
+            if [ "$isdraft" != "true" ]; then
+              echo "::error::Release $tag is already PUBLISHED. Refusing to overwrite" \
+                   "published assets: users may have recorded their hashes, and the" \
+                   "attestation trust story depends on release assets never changing" \
+                   "after publication. If a rebuild is truly required, delete the" \
+                   "release and tag deliberately and re-push."
+              exit 1
+            fi
+            echo "Draft release for $tag already exists — refreshing assets and notes."
+            gh release upload "$tag" dist/apotrope.exe dist/SHA256SUMS --clobber
+            # Keep the body's stated hash in sync with the refreshed assets.
+            # gh release edit has no --generate-notes; re-add auto-generated
+            # notes from the UI before publishing if wanted.
+            gh release edit "$tag" --notes-file release_notes.md
+          else
+            gh release create "$tag" \
+              --draft \
+              --verify-tag \
+              --title "apotrope $tag" \
+              --notes-file release_notes.md \
+              --generate-notes \
+              dist/apotrope.exe dist/SHA256SUMS
+          fi
+
+          {
+            echo "## Maintainer gate — before publishing the draft"
+            echo "- [ ] Download apotrope.exe FROM THE DRAFT (do not rebuild locally)"
+            echo "- [ ] Verify console rendering (colors/glyphs) on a live machine"
+            echo "- [ ] gh attestation verify apotrope.exe --repo $GITHUB_REPOSITORY"
+            echo "- [ ] Publish the draft in the Releases UI"
+          } >> "$GITHUB_STEP_SUMMARY"

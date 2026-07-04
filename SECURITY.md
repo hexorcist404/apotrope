@@ -4,6 +4,12 @@
 
 Apotrope is a **read-only** security auditing tool. It does not modify system configurations, write to the registry, or change any settings on the machines it scans. All operations are observational only.
 
+## Why Apotrope Runs PowerShell with `-ExecutionPolicy Bypass`
+
+Apotrope reads system configuration through short-lived PowerShell subprocesses started with `-ExecutionPolicy Bypass`. The flag exists so the tool runs under any *locally configured* execution policy — including the default `Restricted` — without asking you to change it. An execution policy enforced through Group Policy (the `MachinePolicy`/`UserPolicy` scopes) still takes precedence: the flag doesn't and can't override it, and on such machines some queries may come back limited. The flag applies only to each read-only subprocess: no scripts are written to disk, and the machine's execution-policy setting is never modified. The README section ["How Apotrope queries your system"](README.md#how-apotrope-queries-your-system) has the detail.
+
+If you find an Apotrope query that is *not* read-only, that is a reportable vulnerability — see below.
+
 ## Supported Versions
 
 | Version  | Supported          |

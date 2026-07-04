@@ -66,3 +66,8 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # PEP 740 attestations are already the default for Trusted
+          # Publishing, but pin it explicitly: PyPI provenance is part of our
+          # trust story and must not silently change with an upstream default.
+          attestations: true
