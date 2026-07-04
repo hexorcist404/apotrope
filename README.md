@@ -32,17 +32,18 @@ of checks (BitLocker, some policy reads) just come back limited.
 
 ### How Apotrope compares
 
-| | Apotrope | CIS-CAT Lite | HardeningKitty | Lynis |
-|---|---|---|---|---|
-| Platform | Windows 10/11 | Windows (+others) | Windows | Linux/macOS/BSD |
-| Install | Single `.exe` or `pip` | Java app | PowerShell module | Shell script |
-| Account / signup | None | Yes¹ | None | None |
-| Mode | Read-only audit | Read-only audit | Audit **and** apply¹ | Read-only audit |
-| CIS mapping | CIS Win11 v5.0.0 / Win10 v4.0.0 | CIS (authoritative) | CIS / Microsoft / BSI¹ | CIS / various |
-| Output | Score + HTML + JSON | Scored HTML | CSV¹ | Terminal + log |
-| License | MIT | Free tier / paid Pro | MIT¹ | GPLv3 |
+| | Apotrope | CIS-CAT Lite | HardeningKitty | Harden Windows Security (HotCakeX) | Lynis |
+|---|---|---|---|---|---|
+| Platform | Windows 10/11 | Windows (+others) | Windows | Windows¹ | Linux/macOS/BSD |
+| Install | Single `.exe` or `pip` | Java app | PowerShell module | Microsoft Store (MSIX)¹ | Shell script |
+| Account / signup | None | Yes¹ | None | None¹ | None |
+| Mode | Read-only audit | Read-only audit | Audit **and** apply¹ | Applies hardening; verifies its own baseline¹ | Read-only audit |
+| CIS mapping | CIS Win11 v5.0.0 / Win10 v4.0.0 | CIS (authoritative) | CIS / Microsoft / BSI¹ | Own baseline (not CIS)¹ | CIS / various |
+| Automation | JSON, exit codes, baseline diff, TOML profiles | Scripted runs¹ | PowerShell-native¹ | GUI + headless CLI (JSON, exit codes)¹ | CLI + log |
+| Output | Score + HTML + JSON | Scored HTML | CSV¹ | GUI score; CLI JSON export¹ | Terminal + log |
+| License | MIT | Free tier / paid Pro | MIT¹ | MIT | GPLv3 |
 
-¹ Verify current details with each project before relying on them. Lynis is listed for context; it does not run on Windows.
+¹ Verify current details with each project before relying on them. Lynis is listed for context; it does not run on Windows. Harden Windows Security does a different job — it **applies** a hardened baseline (and is excellent at it) rather than auditing against an external benchmark; see the [FAQ](#faq).
 
 ---
 
@@ -81,6 +82,59 @@ Then open `report.html` in your browser.
 
 Every issue is shown with a copy-paste-ready PowerShell command by default —
 no extra flags needed.
+
+---
+
+## Verify Your Download
+
+`apotrope.exe` is not yet Authenticode-signed (no code-signing certificate yet —
+expect a SmartScreen warning on first run). Instead of asking you to trust a
+bare binary, releases are verifiable two ways.
+
+**1. Verify build provenance** — releases **from v0.1.10 onward** are built on
+GitHub-hosted CI and attested at build time. Requires the
+[GitHub CLI](https://cli.github.com/), logged in with any GitHub account:
+
+```powershell
+gh attestation verify .\apotrope.exe --repo hexorcist404/apotrope
+```
+
+A successful result proves the file was built by a GitHub Actions workflow in
+this repository and hasn't been altered since — not built on someone's laptop,
+not modified in transit. The output shows exactly which workflow, commit, and
+tag produced the file: check that it names `release.yml` and the tag you
+downloaded. (This proves *origin*, not correctness — the source is right here
+for that.)
+
+**2. Verify the SHA-256 hash** against the release notes and the `SHA256SUMS`
+file attached to releases from v0.1.10 onward:
+
+```powershell
+Get-FileHash .\apotrope.exe -Algorithm SHA256
+```
+
+or in Command Prompt:
+
+```bat
+certutil -hashfile apotrope.exe SHA256
+```
+
+(Hex case differs between tools; the comparison is case-insensitive.) Honest
+caveat: the hash is published on the same release page as the exe, so this
+step catches download corruption and tampered mirrors — not a compromised
+repository. Step 1 is the authenticity check; this is the quick integrity
+check.
+
+**Prefer not to run a downloaded exe at all?** `pip install apotrope` gets the
+same tool from PyPI, where every release is published straight from CI via
+[trusted publishing](https://docs.pypi.org/trusted-publishers/) (OpenID
+Connect, no long-lived tokens) with [PEP 740](https://peps.python.org/pep-0740/)
+attestations — visible on the PyPI project page; pip itself doesn't verify
+attestations at install time yet.
+
+> **Note:** v0.1.9 and older were built and attached by hand, before CI-built
+> releases existed. They cannot carry build-provenance attestations — verify
+> them by hash instead (v0.1.9's SHA-256 is published in its release notes).
 
 ---
 
@@ -133,11 +187,12 @@ apotrope
 ### How Apotrope queries your system
 
 Apotrope uses PowerShell subprocesses with `-ExecutionPolicy Bypass` to read system
-configuration. This flag is required so the tool can run on machines with any execution
-policy setting — including the default `Restricted` policy — without requiring you to
-permanently change your policy. **No scripts are written to disk.** Each command is a
-read-only query passed directly to the PowerShell process; the bypass applies only to
-that subprocess and does not change the machine's policy setting.
+configuration. This flag is required so the tool can run under any locally configured
+execution policy — including the default `Restricted` — without requiring you to
+change your policy. (An execution policy enforced through Group Policy takes
+precedence and is not overridden.) **No scripts are written to disk.** Each command is
+a read-only query passed directly to the PowerShell process; the bypass applies only
+to that subprocess and does not change the machine's policy setting.
 
 ### Sharing reports safely
 
@@ -402,6 +457,31 @@ def run() -> list[CheckResult]:
 ```
 
 The scanner auto-discovers all modules in `checks/` — no registration needed.
+
+---
+
+## FAQ
+
+### How is this different from Harden Windows Security (HotCakeX)?
+
+Different job. [Harden Windows Security](https://github.com/HotCakeX/Harden-Windows-Security)
+changes your machine to a hardened baseline — it's excellent at that. Apotrope
+never changes anything; it's a read-only assessor that scores any box against
+CIS Benchmarks. Audit with Apotrope, harden with Harden Windows Security or
+Group Policy, then re-audit. They compose.
+
+### How do I verify that my download is legitimate?
+
+See [Verify Your Download](#verify-your-download): check the SHA-256 published
+with the release, and — from v0.1.10 onward — verify CI build provenance with
+`gh attestation verify`. Or skip the exe entirely with `pip install apotrope`.
+
+### Is Apotrope affiliated with CIS?
+
+No. Apotrope independently references CIS Benchmark control IDs for
+informational purposes. It is not affiliated with, endorsed by, or sponsored by
+CIS. For the official benchmarks and tooling, see
+[cisecurity.org](https://www.cisecurity.org).
 
 ---
 
