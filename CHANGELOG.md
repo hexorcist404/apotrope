@@ -65,7 +65,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   "no antivirus registered" CRITICAL. A genuinely disabled Defender (the cmdlet succeeds and
   reports protection off) still correctly fails CRITICAL.
 
+### Docs
+- **README: Harden Windows Security (HotCakeX) joins the comparison table,** which
+  also gains an Automation row, plus a new FAQ section ("How is this different from
+  Harden Windows Security?", download verification, CIS affiliation) and a "Verify
+  Your Download" section documenting build-provenance attestations, SHA-256
+  checking, and the PyPI trusted-publishing channel as the exe-free alternative.
+- **SECURITY.md explains why PowerShell subprocesses use `-ExecutionPolicy Bypass`**
+  (read-only queries, nothing written to disk, machine policy unchanged),
+  cross-referencing the README's "How Apotrope queries your system" section.
+
 ### CI
+- **Version-tag releases are now built, attested, and drafted by CI.** A new
+  `release.yml` builds `apotrope.exe` on `windows-latest` for every `v*` tag, runs
+  the test suite, generates `SHA256SUMS`, attaches a GitHub build-provenance
+  attestation (`actions/attest-build-provenance`, verifiable with
+  `gh attestation verify`), and creates a **draft** GitHub release with both files
+  attached. The maintainer performs the on-hardware rendering check against the exe
+  downloaded from the draft, then publishes it — the published exe is always the
+  CI-built artifact, never a local build, and the workflow refuses to modify a
+  release once it has been published.
+- **PyPI attestations pinned on.** `publish.yml` now passes `attestations: true`
+  explicitly (PEP 740 provenance was already the Trusted Publishing default; now it
+  cannot silently change with an upstream default).
 - **A `build-exe` job builds and smoke-tests `apotrope.exe` on `windows-latest`**
   (`build_exe.py --no-icon`, then `--version` and `--dry-run`) and uploads the exe as a
   workflow artifact. This catches a broken or empty frozen build on every PR; it
