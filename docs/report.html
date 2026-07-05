@@ -235,7 +235,7 @@
   .cbar:hover .cbar-track { box-shadow: inset 0 0 0 1px var(--line); }
   .cbar-name { font-size:11.5px; color:var(--text); letter-spacing:0.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .cbar-track { height:13px; background:#0a130d; border:1px solid rgba(43,255,136,0.12); border-radius:2px; overflow:hidden; position:relative; }
-  .cbar-fill { height:100%; border-radius:0; transition:width .6s cubic-bezier(.2,.7,.2,1); }
+  .cbar-fill { display:block; height:100%; width:0; border-radius:0; transition:width .6s cubic-bezier(.2,.7,.2,1); }
   /* HP-bar segmentation: 20 cells, score maps to filled cells */
   .cbar-track::after { content:""; position:absolute; inset:0; pointer-events:none; z-index:2;
      background: repeating-linear-gradient(90deg, transparent 0 calc(5% - 2px), var(--panel) calc(5% - 2px) 5%); }
@@ -319,12 +319,22 @@
   .fbody .fld { display:grid; grid-template-columns: 82px 1fr; gap:14px; align-items:start; }
   .fbody .fld .k { font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--faint); padding-top:2px; }
   .fbody .fld .vv { font-size:13px; color:var(--text); line-height:1.65; }
-  .code { font-size:12.5px; background:#02060a; border:1px solid var(--line); border-left:2px solid var(--accent);
-          border-radius:2px; padding:11px 13px; color:var(--green); white-space:pre-wrap; word-break:break-word;
-          position:relative; }
-  .code .copy { position:absolute; top:7px; right:8px; font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase;
-                color:var(--muted); border:1px solid var(--line); padding:3px 7px; border-radius:2px; background:var(--void); }
+  .rem { display:grid; gap:11px; }
+  .rem-note { font-size:13px; color:var(--text); line-height:1.65; }
+  .code { font-size:12.5px; background:#02060a; border:1px solid var(--line);
+          border-left:2px solid var(--accent); border-radius:2px; overflow:hidden; }
+  .code-bar { display:flex; align-items:center; justify-content:space-between; gap:12px;
+              padding:6px 8px 6px 11px; background:rgba(43,255,136,0.05);
+              border-bottom:1px solid var(--line); }
+  .code-tag { font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); }
+  .code .copy { font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase; flex-shrink:0;
+                color:var(--muted); border:1px solid var(--line); padding:3px 9px; border-radius:2px;
+                background:var(--void); cursor:pointer; }
   .code .copy:hover { color:var(--accent); border-color:var(--accent); }
+  .code-cmd { font-family:"IBM Plex Mono","Cascadia Code","Consolas",monospace; font-size:12.5px;
+              color:var(--green); white-space:pre-wrap; word-break:break-word; padding:11px 13px; margin:0; }
+  .code-warn { font-size:10.5px; line-height:1.5; color:#ffb23d; padding:6px 13px; margin:0;
+               background:rgba(255,178,61,0.06); border-top:1px solid rgba(255,178,61,0.18); }
   .cis { display:inline-flex; align-items:center; gap:6px; font-size:11px; letter-spacing:0.06em;
          color:var(--cyan); border:1px solid rgba(68,224,230,0.28); background:rgba(68,224,230,0.05);
          padding:3px 9px; border-radius:2px; }
@@ -336,6 +346,7 @@
           display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap;
           font-size:11.5px; color:var(--muted); letter-spacing:0.05em; }
   .foot .auth { color:var(--faint); }
+  .foot .share-warn { flex-basis:100%; order:9; color:#ffb23d; opacity:0.92; font-size:11px; }
   .foot a { color:var(--muted); border-bottom:1px dashed transparent; }
   .foot a:hover { color:var(--accent); border-bottom-color:var(--accent); }
 
@@ -355,7 +366,10 @@
     .cat-bar { position:static; background:#f2f2f2 !important; }
     .cat-name, .brand .name, .ti-name, .fname b, .meta-item .v b { color:#111 !important; }
     .fbody[hidden] { display:grid !important; }   /* show all details on paper */
-    .code { background:#f6f6f6 !important; color:#111 !important; }
+    .code { background:#f6f6f6 !important; }
+    .code-bar { background:#ececec !important; border-bottom-color:#ccc !important; }
+    .code-tag { color:#444 !important; }
+    .code-cmd { color:#111 !important; }
   }
 </style>
 </head>
@@ -370,12 +384,12 @@
       <div class="brand">
         <img class="diamond" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAA4FSURBVHhe7VsJcFPVGi76Rn06o8LMc3ugqE9FRX2igLZZWpaWpIAPKLJ3X9LcLC2UvdQ34htERlABRVoKiJStAm2TLtA2adOkS7Y2yc3WrMUuaVlSlkJZPG/+26SWawFb0gJOv5kzc+ec7/z/ny85239P/PyGMIQhDGEIg49ZO3Y8l4grt7Jw+bZZ+3Y8R27/K+OhhLpKHs+Ouz7/rR1B4Tn0rvg6Gd/Pz+9hMvkvhWhpKZNr1SrWXjmD1l5zI65C3A5l7dVzCOp4Vq0yVioKJfd74DE/58hbmFGdvfxMA/oMXUJJDYbLbIsujcoMnEllUmdiFt26JKf+MrQBBzOrs8MLct4i23ngELphw9NsXLEhyWn4/cMZ1dmLio+/Ce30yQF06tSPg+B5yQnBGI5JfWT56S6R+E7DFbZe8SXYINt9IJCgkkTz7bhj3Y3zXT9vi0YJQ6AnJ+g/U6fSZ0wO6VkXU1nC8A4T6Muz4844VUVMT859jThZKY1bXydZfakVpaELiOfAW2DSg8mPzO1NAA8eYtVWcnl2vAVsgC1uvUYSU3mSTibeN1icc2g0ZlDtXdZiQ5+hDpTUYERsg3Lr3N27nyVzvbiNAAQYu7c9ixkU3yU5DTfAJtgGHwsF2S+TufcM78fF/Z2lrV7Ld+jbYeyubG9CHHNdQbRI+AGZS8adBPBiyQnhBxxzXf5Kd5NnftC3szTVqeCbzB1UxCsrPuVZtMbUa24EhWfT6WOrJXPJvFvhzwrgRbxCEsazavWp1855/GmNcTXl88i8AUd4cd54Tn1d4ar2ZvQZuoj4Dr07sa56zcQ5cx4jc2+HvgoAeGHOnMdY2qrVfAfuBt+rzjcjjqmuKLyscDyZ63PMzNj6PKaXb086ZSTG+dJmK4zz3fOOHXiJzP0z6I8AXoBPzKjMhBiIOeeUCWEG5faZGRnPk7m+wMPxdVV8vkPvSkMX0eqLrYhTX1ceLS2hkol9wd0I4EV0WRGVW19bBjFBbDw73ppQV5Xks2314qJf/sExKKvXdLQh2LLy7Dp7nFISReb1B74QwIt4ZXkkz4bbIEaIlaNX1MzLyXmGzOszomSiyakXXSit2Ygicw/mU0tLHyVz+gtfCgAIMZsficw5KExrNqDUSy4UXVUylczpM+KqxIEr3I2Ia1S2jR//VoQ/9YMEWijtX2RefzBpRvCUwNApweT6/oAeTH8VYhs/7o0IjkHZusLdhKKryyeReX0GCLDS3YhYuPyMH0LDPg7++A0qk76SwqDH0mi0p8j8vmD0m69RRo95lUau7wsmT578JJVBj6Ey6KsmTpk4xg8hv0Rcfhr2DD4VIBGXn/1w8eIR3nrKtMBJFGZgGi00aMbNPW6PXSd3vZxjzmcJrAW7Dql/UR5UZavyrPmZuUZB4o6SPa+Q+bcD+IYYKKH0yd66N8PChrNx+ZkBEWBiTMzwnm1UKvVR6rTAhVQmfS01eNJt1+H1P296Md9xIrO4WXxFh4zIjOwIR2aiwDPUFbeIrwjtJ3ZvOLDhtssqbRrtQ8JnaOBCiKFn29gFC54eNAG8+Ig56QUKM5BLYdKTAqYHjCK37xTtDS1uKWvVIh2qaBVfL3UWykrqczd8n73p2+1HvvoOnqGuwiW+rkVaVNJS1pYu/mk62Q41mDoSfNAYgTzwSW4H3BMBvKBNo/07IDhgxYcfvj3LW5ch3ccUtUmQsqMG5TWV3/hCXSSKlpasD6/XY2G5R9LDcrIzwk06LFpWsn69skiU1yS5Dlzx6Qq0S/pzd3ZowoSxn4Btagj1/W6HveCeCuDBsNDUpalhGVsFK8yKvYWNokvy8zJ0uLECJdl1KNFpQsvPNaLlnW6UfP0SUeAZ6qANOMCFPgWNpR0pJvk+sBW6Nvmz3o7UZNwTAeBUFiMXMzCj6keuVWdIbrJ0JLlb0P4OM6o5U4ZyG8tRskOPMKcR8RstiO1qQGsqBWhT1kairJEJiDpo4ziNBBf6QN+sDhNKdreg5EbLZY5VY2Kb1DtjKsWMW50EB1WA8PL8dzCjchPPorUvb3OiVRdaUEqrA/FOmdBKpw6daBIh6RkJ2nLRiUCQpa1OxLHrO9M3RiHJ7BFIOfNxpJz5BJLMGoEyNkYizKq7ChzgQh/oCzbAFtgE214fXIvGkYgrvo4oErzXM6YBWwXYuOKcd38dW10WzK3XCPlOw/XVF1wopdUOOTyUfMqEVpw9RXxjm5vqUNWZMiRoLGtLxOWboxXSxE/V6sA94e9K9GFPIlPMS8iJvU4UeIa63RHvSedUV0+Kqipjs3TyLXmnxG1gY0tTLWGTsP2rifCV4rKj1RdaIDcA+Yd8SKV5Qh7GxuVnB0AA+amwQ1lBPLtODN8AJD7gA/PseNc3c74FjsVXufWa8sU1slUHTIXFxt9MKMcoyPDayvHzGy2dNbyzPv5V5Ep5B7k/DyCKK+VdBHXS2cM7BX5+3dme44a8ncbfzCjLmF+6pFq6EjOoJDyb7hr4In5pdpyIAWJZ3uZAfBtePu/ogalsXOH0qQArzpxCCXWVZ+OVFecgPwfpLr5DT5SlTfWIY1IrWJqqqMiywpHefgKjQGBCNnREcyzVW7efMQLTR41CDvbrxAfv3P0pUdzrA4g6Q9QodJA5guPlH1RnrzUiG8oz5eV76yILj41M1FRGYkaVHHx740hyGojcYZxcciGhVnYOfi0+FyBBJe0SwGm4SQDMpJZDFnhe4bFuAfIMecJbCQA/e0KAzLndAkAdCJAVMoLr5XsFyDXmFnjrFuXn/5NVVx3eqwAXW1G8SuqGWH0qADEE9IqGeUf2TeVa6qQpbb0PAZ4dv4qZ1WWLq6UrskyFJ+Hne9wkTPfa8gyBq11D4F3ig0PxDgHZ7BFX8/38urfDOUbBj11DoKBkSY0sBWyDD8gCeYcAJELg5778tBNSchWfHj842edDgDwJxtVIpmGm2kJC9QsutMzlmQR/NfeYBGuJSRAmMpa25uuY6nLWHLWcvpeYBJ/qZRJ8Cu0Nf6ciTKOixSqlcdAn79ey1j9OgmbCF/iESRCGI6Tn4lSV0zwhPzQgk2Bvy+Ci4tz32Tr5Fp5F25ACyyAxOdlvuQwmtzoQx4Z3ZnwZSSx9qplPeJbB4WjXlxGIY9V1AifJ3Yw297oM2gkf8PaIa9M52QbV5thq0eAsg70J4AWdzX4iSioKxQzKdK5NZ0puslwmNkKXTDdthGCTQ2yEWhrQGlke2rR/A1HWSPOIOu9GKMmhRznkjVCzpYNr05o55tqdbI2cMXXZssfJcQAGdSN0Cwybvm7ZurkZ24Qphpr9sJ2Vt8vQoUapZyts9myF23tshds9W2EzwQEu9CloFHesMCv2z83cJpyRlpLq5zfr/twKe+HPpL9HmUpZ3vMwBAcaONjAASe3qfzGevVJUZS05IsIE86dm5e9Cwo8R8tE67+oPVmS2yS5obwEhyEpypTt7z4Rgk04DMGBq9thL7gnAvhP8X+ewgziUBiByR8xg14kt2eKf5pe3Cw+DUddiYs4DktLzbn/2374q2+gwLPIWVRR0Sq+5jkOn84s2zuTbCdg+pRRFGZQEoVJ44JPcjtgUAUICQl5JIBBW0Bl0FMpzMAJPdvI2HBgy0v59qI9xc3iTh0y9ZIQMUFCpDPffnLvpkObRpP79wQ1lDoeEiI0RtACiKFn24AK0DMlRmVQg4h0FIP+yc09bo90UfqrufVCtsBauPuQOlsNJddSsCfHJMR+OJHZp2QrXLCAGKiMIOKOAWDAVgEWriCSov5B/q8TSdHQoNiA0IC7urzgi6QoJGYpjKBYiAliG5CkaI+0eLg/fTyLwqC8Rub1B11p8UCfpMUhVe9PH8caN25MuE/T4pGS4ildL0YMKDInSxgiFN405u4GPn8xIhQ+EpGTJUhr6noxEiktvXtx52dlPY/plcruV2NWnS1WURFB5vUHvhQgTi4J59l01jWeV2OYXqGafzyr15WiP/hbfG11Mt+Ot3W9HHXBlRVxZEUxhUzsC3whQJTkZACnvk4EMXW9qsfbWLWVSyFmMveuEbbnhxfYRtX3cAokXo83WRDbqNq1MPvnP6z9fwZ3I8Dc3MOjMKMqA2KAWOCQhOlVP4Qd2tNrutyniCotmoCZa0/AsdRzQeJcoqZq1UjSS4o7oT8CgA+Wpnolz6k/231Bwlx7MkKUP5HMHXAkyMvnc21a0zq4InP1HOJadXisvHwOmXcr9FWAuJqy2TyrVge+wCfPqjXHySULyLxBxdhFix5P1NSs4zsM54lLUu4mhJlrhRGlgnFkLhl/VoDI4oL3OeZaAexHPJcoz7M0NWm3OhHeE8w7euAVzKjct8zVdU2O7zTcYOtV305PT7/lJYU7CTA9/ZtnML3yG8g+/xd1oBSXDWFG1b55+Uf79BJ1UBFdVRzIsWgq1sBFyd8uwKzcHF8rg0TnMDL3NgIMS1BXYXw73gw2YFmDVFystKR7y3vfI0FdEcuz6Rq6r8patfKoymJv2opAbwLEyEQhHItGvvbyaZR24zzi2/GGeKU0rifngUHw118PT9TLN/KdxivEZenTDZBBPrxEcHQMtNNDfr8svaAw9w2OSX0I3jARt76chk62Tv4V2CDbfeCwuOiXtzGT6iik1z3X5Ts4Fl2qfwhtBhS2WZPKd+o7oA0Sn5i59uhC4bGxZDsPPGJk4ulcq1ZF/GECttUKsZujELuJP0x0EjfK1dGVJX26cfIg4uEEtSwJ7vN1/2XGjrf59G7fgwC40Zmol29n6RTfz88amNudQxjCEIYwhDvg/+QSgOSC5DZUAAAAAElFTkSuQmCC" width="26" height="26" alt="Apotrope">
         <span class="name">APOTROPE</span>
-        <span class="ver">v0.1.9</span>
+        <span class="ver">v0.1.10</span>
       </div>
       <div class="topbar-meta">
         <div class="meta-item"><span class="label">Host</span><span class="v"><b>WORKSTATION-07</b></span></div>
-        <div class="meta-item"><span class="label">System</span><span class="v">Windows 11 Pro 10.0.22631</span></div>
-        <div class="meta-item"><span class="label">Scan</span><span class="v">2026-06-06 14:30 UTC <span style="color:var(--faint)">· 21.7s</span></span></div>
+        <div class="meta-item"><span class="label">System</span><span class="v">10.0.26200</span></div>
+        <div class="meta-item"><span class="label">Scan</span><span class="v">2026-07-05 03:04 UTC <span style="color:var(--faint)">· 27.3s</span></span></div>
         <span class="ro-tag"><span class="dot"></span>Read-only audit</span>
       </div>
     </div>
@@ -388,22 +402,22 @@
           <svg width="230" height="230" viewBox="0 0 230 230" style="position:absolute;inset:0">
             <defs><filter id="gl"><feGaussianBlur stdDeviation="3.2" result="b"/>
               <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-            <line x1="115.0" y1="12.0" x2="115.0" y2="3.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="131.11" y1="13.27" x2="132.52" y2="4.38" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="146.83" y1="17.04" x2="149.61" y2="8.48" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="161.76" y1="23.23" x2="165.85" y2="15.21" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="175.54" y1="31.67" x2="180.83" y2="24.39" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="187.83" y1="42.17" x2="194.2" y2="35.8" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="198.33" y1="54.46" x2="205.61" y2="49.17" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="206.77" y1="68.24" x2="214.79" y2="64.15" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="212.96" y1="83.17" x2="221.52" y2="80.39" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="216.73" y1="98.89" x2="225.62" y2="97.48" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="218.0" y1="115.0" x2="227.0" y2="115.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="216.73" y1="131.11" x2="225.62" y2="132.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="212.96" y1="146.83" x2="221.52" y2="149.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="206.77" y1="161.76" x2="214.79" y2="165.85" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="198.33" y1="175.54" x2="205.61" y2="180.83" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="187.83" y1="187.83" x2="194.2" y2="194.2" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="175.54" y1="198.33" x2="180.83" y2="205.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="161.76" y1="206.77" x2="165.85" y2="214.79" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="146.83" y1="212.96" x2="149.61" y2="221.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="131.11" y1="216.73" x2="132.52" y2="225.62" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="115.0" y1="218.0" x2="115.0" y2="227.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="98.89" y1="216.73" x2="97.48" y2="225.62" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="83.17" y1="212.96" x2="80.39" y2="221.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="68.24" y1="206.77" x2="64.15" y2="214.79" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="54.46" y1="198.33" x2="49.17" y2="205.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="42.17" y1="187.83" x2="35.8" y2="194.2" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="31.67" y1="175.54" x2="24.39" y2="180.83" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="23.23" y1="161.76" x2="15.21" y2="165.85" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="17.04" y1="146.83" x2="8.48" y2="149.61" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="13.27" y1="131.11" x2="4.38" y2="132.52" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="12.0" y1="115.0" x2="3.0" y2="115.0" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="13.27" y1="98.89" x2="4.38" y2="97.48" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="17.04" y1="83.17" x2="8.48" y2="80.39" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="23.23" y1="68.24" x2="15.21" y2="64.15" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="31.67" y1="54.46" x2="24.39" y2="49.17" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="42.17" y1="42.17" x2="35.8" y2="35.8" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="54.46" y1="31.67" x2="49.17" y2="24.39" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="68.24" y1="23.23" x2="64.15" y2="15.21" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="83.17" y1="17.04" x2="80.39" y2="8.48" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="98.89" y1="13.27" x2="97.48" y2="4.38" stroke="#16241d" stroke-width="2" opacity="0.5"/>
+            <line x1="115.0" y1="12.0" x2="115.0" y2="3.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="131.11" y1="13.27" x2="132.52" y2="4.38" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="146.83" y1="17.04" x2="149.61" y2="8.48" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="161.76" y1="23.23" x2="165.85" y2="15.21" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="175.54" y1="31.67" x2="180.83" y2="24.39" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="187.83" y1="42.17" x2="194.2" y2="35.8" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="198.33" y1="54.46" x2="205.61" y2="49.17" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="206.77" y1="68.24" x2="214.79" y2="64.15" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="212.96" y1="83.17" x2="221.52" y2="80.39" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="216.73" y1="98.89" x2="225.62" y2="97.48" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="218.0" y1="115.0" x2="227.0" y2="115.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="216.73" y1="131.11" x2="225.62" y2="132.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="212.96" y1="146.83" x2="221.52" y2="149.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="206.77" y1="161.76" x2="214.79" y2="165.85" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="198.33" y1="175.54" x2="205.61" y2="180.83" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="187.83" y1="187.83" x2="194.2" y2="194.2" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="175.54" y1="198.33" x2="180.83" y2="205.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="161.76" y1="206.77" x2="165.85" y2="214.79" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="146.83" y1="212.96" x2="149.61" y2="221.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="131.11" y1="216.73" x2="132.52" y2="225.62" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="115.0" y1="218.0" x2="115.0" y2="227.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="98.89" y1="216.73" x2="97.48" y2="225.62" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="83.17" y1="212.96" x2="80.39" y2="221.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="68.24" y1="206.77" x2="64.15" y2="214.79" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="54.46" y1="198.33" x2="49.17" y2="205.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="42.17" y1="187.83" x2="35.8" y2="194.2" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="31.67" y1="175.54" x2="24.39" y2="180.83" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="23.23" y1="161.76" x2="15.21" y2="165.85" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="17.04" y1="146.83" x2="8.48" y2="149.61" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="13.27" y1="131.11" x2="4.38" y2="132.52" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="12.0" y1="115.0" x2="3.0" y2="115.0" stroke="#ffb23d" stroke-width="2" opacity="0.9"/><line x1="13.27" y1="98.89" x2="4.38" y2="97.48" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="17.04" y1="83.17" x2="8.48" y2="80.39" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="23.23" y1="68.24" x2="15.21" y2="64.15" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="31.67" y1="54.46" x2="24.39" y2="49.17" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="42.17" y1="42.17" x2="35.8" y2="35.8" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="54.46" y1="31.67" x2="49.17" y2="24.39" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="68.24" y1="23.23" x2="64.15" y2="15.21" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="83.17" y1="17.04" x2="80.39" y2="8.48" stroke="#16241d" stroke-width="2" opacity="0.5"/><line x1="98.89" y1="13.27" x2="97.48" y2="4.38" stroke="#16241d" stroke-width="2" opacity="0.5"/>
             <circle cx="115" cy="115" r="96" fill="none" stroke="#0c1610" stroke-width="9"/>
             <circle cx="115" cy="115" r="96" fill="none" stroke="#ffb23d" stroke-width="9"
-              stroke-linecap="round" stroke-dasharray="603.2" stroke-dashoffset="186.99"
+              stroke-linecap="round" stroke-dasharray="603.2" stroke-dashoffset="150.8"
               transform="rotate(-90 115 115)" filter="url(#gl)"/>
           </svg>
           <div class="gauge-center">
-            <div class="gauge-score" style="color:#ffb23d;text-shadow:0 0 22px #ffb23d">69</div>
+            <div class="gauge-score" style="color:#ffb23d;text-shadow:0 0 22px #ffb23d">75</div>
             <div class="gauge-of">/ 100</div>
             <div class="gauge-grade">
-              <span class="grade-chip" style="color:var(--void);background:#ffb23d">D</span>
-              <span class="grade-label">Poor</span>
+              <span class="grade-chip" style="color:var(--void);background:#ffb23d">C</span>
+              <span class="grade-label">Fair</span>
             </div>
           </div>
         </div>
-        <div class="gauge-cat">56 checks evaluated</div>
+        <div class="gauge-cat">53 checks evaluated</div>
       </div>
 
       <div class="hero-right">
@@ -411,38 +425,38 @@
           <div class="summary-head">
             <span class="kicker">Executive Summary</span>
             <div class="pills">
-              <span class="pill pill-pass"><span class="n">35</span> passed</span>
+              <span class="pill pill-pass"><span class="n">34</span> passed</span>
               <span class="pill pill-fail"><span class="n">3</span> failed</span>
-              <span class="pill pill-warn"><span class="n">4</span> warnings</span>
-              <span class="pill pill-info"><span class="n">14</span> info</span>
+              <span class="pill pill-warn"><span class="n">3</span> warnings</span>
+              <span class="pill pill-info"><span class="n">13</span> info</span>
             </div>
           </div>
-          <div class="summary-body">The security posture of <b>WORKSTATION-07</b> has been assessed as <b>Poor</b> with an overall score of <b>69/100 (D)</b> across 56 security checks. <span class="hl-high">1 high-severity finding should be addressed promptly.</span> Of the checks performed, 3 checks failed and 4 checks issued warnings. The primary areas of concern are <b>Firewall</b>, <b>File Sharing</b> and <b>PowerShell</b>. Remediation should be prioritized by severity, addressing critical and high-severity findings first.</div>
+          <div class="summary-body">The security posture of <b>WORKSTATION-07</b> has been assessed as <b>Fair</b> with an overall score of <b>75/100 (C)</b> across 53 security checks. <span class="hl-high">1 high-severity finding should be addressed promptly.</span> Of the checks performed, 3 checks failed and 3 checks issued warnings. The primary areas of concern are <b>Accounts</b>, <b>Hardening</b> and <b>Encryption</b>. Remediation should be prioritized by severity, addressing critical and high-severity findings first.</div>
         </div>
 
         <div class="stat-strip">
           <div class="donut-panel panel rise">
-            <div class="panel-h"><span class="label">Result Distribution</span><span class="label">56</span></div>
+            <div class="panel-h"><span class="label">Result Distribution</span><span class="label">53</span></div>
             <div class="donut-row">
               <svg width="128" height="128" viewBox="0 0 128 128">
                 <circle cx="64" cy="64" r="52" fill="none" stroke="#0c1610" stroke-width="13"/>
                 <circle cx="64" cy="64" r="52" fill="none" stroke="#2bff88" stroke-width="13"
-                  stroke-dasharray="204.2 122.52" stroke-dashoffset="-0.0"
+                  stroke-dasharray="209.6 117.13" stroke-dashoffset="-0.0"
                   transform="rotate(-90 64 64)"/><circle cx="64" cy="64" r="52" fill="none" stroke="#ff5147" stroke-width="13"
-                  stroke-dasharray="17.5 309.22" stroke-dashoffset="-204.2"
+                  stroke-dasharray="18.49 308.23" stroke-dashoffset="-209.6"
                   transform="rotate(-90 64 64)"/><circle cx="64" cy="64" r="52" fill="none" stroke="#ffb23d" stroke-width="13"
-                  stroke-dasharray="23.34 303.39" stroke-dashoffset="-221.71"
+                  stroke-dasharray="18.49 308.23" stroke-dashoffset="-228.09"
                   transform="rotate(-90 64 64)"/><circle cx="64" cy="64" r="52" fill="none" stroke="#44e0e6" stroke-width="13"
-                  stroke-dasharray="81.68 245.04" stroke-dashoffset="-245.04"
+                  stroke-dasharray="80.14 246.59" stroke-dashoffset="-246.59"
                   transform="rotate(-90 64 64)"/>
                 <text x="64" y="60" text-anchor="middle" fill="var(--red)" font-size="22" font-weight="700">3</text>
                 <text x="64" y="77" text-anchor="middle" fill="var(--muted)" font-size="8.5" letter-spacing="1.4">FAILED</text>
               </svg>
               <div class="donut-legend">
-                <div class="leg"><span class="sw" style="background:var(--green)"></span><span class="lk">PASS</span><span class="lv">35</span></div>
+                <div class="leg"><span class="sw" style="background:var(--green)"></span><span class="lk">PASS</span><span class="lv">34</span></div>
                 <div class="leg"><span class="sw" style="background:var(--red)"></span><span class="lk">FAIL</span><span class="lv">3</span></div>
-                <div class="leg"><span class="sw" style="background:var(--amber)"></span><span class="lk">WARN</span><span class="lv">4</span></div>
-                <div class="leg"><span class="sw" style="background:var(--cyan)"></span><span class="lk">INFO</span><span class="lv">14</span></div>
+                <div class="leg"><span class="sw" style="background:var(--amber)"></span><span class="lk">WARN</span><span class="lv">3</span></div>
+                <div class="leg"><span class="sw" style="background:var(--cyan)"></span><span class="lk">INFO</span><span class="lv">13</span></div>
               </div>
             </div>
           </div>
@@ -450,46 +464,34 @@
           <div class="bars-panel panel rise">
             <div class="panel-h"><span class="label">Category Scores</span><span class="label">14 areas</span></div>
             
-            <button class="cbar" onclick="apoJump('Firewall')">
-              <span class="cbar-name">Firewall</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:90%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">90</span>
+            <button class="cbar" onclick="apoJump('Accounts')">
+              <span class="cbar-name">Accounts</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:85%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">85</span>
             </button>
             
-            <button class="cbar" onclick="apoJump('File-Sharing')">
-              <span class="cbar-name">File Sharing</span>
+            <button class="cbar" onclick="apoJump('Encryption')">
+              <span class="cbar-name">Encryption</span>
               <span class="cbar-track"><span class="cbar-fill" style="width:95%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
               <span class="cbar-val" style="color:#2bff88">95</span>
             </button>
             
-            <button class="cbar" onclick="apoJump('PowerShell')">
-              <span class="cbar-name">PowerShell</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:95%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">95</span>
+            <button class="cbar" onclick="apoJump('Hardening')">
+              <span class="cbar-name">Hardening</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:96%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">96</span>
             </button>
             
-            <button class="cbar" onclick="apoJump('Remote-Access')">
-              <span class="cbar-name">Remote Access</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:95%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">95</span>
+            <button class="cbar" onclick="apoJump('Network')">
+              <span class="cbar-name">Network</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:99%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">99</span>
             </button>
             
             <button class="cbar" onclick="apoJump('Access-Control')">
               <span class="cbar-name">Access Control</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:98%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">98</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Accounts')">
-              <span class="cbar-name">Accounts</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:98%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">98</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Patching')">
-              <span class="cbar-name">Patching</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:98%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">98</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
             </button>
             
             <button class="cbar" onclick="apoJump('Antivirus')">
@@ -498,26 +500,38 @@
               <span class="cbar-val" style="color:#2bff88">100</span>
             </button>
             
-            <button class="cbar" onclick="apoJump('Encryption')">
-              <span class="cbar-name">Encryption</span>
+            <button class="cbar" onclick="apoJump('File-Sharing')">
+              <span class="cbar-name">File Sharing</span>
               <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
               <span class="cbar-val" style="color:#2bff88">100</span>
             </button>
             
-            <button class="cbar" onclick="apoJump('Hardening')">
-              <span class="cbar-name">Hardening</span>
+            <button class="cbar" onclick="apoJump('Firewall')">
+              <span class="cbar-name">Firewall</span>
               <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
               <span class="cbar-val" style="color:#2bff88">100</span>
             </button>
             
-            <button class="cbar" onclick="apoJump('Network')">
-              <span class="cbar-name">Network</span>
+            <button class="cbar" onclick="apoJump('Patching')">
+              <span class="cbar-name">Patching</span>
               <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
               <span class="cbar-val" style="color:#2bff88">100</span>
             </button>
             
             <button class="cbar" onclick="apoJump('Persistence')">
               <span class="cbar-name">Persistence</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('PowerShell')">
+              <span class="cbar-name">PowerShell</span>
+              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
+              <span class="cbar-val" style="color:#2bff88">100</span>
+            </button>
+            
+            <button class="cbar" onclick="apoJump('Remote-Access')">
+              <span class="cbar-name">Remote Access</span>
               <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
               <span class="cbar-val" style="color:#2bff88">100</span>
             </button>
@@ -544,7 +558,7 @@
     <div class="top-issues panel">
       <div class="ti-head">
         <span class="ti-flag">⚑ Top Issues</span>
-        <span class="label">Prioritized remediation · 4</span>
+        <span class="label">Prioritized remediation · 3</span>
       </div>
       <div class="ti-list">
         
@@ -554,10 +568,10 @@
             <div class="ti-tags">
               <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
               <span style="font-size:11px;color:#ff5147;letter-spacing:0.1em">FAIL</span>
-              <button class="linkbtn" onclick="apoJump('Firewall')">Firewall ↗</button>
+              <button class="linkbtn" onclick="apoJump('Accounts')">Accounts ↗</button>
             </div>
-            <div class="ti-name">Public Profile Inbound</div>
-            <div class="ti-fix"><b>Fix:</b> Set the Public profile default inbound action to Block.</div>
+            <div class="ti-name">Password Policy — Minimum Length</div>
+            <div class="ti-fix"><b>Fix:</b> Require a minimum password length of 14 characters.</div>
           </div>
         </div>
         
@@ -565,12 +579,12 @@
           <span class="ti-num">02</span>
           <div>
             <div class="ti-tags">
-              <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
-              <span style="font-size:11px;color:#ffb23d;letter-spacing:0.1em">WARN</span>
-              <button class="linkbtn" onclick="apoJump('Remote-Access')">Remote Access ↗</button>
+              <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+              <span style="font-size:11px;color:#ff5147;letter-spacing:0.1em">FAIL</span>
+              <button class="linkbtn" onclick="apoJump('Accounts')">Accounts ↗</button>
             </div>
-            <div class="ti-name">RDP Network Level Authentication</div>
-            <div class="ti-fix"><b>Fix:</b> Require NLA for all RDP connections.</div>
+            <div class="ti-name">Password Policy — Complexity</div>
+            <div class="ti-fix"><b>Fix:</b> Enable the password complexity requirement so passwords must mix character types.</div>
           </div>
         </div>
         
@@ -580,23 +594,10 @@
             <div class="ti-tags">
               <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
               <span style="font-size:11px;color:#ff5147;letter-spacing:0.1em">FAIL</span>
-              <button class="linkbtn" onclick="apoJump('File-Sharing')">File Sharing ↗</button>
+              <button class="linkbtn" onclick="apoJump('Encryption')">Encryption ↗</button>
             </div>
-            <div class="ti-name">SMB Signing Required</div>
-            <div class="ti-fix"><b>Fix:</b> Enable &#39;Microsoft network server: Digitally sign communications (always)&#39;.</div>
-          </div>
-        </div>
-        
-        <div class="ti-item">
-          <span class="ti-num">04</span>
-          <div>
-            <div class="ti-tags">
-              <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
-              <span style="font-size:11px;color:#ff5147;letter-spacing:0.1em">FAIL</span>
-              <button class="linkbtn" onclick="apoJump('PowerShell')">PowerShell ↗</button>
-            </div>
-            <div class="ti-name">Script Block Logging</div>
-            <div class="ti-fix"><b>Fix:</b> Enable Script Block Logging via Administrative Templates.</div>
+            <div class="ti-name">BitLocker — G:</div>
+            <div class="ti-fix"><b>Fix:</b> Encrypt drive G: with BitLocker using the TPM protector.</div>
           </div>
         </div>
         
@@ -607,17 +608,17 @@
     <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
     <div class="toolbar panel">
       <div class="filters">
-        <button class="fchip f-all"  data-on="true"  data-k="ALL">ALL <span class="fn">56</span></button>
+        <button class="fchip f-all"  data-on="true"  data-k="ALL">ALL <span class="fn">53</span></button>
         <button class="fchip f-fail" data-on="false" data-k="FAIL">FAIL <span class="fn">3</span></button>
-        <button class="fchip f-warn" data-on="false" data-k="WARN">WARN <span class="fn">4</span></button>
-        <button class="fchip f-pass" data-on="false" data-k="PASS">PASS <span class="fn">35</span></button>
-        <button class="fchip f-info" data-on="false" data-k="INFO">INFO <span class="fn">14</span></button>
+        <button class="fchip f-warn" data-on="false" data-k="WARN">WARN <span class="fn">3</span></button>
+        <button class="fchip f-pass" data-on="false" data-k="PASS">PASS <span class="fn">34</span></button>
+        <button class="fchip f-info" data-on="false" data-k="INFO">INFO <span class="fn">13</span></button>
       </div>
       <div class="search"><span class="pr">›</span><input id="apoSearch" placeholder="filter findings…" spellcheck="false"/></div>
       <div class="tool-right">
         <button class="linkbtn" id="apoExpand">expand all</button>
         <button class="linkbtn" id="apoCollapse">collapse</button>
-        <span class="showing" id="apoShowing">56 / 56 shown</span>
+        <span class="showing" id="apoShowing">53 / 53 shown</span>
       </div>
     </div>
 
@@ -629,66 +630,42 @@
         <span class="cat-meta">
           <span class="cat-tally">
             
-            <span style="color:var(--amber)">!1</span>
-            <span style="color:var(--green)">✓3</span>
             
+            <span style="color:var(--green)">✓3</span>
+            <span style="color:var(--cyan)">i1</span>
           </span>
-          <span class="cat-score" style="color:#2bff88">98/100 A</span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="WARN" data-text="uac secure desktop prompt access control admin approval mode is on, but elevation prompts on the secure desktop are relaxed. cis 2.3.17.1">
-          <button class="fhead">
-            <span class="ficon" style="color:#ffb23d">!</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
-            <span class="fname">
-              <b>UAC Secure Desktop Prompt</b>
-              <div class="fsnip">Admin Approval Mode is on, but elevation prompts on the secure desktop are relaxed.</div>
-            </span>
-            <span class="fright">
-              <span class="cis">CIS 2.3.17.1</span>
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies uac secure desktop prompt.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Admin Approval Mode is on, but elevation prompts on the secure desktop are relaxed.</span></div>
-            
-            <div class="fld"><span class="k">Remediation</span>
-              <div class="code">Set elevation prompt to &#39;Prompt for consent on the secure desktop&#39;.<button class="copy">copy</button></div></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.1</span></span></div>
-          </div>
-        </div>
-        
-        <div class="frow" data-status="PASS" data-text="uac enabled access control configured as expected. cis 2.3.17.1">
+        <div class="frow" data-status="PASS" data-text="uac enabled access control uac (enablelua) is enabled. cis 2.3.17.6 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff2d6b;border:1px solid #ff2d6b;background:transparent">CRITICAL</span>
             <span class="fname">
               <b>UAC Enabled</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 2.3.17.1</span>
+              <span class="cis">CIS 2.3.17.6</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies uac enabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether User Account Control (UAC) is enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">UAC (EnableLUA) is enabled.</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.1</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.6</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="admin token filtering access control configured as expected. cis 2.3.17.2">
+        <div class="frow" data-status="PASS" data-text="uac admin consent behavior access control consentpromptbehavioradmin = 5: prompt for consent for non-windows binaries (windows default). cis 2.3.17.2 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Admin Token Filtering</b>
+              <b>UAC Admin Consent Behavior</b>
               
             </span>
             <span class="fright">
@@ -697,31 +674,52 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies admin token filtering.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks the UAC consent prompt behavior for administrator accounts.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">ConsentPromptBehaviorAdmin = 5: Prompt for consent for non-Windows binaries (Windows default).</span></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.2</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="detect application installs access control configured as expected. cis 2.3.17.5">
+        <div class="frow" data-status="PASS" data-text="uac secure desktop access control uac prompts are displayed on the secure desktop (isolated from user input). cis 2.3.17.7 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Detect Application Installs</b>
+              <b>UAC Secure Desktop</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 2.3.17.5</span>
+              <span class="cis">CIS 2.3.17.7</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies detect application installs.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether UAC prompts appear on the isolated secure desktop.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">UAC prompts are displayed on the secure desktop (isolated from user input).</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.5</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.7</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="uac standard user behavior access control consentpromptbehavioruser = 3: prompt for credentials (default). cis 2.3.17.3 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>UAC Standard User Behavior</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 2.3.17.3</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks the UAC consent prompt behavior for standard user accounts.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">ConsentPromptBehaviorUser = 3: Prompt for credentials (default).</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.17.3</span></span></div>
           </div>
         </div>
         
@@ -733,47 +731,23 @@
         <span class="cat-name">Accounts</span>
         <span class="cat-meta">
           <span class="cat-tally">
+            <span style="color:var(--red)">✗2</span>
             
-            <span style="color:var(--amber)">!1</span>
             <span style="color:var(--green)">✓4</span>
-            <span style="color:var(--cyan)">i1</span>
+            
           </span>
-          <span class="cat-score" style="color:#2bff88">98/100 A</span>
+          <span class="cat-score" style="color:#2bff88">85/100 B</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="WARN" data-text="guest account accounts the built-in guest account is present and should be confirmed disabled. cis 2.3.1.1">
+        <div class="frow" data-status="FAIL" data-text="password policy — minimum length accounts minimum password length: 0 characters. cis 1.1.4 net accounts /minpwlen:14">
           <button class="fhead">
-            <span class="ficon" style="color:#ffb23d">!</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="ficon" style="color:#ff5147">✗</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Guest Account</b>
-              <div class="fsnip">The built-in Guest account is present and should be confirmed disabled.</div>
-            </span>
-            <span class="fright">
-              <span class="cis">CIS 2.3.1.1</span>
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies guest account.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">The built-in Guest account is present and should be confirmed disabled.</span></div>
-            
-            <div class="fld"><span class="k">Remediation</span>
-              <div class="code">Disable the Guest account.<button class="copy">copy</button></div></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.1.1</span></span></div>
-          </div>
-        </div>
-        
-        <div class="frow" data-status="PASS" data-text="password length policy accounts configured as expected. cis 1.1.4">
-          <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
-            <span class="fname">
-              <b>Password Length Policy</b>
-              
+              <b>Password Policy — Minimum Length</b>
+              <div class="fsnip">Minimum password length: 0 characters.</div>
             </span>
             <span class="fright">
               <span class="cis">CIS 1.1.4</span>
@@ -781,82 +755,118 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies password length policy.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Minimum password length must be ≥8 (WARN if &lt;12).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Minimum password length: 0 characters.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="rem">
+                <div class="rem-note">Require a minimum password length of 14 characters.</div>
+                
+                <div class="code">
+                  <div class="code-bar">
+                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">copy</button>
+                  </div>
+                  <pre class="code-cmd">net accounts /minpwlen:14</pre>
+                  <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
+                </div>
+                
+              </div></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 1.1.4</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="account lockout threshold accounts configured as expected. cis 1.2.2">
+        <div class="frow" data-status="FAIL" data-text="password policy — complexity accounts password complexity requirement: disabled. cis 1.1.5 # set via local security policy: secpol.msc -&gt; account policies -&gt;
+# password policy -&gt; password must meet complexity requirements -&gt; enabled.
+# verify the current setting:
+secedit /export /cfg &#34;$env:temp\secpol.cfg&#34; | out-null; select-string -path &#34;$env:temp\secpol.cfg&#34; -pattern &#39;passwordcomplexity&#39;">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="ficon" style="color:#ff5147">✗</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Account Lockout Threshold</b>
-              
+              <b>Password Policy — Complexity</b>
+              <div class="fsnip">Password complexity requirement: disabled.</div>
             </span>
             <span class="fright">
-              <span class="cis">CIS 1.2.2</span>
+              <span class="cis">CIS 1.1.5</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies account lockout threshold.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether password complexity requirements are enforced.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Password complexity requirement: disabled.</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 1.2.2</span></span></div>
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="rem">
+                <div class="rem-note">Enable the password complexity requirement so passwords must mix character types.</div>
+                
+                <div class="code">
+                  <div class="code-bar">
+                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">copy</button>
+                  </div>
+                  <pre class="code-cmd"># Set via Local Security Policy: secpol.msc -&gt; Account Policies -&gt;
+# Password Policy -&gt; Password must meet complexity requirements -&gt; Enabled.
+# Verify the current setting:
+secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -Path &#34;$env:TEMP\secpol.cfg&#34; -Pattern &#39;PasswordComplexity&#39;</pre>
+                  <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
+                </div>
+                
+              </div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 1.1.5</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="blank password use restricted accounts configured as expected. cis 2.3.1.2">
+        <div class="frow" data-status="PASS" data-text="guest account accounts built-in guest account is disabled. cis 2.3.1.1 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Blank Password Use Restricted</b>
+              <b>Guest Account</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 2.3.1.2</span>
+              <span class="cis">CIS 2.3.1.1</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies blank password use restricted.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether the built-in Guest account is disabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Built-in Guest account is disabled.</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.1.2</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.1.1</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="administrator account renamed accounts configured as expected. cis 2.3.1.5">
+        <div class="frow" data-status="PASS" data-text="built-in administrator account accounts built-in administrator account is disabled. cis 2.3.1.3 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Administrator Account Renamed</b>
+              <b>Built-in Administrator Account</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 2.3.1.5</span>
+              <span class="cis">CIS 2.3.1.3</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies administrator account renamed.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks if the built-in Administrator account is enabled and not renamed.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Built-in Administrator account is disabled.</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.1.5</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.1.3</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="local administrator count accounts 2 local administrators ">
+        <div class="frow" data-status="PASS" data-text="local administrators accounts 2 administrator(s): administrator, wsadmin  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Local Administrator Count</b>
+              <b>Local Administrators</b>
               
             </span>
             <span class="fright">
@@ -865,10 +875,31 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies local administrator count.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">2 local administrators</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Counts members of the local Administrators group (WARN if &gt;2).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">2 administrator(s): Administrator, wsadmin</span></div>
             
             
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="password policy — account lockout accounts lockout threshold: 10 attempt(s) | duration: 30 minute(s). cis 1.2.1 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>Password Policy — Account Lockout</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 1.2.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether account lockout is configured to deter brute-force attacks.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Lockout threshold: 10 attempt(s) | Duration: 30 minute(s).</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 1.2.1</span></span></div>
           </div>
         </div>
         
@@ -890,54 +921,54 @@
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="defender real-time protection antivirus configured as expected. cis 18.10.43.10.1">
+        <div class="frow" data-status="PASS" data-text="defender real-time protection antivirus realtimeprotectionenabled: true | amserviceenabled: true | antivirusenabled: true cis 18.10.42.10.3 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff2d6b;border:1px solid #ff2d6b;background:transparent">CRITICAL</span>
             <span class="fname">
               <b>Defender Real-Time Protection</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 18.10.43.10.1</span>
+              <span class="cis">CIS 18.10.42.10.3</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies defender real-time protection.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether Windows Defender real-time protection is active.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">RealTimeProtectionEnabled: True | AMServiceEnabled: True | AntivirusEnabled: True</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.43.10.1</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.42.10.3</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="defender signatures current antivirus configured as expected. cis 18.10.43.14">
+        <div class="frow" data-status="PASS" data-text="defender signature age antivirus antivirus signature age: 0 day(s). cis 18.10.42.14 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Defender Signatures Current</b>
+              <b>Defender Signature Age</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 18.10.43.14</span>
+              <span class="cis">CIS 18.10.42.14</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies defender signatures current.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether Defender virus definitions are less than 7 days old.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Antivirus signature age: 0 day(s).</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.43.14</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.42.14</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="tamper protection enabled antivirus configured as expected. ">
+        <div class="frow" data-status="PASS" data-text="defender tamper protection antivirus istamperprotected: true  ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Tamper Protection Enabled</b>
+              <b>Defender Tamper Protection</b>
               
             </span>
             <span class="fright">
@@ -946,19 +977,19 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies tamper protection enabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether Tamper Protection is enabled to prevent unauthorised changes to Defender settings.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">IsTamperProtected: True</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="defender engine version antivirus 1.1.24050.5 ">
+        <div class="frow" data-status="INFO" data-text="registered av products antivirus registered av product(s): windows defender  ">
           <button class="fhead">
             <span class="ficon" style="color:#44e0e6">i</span>
             <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
             <span class="fname">
-              <b>Defender Engine Version</b>
+              <b>Registered AV Products</b>
               
             </span>
             <span class="fright">
@@ -967,8 +998,8 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies defender engine version.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">1.1.24050.5</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Lists antivirus products registered with Windows Security Center.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Registered AV product(s): Windows Defender</span></div>
             
             
           </div>
@@ -982,34 +1013,70 @@
         <span class="cat-name">Encryption</span>
         <span class="cat-meta">
           <span class="cat-tally">
-            
+            <span style="color:var(--red)">✗1</span>
             
             <span style="color:var(--green)">✓1</span>
             
           </span>
-          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+          <span class="cat-score" style="color:#2bff88">95/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="bitlocker — c: encryption configured as expected. ">
+        <div class="frow" data-status="FAIL" data-text="bitlocker — g: encryption drive: g: | type: 1 | status: unknown | encrypted: 0% | protection: off cis 18.10.10 enable-bitlocker -mountpoint &#39;g:&#39; -encryptionmethod xtsaes256 -usedspaceonly -tpmprotector">
+          <button class="fhead">
+            <span class="ficon" style="color:#ff5147">✗</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>BitLocker — G:</b>
+              <div class="fsnip">Drive: G: | Type: 1 | Status: Unknown | Encrypted: 0% | Protection: Off</div>
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.10.10</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks BitLocker encryption status for drive G:.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Drive: G: | Type: 1 | Status: Unknown | Encrypted: 0% | Protection: Off</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="rem">
+                <div class="rem-note">Encrypt drive G: with BitLocker using the TPM protector.</div>
+                
+                <div class="code">
+                  <div class="code-bar">
+                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">copy</button>
+                  </div>
+                  <pre class="code-cmd">Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector</pre>
+                  <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
+                </div>
+                
+              </div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.10</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="bitlocker — c: encryption drive: c: | type: unknown | status: 1 | method: 6 | encrypted: 100% | protection: on cis 18.10.10 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
               <b>BitLocker — C:</b>
               
             </span>
             <span class="fright">
-              
+              <span class="cis">CIS 18.10.10</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies bitlocker — c:.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks BitLocker encryption status for drive C:.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Drive: C: | Type: Unknown | Status: 1 | Method: 6 | Encrypted: 100% | Protection: On</span></div>
             
-            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.10</span></span></div>
           </div>
         </div>
         
@@ -1021,44 +1088,20 @@
         <span class="cat-name">File Sharing</span>
         <span class="cat-meta">
           <span class="cat-tally">
-            <span style="color:var(--red)">✗1</span>
+            
             
             <span style="color:var(--green)">✓2</span>
-            
+            <span style="color:var(--cyan)">i1</span>
           </span>
-          <span class="cat-score" style="color:#2bff88">95/100 A</span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="FAIL" data-text="smb signing required file sharing the server does not require smb packet signing, allowing tampering and relay. cis 2.3.8.1">
-          <button class="fhead">
-            <span class="ficon" style="color:#ff5147">✗</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
-            <span class="fname">
-              <b>SMB Signing Required</b>
-              <div class="fsnip">The server does not require SMB packet signing, allowing tampering and relay.</div>
-            </span>
-            <span class="fright">
-              <span class="cis">CIS 2.3.8.1</span>
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies smb signing required.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">The server does not require SMB packet signing, allowing tampering and relay.</span></div>
-            
-            <div class="fld"><span class="k">Remediation</span>
-              <div class="code">Enable &#39;Microsoft network server: Digitally sign communications (always)&#39;.<button class="copy">copy</button></div></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.8.1</span></span></div>
-          </div>
-        </div>
-        
-        <div class="frow" data-status="PASS" data-text="smbv1 disabled file sharing configured as expected. cis 18.4.2">
+        <div class="frow" data-status="PASS" data-text="smbv1 disabled file sharing smbv1 protocol is disabled. cis 18.4.2 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff2d6b;border:1px solid #ff2d6b;background:transparent">CRITICAL</span>
             <span class="fname">
               <b>SMBv1 Disabled</b>
               
@@ -1069,31 +1112,58 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies smbv1 disabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks that SMBv1 is disabled (mitigates EternalBlue/WannaCry/NotPetya).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">SMBv1 protocol is disabled.</span></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.4.2</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="anonymous share enumeration off file sharing configured as expected. cis 2.3.10.5">
+        <div class="frow" data-status="PASS" data-text="smb signing required file sharing smb signing is required on this server. cis 2.3.9.2 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Anonymous Share Enumeration Off</b>
+              <b>SMB Signing Required</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 2.3.10.5</span>
+              <span class="cis">CIS 2.3.9.2</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies anonymous share enumeration off.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks that SMB message signing is required (mitigates NTLM relay attacks).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">SMB signing is required on this server.</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.10.5</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.9.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="smb encryption file sharing smb encryption (encryptdata) is disabled. cis 18.6.8.7 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>SMB Encryption</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.6.8.7</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether SMB encryption is enforced (SMB 3.0+ feature).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">SMB encryption (EncryptData) is disabled.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="rem">
+                <div class="rem-note">Enable SMB encryption for sensitive environments: Set-SmbServerConfiguration -EncryptData $true -Force. Note: requires all clients to support SMB 3.0+</div>
+                
+              </div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.6.8.7</span></span></div>
           </div>
         </div>
         
@@ -1105,46 +1175,22 @@
         <span class="cat-name">Firewall</span>
         <span class="cat-meta">
           <span class="cat-tally">
-            <span style="color:var(--red)">✗1</span>
             
-            <span style="color:var(--green)">✓5</span>
+            
+            <span style="color:var(--green)">✓6</span>
             
           </span>
-          <span class="cat-score" style="color:#2bff88">90/100 A</span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="FAIL" data-text="public profile inbound firewall default inbound action is allow on the public profile, exposing listening services to untrusted networks. cis 9.3.2">
-          <button class="fhead">
-            <span class="ficon" style="color:#ff5147">✗</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
-            <span class="fname">
-              <b>Public Profile Inbound</b>
-              <div class="fsnip">Default inbound action is Allow on the Public profile, exposing listening services to untrusted networks.</div>
-            </span>
-            <span class="fright">
-              <span class="cis">CIS 9.3.2</span>
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies public profile inbound.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Default inbound action is Allow on the Public profile, exposing listening services to untrusted networks.</span></div>
-            
-            <div class="fld"><span class="k">Remediation</span>
-              <div class="code">Set the Public profile default inbound action to Block.<button class="copy">copy</button></div></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.3.2</span></span></div>
-          </div>
-        </div>
-        
-        <div class="frow" data-status="PASS" data-text="domain profile enabled firewall configured as expected. cis 9.1.1">
+        <div class="frow" data-status="PASS" data-text="firewall — domain profile enabled firewall profile: domain | enabled: true cis 9.1.1 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Domain Profile Enabled</b>
+              <b>Firewall — Domain Profile Enabled</b>
               
             </span>
             <span class="fright">
@@ -1153,19 +1199,19 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies domain profile enabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether the Windows Firewall Domain profile is enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Profile: Domain | Enabled: True</span></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.1.1</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="private profile enabled firewall configured as expected. cis 9.2.1">
+        <div class="frow" data-status="PASS" data-text="firewall — private profile enabled firewall profile: private | enabled: true cis 9.2.1 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Private Profile Enabled</b>
+              <b>Firewall — Private Profile Enabled</b>
               
             </span>
             <span class="fright">
@@ -1174,19 +1220,19 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies private profile enabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether the Windows Firewall Private profile is enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Profile: Private | Enabled: True</span></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.2.1</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="public profile enabled firewall configured as expected. cis 9.3.1">
+        <div class="frow" data-status="PASS" data-text="firewall — public profile enabled firewall profile: public | enabled: true cis 9.3.1 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Public Profile Enabled</b>
+              <b>Firewall — Public Profile Enabled</b>
               
             </span>
             <span class="fright">
@@ -1195,52 +1241,73 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies public profile enabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether the Windows Firewall Public profile is enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Profile: Public | Enabled: True</span></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.3.1</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="inbound connection logging firewall configured as expected. cis 9.3.5">
+        <div class="frow" data-status="PASS" data-text="firewall — domain default inbound action firewall profile: domain | defaultinboundaction: notconfigured | defaultoutboundaction: notconfigured cis 9.1.2 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Inbound Connection Logging</b>
+              <b>Firewall — Domain Default Inbound Action</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 9.3.5</span>
+              <span class="cis">CIS 9.1.2</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies inbound connection logging.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks that the Domain profile does not explicitly allow all unsolicited inbound connections by default.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Profile: Domain | DefaultInboundAction: NotConfigured | DefaultOutboundAction: NotConfigured</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.3.5</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.1.2</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="firewall service running firewall configured as expected. ">
+        <div class="frow" data-status="PASS" data-text="firewall — private default inbound action firewall profile: private | defaultinboundaction: notconfigured | defaultoutboundaction: notconfigured cis 9.2.2 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Firewall Service Running</b>
+              <b>Firewall — Private Default Inbound Action</b>
               
             </span>
             <span class="fright">
-              
+              <span class="cis">CIS 9.2.2</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies firewall service running.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks that the Private profile does not explicitly allow all unsolicited inbound connections by default.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Profile: Private | DefaultInboundAction: NotConfigured | DefaultOutboundAction: NotConfigured</span></div>
             
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.2.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="firewall — public default inbound action firewall profile: public | defaultinboundaction: notconfigured | defaultoutboundaction: notconfigured cis 9.3.2 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>Firewall — Public Default Inbound Action</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 9.3.2</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks that the Public profile does not explicitly allow all unsolicited inbound connections by default.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Profile: Public | DefaultInboundAction: NotConfigured | DefaultOutboundAction: NotConfigured</span></div>
             
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.3.2</span></span></div>
           </div>
         </div>
         
@@ -1253,22 +1320,58 @@
         <span class="cat-meta">
           <span class="cat-tally">
             
-            
-            <span style="color:var(--green)">✓4</span>
+            <span style="color:var(--amber)">!2</span>
+            <span style="color:var(--green)">✓2</span>
             <span style="color:var(--cyan)">i1</span>
           </span>
-          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+          <span class="cat-score" style="color:#2bff88">96/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="audit policy hardening configured as expected. cis 17.1.1">
+        <div class="frow" data-status="WARN" data-text="autoplay disabled hardening autoplay is partially disabled (nodrivetypeautorun = 158). some drive types may still trigger autoplay. cis 18.10.8.3 set-itemproperty -path &#39;hklm:\software\microsoft\windows\currentversion\policies\explorer&#39; -name nodrivetypeautorun -value 255 -type dword -force">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="ficon" style="color:#ffb23d">!</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>AutoPlay Disabled</b>
+              <div class="fsnip">AutoPlay is partially disabled (NoDriveTypeAutoRun = 158)</div>
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.10.8.3</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether AutoPlay is disabled for all drive types.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">AutoPlay is partially disabled (NoDriveTypeAutoRun = 158). Some drive types may still trigger AutoPlay.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="rem">
+                <div class="rem-note">Disable AutoPlay for all drive types so the remaining drive types can no longer auto-execute content.</div>
+                
+                <div class="code">
+                  <div class="code-bar">
+                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">copy</button>
+                  </div>
+                  <pre class="code-cmd">Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force</pre>
+                  <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
+                </div>
+                
+              </div></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.8.3</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="WARN" data-text="audit policy hardening the following subcategories have auditing disabled: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;logon&#39; /success:enable /failure:enable">
+          <button class="fhead">
+            <span class="ficon" style="color:#ffb23d">!</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
               <b>Audit Policy</b>
-              
+              <div class="fsnip">The following subcategories have auditing disabled: Sensitive Privilege Use</div>
             </span>
             <span class="fright">
               <span class="cis">CIS 17.1.1</span>
@@ -1276,82 +1379,76 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies the advanced audit policy is configured.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks that key audit policy subcategories log Success/Failure events.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">The following subcategories have auditing disabled: Sensitive Privilege Use. Security-relevant events may not be recorded.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="rem">
+                <div class="rem-note">Enable audit logging for the key subcategories that currently have auditing disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</div>
+                
+                <div class="code">
+                  <div class="code-bar">
+                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">copy</button>
+                  </div>
+                  <pre class="code-cmd">auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable</pre>
+                  <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
+                </div>
+                
+              </div></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 17.1.1</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="autorun disabled hardening configured as expected. cis 18.9.8.1">
+        <div class="frow" data-status="PASS" data-text="winrm status hardening winrm service is not running. cis 18.10.90.2.2 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>AutoRun Disabled</b>
+              <b>WinRM Status</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 18.9.8.1</span>
+              <span class="cis">CIS 18.10.90.2.2</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies autorun disabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether the Windows Remote Management (WinRM) service is running.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">WinRM service is not running.</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.9.8.1</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.90.2.2</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="wdigest cleartext disabled hardening configured as expected. cis 18.3.4">
+        <div class="frow" data-status="PASS" data-text="screen lock timeout hardening screen lock timeout: 10 minute(s).  ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>WDigest Cleartext Disabled</b>
+              <b>Screen Lock Timeout</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 18.3.4</span>
+              
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies wdigest cleartext disabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks that the screen automatically locks within 15 minutes.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Screen lock timeout: 10 minute(s).</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.3.4</span></span></div>
+            
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="cached logon count limited hardening configured as expected. cis 2.3.7.4">
-          <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
-            <span class="fname">
-              <b>Cached Logon Count Limited</b>
-              
-            </span>
-            <span class="fright">
-              <span class="cis">CIS 2.3.7.4</span>
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies cached logon count limited.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 2.3.7.4</span></span></div>
-          </div>
-        </div>
-        
-        <div class="frow" data-status="INFO" data-text="powershell transcription hardening not configured ">
+        <div class="frow" data-status="INFO" data-text="speculative execution mitigations hardening no featuresettingsoverride registry key found — windows default mitigations apply (recommended).  ">
           <button class="fhead">
             <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>PowerShell Transcription</b>
+              <b>Speculative Execution Mitigations</b>
               
             </span>
             <span class="fright">
@@ -1360,8 +1457,8 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies powershell transcription.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Not configured</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether Spectre/Meltdown mitigations have been explicitly disabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">No FeatureSettingsOverride registry key found — Windows default mitigations apply (recommended).</span></div>
             
             
           </div>
@@ -1376,84 +1473,78 @@
         <span class="cat-meta">
           <span class="cat-tally">
             
-            
-            <span style="color:var(--green)">✓3</span>
+            <span style="color:var(--amber)">!1</span>
+            <span style="color:var(--green)">✓1</span>
             <span style="color:var(--cyan)">i2</span>
           </span>
-          <span class="cat-score" style="color:#2bff88">100/100 A</span>
+          <span class="cat-score" style="color:#2bff88">99/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="llmnr disabled network configured as expected. cis 18.5.4.2">
+        <div class="frow" data-status="WARN" data-text="netbios over tcp/ip network 2 adapter(s) inherit netbios setting from dhcp. if the dhcp server does not explicitly disable netbios, it may be active.  (get-ciminstance win32_networkadapterconfiguration -filter &#39;ipenabled=true&#39;).settcpipnetbios(2)">
+          <button class="fhead">
+            <span class="ficon" style="color:#ffb23d">!</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>NetBIOS over TCP/IP</b>
+              <div class="fsnip">2 adapter(s) inherit NetBIOS setting from DHCP</div>
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether NetBIOS over TCP/IP is disabled on all network adapters.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">2 adapter(s) inherit NetBIOS setting from DHCP. If the DHCP server does not explicitly disable NetBIOS, it may be active.</span></div>
+            
+            <div class="fld"><span class="k">Remediation</span>
+              <div class="rem">
+                <div class="rem-note">Explicitly disable NetBIOS on all adapters rather than relying on DHCP.</div>
+                
+                <div class="code">
+                  <div class="code-bar">
+                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">copy</button>
+                  </div>
+                  <pre class="code-cmd">(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39;).SetTcpipNetbios(2)</pre>
+                  <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
+                </div>
+                
+              </div></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="llmnr disabled network llmnr is disabled via group policy. cis 18.6.4.4 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
               <b>LLMNR Disabled</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 18.5.4.2</span>
+              <span class="cis">CIS 18.6.4.4</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies llmnr disabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether LLMNR is disabled (LLMNR is susceptible to poisoning attacks).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">LLMNR is disabled via Group Policy.</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.5.4.2</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.6.4.4</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="netbios over tcp/ip off network configured as expected. ">
-          <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
-            <span class="fname">
-              <b>NetBIOS Over TCP/IP Off</b>
-              
-            </span>
-            <span class="fright">
-              
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies netbios over tcp/ip off.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
-            
-            
-          </div>
-        </div>
-        
-        <div class="frow" data-status="PASS" data-text="ipv6 source routing off network configured as expected. cis 18.5.20.1">
-          <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
-            <span class="fname">
-              <b>IPv6 Source Routing Off</b>
-              
-            </span>
-            <span class="fright">
-              <span class="cis">CIS 18.5.20.1</span>
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies ipv6 source routing off.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.5.20.1</span></span></div>
-          </div>
-        </div>
-        
-        <div class="frow" data-status="INFO" data-text="primary ip address network 10.4.12.37 ">
+        <div class="frow" data-status="INFO" data-text="listening ports — summary network 33 listening port(s): 135, 139, 445, 902, 912, 1337, 5040, 6060, 6463, 6666, 11434, 13331, 13337, 13344, 15147, 19292, 27015, 27036, 27060, 42050, 49664, 49665, 49666, 49667, 49668, 49669, 49671, 49672, 54235, 55699 … (+3 more)  ">
           <button class="fhead">
             <span class="ficon" style="color:#44e0e6">i</span>
             <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
             <span class="fname">
-              <b>Primary IP Address</b>
+              <b>Listening Ports — Summary</b>
               
             </span>
             <span class="fright">
@@ -1462,19 +1553,19 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies primary ip address.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">10.4.12.37</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Enumerates all TCP ports in LISTEN state.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">33 listening port(s): 135, 139, 445, 902, 912, 1337, 5040, 6060, 6463, 6666, 11434, 13331, 13337, 13344, 15147, 19292, 27015, 27036, 27060, 42050, 49664, 49665, 49666, 49667, 49668, 49669, 49671, 49672, 54235, 55699 … (+3 more)</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="configured dns servers network 10.4.0.1, 10.4.0.2 ">
+        <div class="frow" data-status="INFO" data-text="ipv6 status network ipv6 is active on 2 adapter(s).  ">
           <button class="fhead">
             <span class="ficon" style="color:#44e0e6">i</span>
             <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
             <span class="fname">
-              <b>Configured DNS Servers</b>
+              <b>IPv6 Status</b>
               
             </span>
             <span class="fright">
@@ -1483,8 +1574,8 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies configured dns servers.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">10.4.0.1, 10.4.0.2</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Reports whether IPv6 is active on any network adapter (informational).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">IPv6 is active on 2 adapter(s).</span></div>
             
             
           </div>
@@ -1499,78 +1590,75 @@
         <span class="cat-meta">
           <span class="cat-tally">
             
-            <span style="color:var(--amber)">!1</span>
-            <span style="color:var(--green)">✓1</span>
-            <span style="color:var(--cyan)">i1</span>
+            
+            <span style="color:var(--green)">✓3</span>
+            
           </span>
-          <span class="cat-score" style="color:#2bff88">98/100 A</span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="WARN" data-text="pending reboot patching updates are installed but a reboot is pending to finish applying them. cis 18.1.1">
-          <button class="fhead">
-            <span class="ficon" style="color:#ffb23d">!</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
-            <span class="fname">
-              <b>Pending Reboot</b>
-              <div class="fsnip">Updates are installed but a reboot is pending to finish applying them.</div>
-            </span>
-            <span class="fright">
-              <span class="cis">CIS 18.1.1</span>
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies pending reboot.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Updates are installed but a reboot is pending to finish applying them.</span></div>
-            
-            <div class="fld"><span class="k">Remediation</span>
-              <div class="code">Reboot the machine to complete pending updates.<button class="copy">copy</button></div></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.1.1</span></span></div>
-          </div>
-        </div>
-        
-        <div class="frow" data-status="PASS" data-text="automatic updates enabled patching configured as expected. cis 18.10.93.2.1">
+        <div class="frow" data-status="PASS" data-text="last windows update patching last update installed 9 day(s) ago (2026-06-26). cis 18.10.94.2.1 ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff2d6b;border:1px solid #ff2d6b;background:transparent">CRITICAL</span>
             <span class="fname">
-              <b>Automatic Updates Enabled</b>
+              <b>Last Windows Update</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 18.10.93.2.1</span>
+              <span class="cis">CIS 18.10.94.2.1</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies automatic updates enabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks when the most recent Windows Update was installed.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Last update installed 9 day(s) ago (2026-06-26).</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.93.2.1</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.94.2.1</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="last update installed patching 2026-05-28 ">
+        <div class="frow" data-status="PASS" data-text="windows update service patching windows update service start type is automatic (current state: stopped); it starts on demand when updates are needed. cis 18.10.94.2.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Last Update Installed</b>
+              <b>Windows Update Service</b>
               
             </span>
             <span class="fright">
-              
+              <span class="cis">CIS 18.10.94.2.1</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies last update installed.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">2026-05-28</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether the Windows Update (wuauserv) service can run.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Windows Update service start type is Automatic (current state: Stopped); it starts on demand when updates are needed.</span></div>
             
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.94.2.1</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="pending windows updates patching no pending windows updates found. cis 18.10.94.2.1 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="fname">
+              <b>Pending Windows Updates</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.10.94.2.1</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Counts Windows Updates that are available but not yet installed.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">No pending Windows Updates found.</span></div>
             
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.94.2.1</span></span></div>
           </div>
         </div>
         
@@ -1584,20 +1672,20 @@
           <span class="cat-tally">
             
             
-            <span style="color:var(--green)">✓1</span>
-            <span style="color:var(--cyan)">i1</span>
+            
+            <span style="color:var(--cyan)">i2</span>
           </span>
           <span class="cat-score" style="color:#2bff88">100/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="no unsigned startup items persistence configured as expected. ">
+        <div class="frow" data-status="INFO" data-text="startup programs persistence 29 startup program(s): synapse3, onedrivesetup, onedrivesetup, ollama, rainmeter, send to onenote, tamriel trade centre client, steam, overwolf, tsmapplication, battle.net, rzappengine, nordlockersystray, discord, onedrive, microsoft.lists, electron.app.notion, com.squirrel.slack.slack, riotclient, razerappengine … (+9 more)  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="ficon" style="color:#44e0e6">i</span>
             <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
             <span class="fname">
-              <b>No Unsigned Startup Items</b>
+              <b>Startup Programs</b>
               
             </span>
             <span class="fright">
@@ -1606,19 +1694,19 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies no unsigned startup items.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Enumerates programs configured to run at startup (registry Run keys + startup folders).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">29 startup program(s): Synapse3, OneDriveSetup, OneDriveSetup, Ollama, Rainmeter, Send to OneNote, Tamriel Trade Centre Client, Steam, Overwolf, TSMApplication, Battle.net, RzAppEngine, NordLockerSysTray, Discord, OneDrive, Microsoft.Lists, electron.app.Notion, com.squirrel.slack.slack, RiotClient, RazerAppEngine … (+9 more)</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="startup item count persistence 11 startup entries ">
+        <div class="frow" data-status="INFO" data-text="scheduled tasks persistence 31 non-microsoft task(s): adobe acrobat update task, adobe-genuine-software-integrity-scheduler-1.0, adobegcinvoker-1.0, adobegcinvokerlogon, bravesoftwareupdatetaskmachinecore{f1c02faa-4d43-4038-8ea2-1c1ac48b3891}, bravesoftwareupdatetaskmachineua{1d11ea5f-d697-4aa7-b078-1e0d309db419}, fancontrol, intel ptt ek recertification, microsoftedgeupdatetaskmachinecore, microsoftedgeupdatetaskmachineua, npcapwatchdog, nvidia app selfupdate_{b2fe1952-0186-46c3-baec-a80aa35ac5b8}, onedrive per-machine standalone update task, onedrive reporting task-s-1-5-21-360431784-1045562088-2322528677-1001, onedrive reporting task-s-1-5-21-360431784-1045562088-2322528677-1014, onedrive startup task-s-1-5-21-360431784-1045562088-2322528677-1001, onedrive startup task-s-1-5-21-360431784-1045562088-2322528677-1014, overwolf updater task, zoomupdatetaskuser-s-1-5-21-360431784-1045562088-2322528677-1001, googleupdatertasksystem137.0.7129.0{6f242de3-9642-4523-98f4-f1166ee7b326} … (+11 more)  ">
           <button class="fhead">
             <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
             <span class="fname">
-              <b>Startup Item Count</b>
+              <b>Scheduled Tasks</b>
               
             </span>
             <span class="fright">
@@ -1627,8 +1715,8 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies startup item count.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">11 startup entries</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Enumerates non-Microsoft scheduled tasks (potential persistence points).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">31 non-Microsoft task(s): Adobe Acrobat Update Task, Adobe-Genuine-Software-Integrity-Scheduler-1.0, AdobeGCInvoker-1.0, AdobeGCInvokerLogon, BraveSoftwareUpdateTaskMachineCore{F1C02FAA-4D43-4038-8EA2-1C1AC48B3891}, BraveSoftwareUpdateTaskMachineUA{1D11EA5F-D697-4AA7-B078-1E0D309DB419}, FanControl, Intel PTT EK Recertification, MicrosoftEdgeUpdateTaskMachineCore, MicrosoftEdgeUpdateTaskMachineUA, npcapwatchdog, NVIDIA App SelfUpdate_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}, OneDrive Per-Machine Standalone Update Task, OneDrive Reporting Task-S-1-5-21-360431784-1045562088-2322528677-1001, OneDrive Reporting Task-S-1-5-21-360431784-1045562088-2322528677-1014, OneDrive Startup Task-S-1-5-21-360431784-1045562088-2322528677-1001, OneDrive Startup Task-S-1-5-21-360431784-1045562088-2322528677-1014, Overwolf Updater Task, ZoomUpdateTaskUser-S-1-5-21-360431784-1045562088-2322528677-1001, GoogleUpdaterTaskSystem137.0.7129.0{6F242DE3-9642-4523-98F4-F1166EE7B326} … (+11 more)</span></div>
             
             
           </div>
@@ -1642,67 +1730,43 @@
         <span class="cat-name">PowerShell</span>
         <span class="cat-meta">
           <span class="cat-tally">
-            <span style="color:var(--red)">✗1</span>
             
-            <span style="color:var(--green)">✓4</span>
             
+            <span style="color:var(--green)">✓2</span>
+            <span style="color:var(--cyan)">i3</span>
           </span>
-          <span class="cat-score" style="color:#2bff88">95/100 A</span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="FAIL" data-text="script block logging powershell powershell script-block logging is disabled, reducing visibility into malicious scripts. cis 18.9.95.1">
+        <div class="frow" data-status="PASS" data-text="powershell script block logging powershell script block logging is enabled — powershell commands are logged to the event log. cis 18.10.88.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#ff5147">✗</span>
+            <span class="ficon" style="color:#2bff88">✓</span>
             <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Script Block Logging</b>
-              <div class="fsnip">PowerShell script-block logging is disabled, reducing visibility into malicious scripts.</div>
+              <b>PowerShell Script Block Logging</b>
+              
             </span>
             <span class="fright">
-              <span class="cis">CIS 18.9.95.1</span>
+              <span class="cis">CIS 18.10.88.1</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies script block logging.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">PowerShell script-block logging is disabled, reducing visibility into malicious scripts.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether PowerShell Script Block Logging is enabled (critical for forensics/IR).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Script Block Logging is enabled — PowerShell commands are logged to the event log.</span></div>
             
-            <div class="fld"><span class="k">Remediation</span>
-              <div class="code">Enable Script Block Logging via Administrative Templates.<button class="copy">copy</button></div></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.9.95.1</span></span></div>
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.88.1</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="module logging powershell configured as expected. cis 18.9.95.2">
+        <div class="frow" data-status="PASS" data-text="powershell module logging powershell module logging is enabled — module pipeline execution events are logged.  ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Module Logging</b>
-              
-            </span>
-            <span class="fright">
-              <span class="cis">CIS 18.9.95.2</span>
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies module logging.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.9.95.2</span></span></div>
-          </div>
-        </div>
-        
-        <div class="frow" data-status="PASS" data-text="execution policy remotesigned powershell configured as expected. ">
-          <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
-            <span class="fname">
-              <b>Execution Policy RemoteSigned</b>
+              <b>PowerShell Module Logging</b>
               
             </span>
             <span class="fright">
@@ -1711,40 +1775,40 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies execution policy remotesigned.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether PowerShell Module Logging is enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Module Logging is enabled — module pipeline execution events are logged.</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="powershell v2 disabled powershell configured as expected. cis 18.10.43">
+        <div class="frow" data-status="INFO" data-text="powershell execution policy powershell execution policy is &#39;undefined&#39;.  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>PowerShell v2 Disabled</b>
+              <b>PowerShell Execution Policy</b>
               
             </span>
             <span class="fright">
-              <span class="cis">CIS 18.10.43</span>
+              
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies powershell v2 disabled.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks the LocalMachine PowerShell execution policy.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Execution policy is &#39;Undefined&#39;.</span></div>
             
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.43</span></span></div>
+            
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="constrained language mode powershell configured as expected. ">
+        <div class="frow" data-status="INFO" data-text="powershell v2 powershell could not determine powershell v2 status (state: &#39;&#39;).  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Constrained Language Mode</b>
+              <b>PowerShell v2</b>
               
             </span>
             <span class="fright">
@@ -1753,8 +1817,29 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies constrained language mode.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether PowerShell v2 is installed (downgrade attack vector).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Could not determine PowerShell v2 status (state: &#39;&#39;).</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="powershell constrained language mode powershell powershell language mode: fulllanguage.  ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fname">
+              <b>PowerShell Constrained Language Mode</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether PowerShell Constrained Language Mode is active.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">PowerShell language mode: FullLanguage.</span></div>
             
             
           </div>
@@ -1769,57 +1854,33 @@
         <span class="cat-meta">
           <span class="cat-tally">
             
-            <span style="color:var(--amber)">!1</span>
             
-            <span style="color:var(--cyan)">i1</span>
+            <span style="color:var(--green)">✓1</span>
+            
           </span>
-          <span class="cat-score" style="color:#2bff88">95/100 A</span>
+          <span class="cat-score" style="color:#2bff88">100/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="WARN" data-text="rdp network level authentication remote access remote desktop is enabled but network level authentication is not enforced. cis 9.5.1">
+        <div class="frow" data-status="PASS" data-text="rdp enabled remote access remote desktop is disabled (fdenytsconnections = 1). cis 18.10.57.3.2.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#ffb23d">!</span>
+            <span class="ficon" style="color:#2bff88">✓</span>
             <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>RDP Network Level Authentication</b>
-              <div class="fsnip">Remote Desktop is enabled but Network Level Authentication is not enforced.</div>
+              <b>RDP Enabled</b>
+              
             </span>
             <span class="fright">
-              <span class="cis">CIS 9.5.1</span>
+              <span class="cis">CIS 18.10.57.3.2.1</span>
               <span class="chev">▶</span>
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies rdp network level authentication.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Remote Desktop is enabled but Network Level Authentication is not enforced.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether Remote Desktop is enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Remote Desktop is disabled (fDenyTSConnections = 1).</span></div>
             
-            <div class="fld"><span class="k">Remediation</span>
-              <div class="code">Require NLA for all RDP connections.<button class="copy">copy</button></div></div>
-            
-            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 9.5.1</span></span></div>
-          </div>
-        </div>
-        
-        <div class="frow" data-status="INFO" data-text="rdp listener port remote access 3389 (default) ">
-          <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
-            <span class="fname">
-              <b>RDP Listener Port</b>
-              
-            </span>
-            <span class="fright">
-              
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies rdp listener port.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">3389 (default)</span></div>
-            
-            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.57.3.2.1</span></span></div>
           </div>
         </div>
         
@@ -1841,12 +1902,12 @@
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="no unquoted service paths services configured as expected. ">
+        <div class="frow" data-status="PASS" data-text="unquoted service paths services no services with unquoted paths containing spaces found.  ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>No Unquoted Service Paths</b>
+              <b>Unquoted Service Paths</b>
               
             </span>
             <span class="fright">
@@ -1855,19 +1916,19 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies no unquoted service paths.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks for services whose executable path contains spaces but is not quoted (privilege-escalation vector).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">No services with unquoted paths containing spaces found.</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="telnet service absent services configured as expected. ">
+        <div class="frow" data-status="PASS" data-text="risky services services no known-risky services are running.  ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
-              <b>Telnet Service Absent</b>
+              <b>Risky Services</b>
               
             </span>
             <span class="fright">
@@ -1876,8 +1937,8 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies telnet service absent.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks for known-risky services (Remote Registry, Telnet, SNMP).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">No known-risky services are running.</span></div>
             
             
           </div>
@@ -1893,20 +1954,20 @@
           <span class="cat-tally">
             
             
-            <span style="color:var(--green)">✓2</span>
-            <span style="color:var(--cyan)">i6</span>
+            <span style="color:var(--green)">✓4</span>
+            <span style="color:var(--cyan)">i2</span>
           </span>
           <span class="cat-score" style="color:#2bff88">100/100 A</span>
         </span>
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="supported os build system configured as expected. ">
+        <div class="frow" data-status="PASS" data-text="os end-of-support status system windows 11 25h2 is supported until 2027-10-12 (463 days remaining).  ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
-              <b>Supported OS Build</b>
+              <b>OS End-of-Support Status</b>
               
             </span>
             <span class="fright">
@@ -1915,143 +1976,17 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies supported os build.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether the installed Windows build is still supported by Microsoft.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Windows 11 25H2 is supported until 2027-10-12 (463 days remaining).</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="latest cumulative update installed system configured as expected. ">
+        <div class="frow" data-status="PASS" data-text="system uptime system system uptime is 0 day(s).  ">
           <button class="fhead">
             <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
-            <span class="fname">
-              <b>Latest Cumulative Update Installed</b>
-              
-            </span>
-            <span class="fright">
-              
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies latest cumulative update installed.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Configured as expected.</span></div>
-            
-            
-          </div>
-        </div>
-        
-        <div class="frow" data-status="INFO" data-text="os edition system windows 11 pro ">
-          <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
-            <span class="fname">
-              <b>OS Edition</b>
-              
-            </span>
-            <span class="fright">
-              
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies os edition.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Windows 11 Pro</span></div>
-            
-            
-          </div>
-        </div>
-        
-        <div class="frow" data-status="INFO" data-text="os build number system 22631.4317 ">
-          <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
-            <span class="fname">
-              <b>OS Build Number</b>
-              
-            </span>
-            <span class="fright">
-              
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies os build number.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">22631.4317</span></div>
-            
-            
-          </div>
-        </div>
-        
-        <div class="frow" data-status="INFO" data-text="secure boot state system enabled ">
-          <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
-            <span class="fname">
-              <b>Secure Boot State</b>
-              
-            </span>
-            <span class="fright">
-              
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies secure boot state.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Enabled</span></div>
-            
-            
-          </div>
-        </div>
-        
-        <div class="frow" data-status="INFO" data-text="tpm presence system tpm 2.0 present and ready ">
-          <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
-            <span class="fname">
-              <b>TPM Presence</b>
-              
-            </span>
-            <span class="fright">
-              
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies tpm presence.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">TPM 2.0 present and ready</span></div>
-            
-            
-          </div>
-        </div>
-        
-        <div class="frow" data-status="INFO" data-text="firmware mode system uefi ">
-          <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
-            <span class="fname">
-              <b>Firmware Mode</b>
-              
-            </span>
-            <span class="fright">
-              
-              <span class="chev">▶</span>
-            </span>
-          </button>
-          <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies firmware mode.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">UEFI</span></div>
-            
-            
-          </div>
-        </div>
-        
-        <div class="frow" data-status="INFO" data-text="system uptime system 3 days, 4 hours ">
-          <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
               <b>System Uptime</b>
               
@@ -2062,8 +1997,92 @@
             </span>
           </button>
           <div class="fbody" hidden>
-            <div class="fld"><span class="k">Checks</span><span class="vv">Verifies system uptime.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">3 days, 4 hours</span></div>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Warns when uptime exceeds 30 days (suggests pending patch reboots).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">System uptime is 0 day(s).</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="secure boot system secure boot is enabled. cis 18.10.10.2.2 ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>Secure Boot</b>
+              
+            </span>
+            <span class="fright">
+              <span class="cis">CIS 18.10.10.2.2</span>
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether UEFI Secure Boot is enabled.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Secure Boot is enabled.</span></div>
+            
+            <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.10.2.2</span></span></div>
+          </div>
+        </div>
+        
+        <div class="frow" data-status="PASS" data-text="tpm status system tpm present. ready: true. firmware version: 600.18.30.2361.  ">
+          <button class="fhead">
+            <span class="ficon" style="color:#2bff88">✓</span>
+            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="fname">
+              <b>TPM Status</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether a TPM chip is present and functional.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">TPM present. Ready: True. Firmware version: 600.18.30.2361.</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="os version system microsoft windows 11 pro  (build 26200, version 10.0.26200)  ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>OS Version</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Reports the installed Windows version and build number.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Microsoft Windows 11 Pro  (Build 26200, Version 10.0.26200)</span></div>
+            
+            
+          </div>
+        </div>
+        
+        <div class="frow" data-status="INFO" data-text="domain membership system workgroup member. workgroup: workgroup  ">
+          <button class="fhead">
+            <span class="ficon" style="color:#44e0e6">i</span>
+            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="fname">
+              <b>Domain Membership</b>
+              
+            </span>
+            <span class="fright">
+              
+              <span class="chev">▶</span>
+            </span>
+          </button>
+          <div class="fbody" hidden>
+            <div class="fld"><span class="k">Checks</span><span class="vv">Reports whether this machine is joined to an Active Directory domain.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Workgroup member. Workgroup: WORKGROUP</span></div>
             
             
           </div>
@@ -2077,6 +2096,7 @@
     <div class="foot">
       <span class="auth">For authorized security assessment use only · <strong style="color:var(--green);font-weight:600;text-shadow:0 0 9px rgba(43,255,136,0.45)">No data left this machine</strong> · CIS Benchmark v5.0.0</span>
       <span>apotrope.sh · <a href="https://github.com/hexorcist404/apotrope">github.com/hexorcist404/apotrope</a> · MIT</span>
+      <span class="share-warn">⚠ This report contains this machine's hostname, account names, services, and configuration. Review and redact before sharing it outside your organization.</span>
     </div>
 
   </div>
@@ -2138,7 +2158,9 @@
   document.querySelectorAll('.code .copy').forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
-      var code = btn.parentNode.textContent.replace(/copy$/, '').trim();
+      // Copy ONLY the command text, not the label bar or button.
+      var pre = btn.closest('.code').querySelector('.code-cmd');
+      var code = pre ? pre.textContent.replace(/\s+$/, '') : '';
       if (navigator.clipboard) navigator.clipboard.writeText(code);
       var t = btn.textContent; btn.textContent = 'copied'; setTimeout(function(){ btn.textContent = t; }, 1300);
     });

@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Docs
+- **Sample report refreshed to v0.1.10.** `docs/report.html` is now a real (sanitized)
+  v0.1.10 scan — 53 checks, 75/100 (C) — showcasing the remediation-caution and
+  share-safely banners added in this release. The homepage terminal demo is aligned
+  to the same scan (score, check counts, top failures).
+
 ## [0.1.10] - 2026-07-04
 
 ### Added
