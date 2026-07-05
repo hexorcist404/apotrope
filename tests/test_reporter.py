@@ -179,6 +179,16 @@ class TestGenerateHtmlReport:
         assert quiet, "fixture must contain PASS/INFO rows"
         assert all(not is_open and hidden for _, is_open, hidden in quiet)
 
+    def test_summary_counters_are_filter_buttons(self):
+        """The executive-summary count pills are keyboard-focusable buttons
+        wired to the same data-k filter keys the toolbar chips use."""
+        html = self._generate(_make_report())
+        for cls, key in (("pass", "PASS"), ("fail", "FAIL"),
+                         ("warn", "WARN"), ("info", "INFO")):
+            assert re.search(
+                rf'<button class="pill pill-{cls}" data-k="{key}"', html
+            ), f"missing clickable {key} pill"
+
     def test_version_in_footer(self):
         html = self._generate(_make_report())
         assert "Apotrope" in html
