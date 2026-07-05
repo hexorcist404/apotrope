@@ -143,7 +143,24 @@
              color:var(--void); background:var(--accent); padding:8px 15px; border-radius:2px;
              box-shadow:0 0 16px rgba(43,255,136,0.3); transition:transform .12s; white-space:nowrap; }
   .nav-cta:hover { transform:translateY(-1px); }
-  @media (max-width:1140px){ .nav-links .nav-compare { display:none; } }
+  /* Compare dropdown — CSS-only (hover + focus-within) so the JS-free vs
+     pages get the identical nav. Full nav height = no hover dead-zone. */
+  .nav-drop { position:relative; display:flex; align-items:center; height:62px; }
+  .nav-drop-btn { display:flex; align-items:center; gap:6px; font-family:"IBM Plex Mono",monospace;
+                  font-size:12px; letter-spacing:0.12em; color:var(--muted); text-transform:uppercase;
+                  background:none; border:none; cursor:pointer; padding:0; transition:color .15s; white-space:nowrap; }
+  .nav-drop-btn .dcaret { font-size:9px; transition:transform .15s; }
+  .nav-drop:hover .nav-drop-btn, .nav-drop:focus-within .nav-drop-btn { color:var(--bright); }
+  .nav-drop:hover .dcaret, .nav-drop:focus-within .dcaret { transform:rotate(180deg); }
+  .nav-drop-menu { display:none; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+                   background:rgba(8,13,17,0.97); border:1px solid var(--line); border-radius:3px;
+                   padding:7px 0; min-width:190px; box-shadow:0 16px 34px rgba(0,0,0,0.55); }
+  .nav-drop:hover .nav-drop-menu, .nav-drop:focus-within .nav-drop-menu { display:block; }
+  .nav-drop-menu a { display:block; padding:9px 18px; }
+  .nav-drop-menu a:hover { background:rgba(43,255,136,0.05); }
+  /* measured fit: full nav needs ~1000px; below that, drop Compare first
+     (the vs pages stay reachable from the in-page comparison links) */
+  @media (max-width:1020px){ .nav-links .nav-drop { display:none; } }
   @media (max-width:760px){ .nav-links { display:none; } }
 
   /* ── Hero ────────────────────────────────────────────────────────────────── */
@@ -314,9 +331,14 @@
         <a href="#checks">Checks</a>
         <a href="#scoring">Scoring</a>
         <a href="#report">Report</a>
-        <a class="nav-compare" href="/lynis-for-windows/">vs Lynis</a>
-        <a class="nav-compare" href="/vs-cis-cat/">vs CIS-CAT</a>
-        <a class="nav-compare" href="/vs-harden-windows-security/" title="Apotrope vs Harden Windows Security">vs HWS</a>
+        <div class="nav-drop">
+          <button class="nav-drop-btn" type="button" aria-haspopup="true">Compare <span class="dcaret">▾</span></button>
+          <div class="nav-drop-menu">
+            <a href="/lynis-for-windows/">vs Lynis</a>
+            <a href="/vs-cis-cat/">vs CIS-CAT</a>
+            <a href="/vs-harden-windows-security/" title="Apotrope vs Harden Windows Security">vs HWS</a>
+          </div>
+        </div>
         <a href="#start">Get Started</a>
         <a href="#faq">FAQ</a>
         <a href="https://github.com/hexorcist404/apotrope">GitHub ↗</a>

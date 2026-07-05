@@ -219,6 +219,8 @@
   .pill-fail { color:var(--red);   border-color:rgba(255,81,71,0.3);  background:rgba(255,81,71,0.07); }
   .pill-warn { color:var(--amber); border-color:rgba(255,178,61,0.3); background:rgba(255,178,61,0.06); }
   .pill-info { color:var(--cyan);  border-color:rgba(68,224,230,0.28);background:rgba(68,224,230,0.05); }
+  button.pill { transition:filter .15s, text-shadow .15s; }
+  button.pill:hover, button.pill:focus-visible { filter:brightness(1.4); text-shadow:0 0 9px currentColor; }
 
   /* donut */
   .donut-row { display:flex; align-items:center; gap:18px; }
@@ -316,6 +318,9 @@
 
   .fbody { padding:2px 16px 18px 59px; display:grid; gap:13px;
            border-top:1px solid var(--line-soft); background:rgba(0,0,0,0.18); }
+  /* display:grid above beats the UA's [hidden]{display:none} — collapse needs
+     an explicit author rule or the toggle can never hide the body */
+  .fbody[hidden] { display:none; }
   .fbody .fld { display:grid; grid-template-columns: 82px 1fr; gap:14px; align-items:start; }
   .fbody .fld .k { font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--faint); padding-top:2px; }
   .fbody .fld .vv { font-size:13px; color:var(--text); line-height:1.65; }
@@ -424,11 +429,13 @@
         <div class="summary-panel panel rise">
           <div class="summary-head">
             <span class="kicker">Executive Summary</span>
+            {# Counters double as shortcuts: click filters the results to that
+               status and jumps to them (delegates to the toolbar chips). #}
             <div class="pills">
-              <span class="pill pill-pass"><span class="n">{{ pass_count }}</span> passed</span>
-              <span class="pill pill-fail"><span class="n">{{ fail_count }}</span> failed</span>
-              <span class="pill pill-warn"><span class="n">{{ warn_count }}</span> warnings</span>
-              <span class="pill pill-info"><span class="n">{{ info_count }}</span> info</span>
+              <button class="pill pill-pass" data-k="PASS" title="Show the passed checks"><span class="n">{{ pass_count }}</span> passed</button>
+              <button class="pill pill-fail" data-k="FAIL" title="Show the failed checks"><span class="n">{{ fail_count }}</span> failed</button>
+              <button class="pill pill-warn" data-k="WARN" title="Show the warnings"><span class="n">{{ warn_count }}</span> warnings</button>
+              <button class="pill pill-info" data-k="INFO" title="Show the info results"><span class="n">{{ info_count }}</span> info</button>
             </div>
           </div>
           <div class="summary-body">{{ exec_summary_html }}</div>
@@ -528,9 +535,14 @@
         </span>
       </div>
       <div class="findings">
+        {# Default state: FAIL/WARN rows start expanded so issues triage at a
+           glance; PASS/INFO (and ERROR) start collapsed. Keep the is-open
+           class and the hidden attribute in sync — the toggle JS relies on
+           [hidden] and the caret rotation on .is-open. #}
         {% for f in cat.findings %}
+        {% set f_open = f.status in ('FAIL', 'WARN') %}
         <div class="frow" data-status="{{ f.status }}" data-text="{{ f.check_name|lower }} {{ f.category|lower }} {{ f.details|lower }} {{ f.cis|lower }} {{ f.command|lower }}">
-          <button class="fhead">
+          <button class="fhead{% if f_open %} is-open{% endif %}">
             <span class="ficon" style="color:{{ f.status_color }}">{{ f.status_glyph }}</span>
             <span class="fsev" style="color:{{ f.sev_color }};border:1px solid {{ f.sev_color }};background:transparent">{{ f.severity }}</span>
             <span class="fname">
@@ -542,7 +554,7 @@
               <span class="chev">▶</span>
             </span>
           </button>
-          <div class="fbody" hidden>
+          <div class="fbody"{% if not f_open %} hidden{% endif %}>
             <div class="fld"><span class="k">Checks</span><span class="vv">{{ f.description }}</span></div>
             <div class="fld"><span class="k">Found</span><span class="vv">{{ f.details }}</span></div>
             {% if f.remediation or f.command %}
@@ -614,6 +626,17 @@
     });
   });
   search.addEventListener('input', apply);
+
+  // Executive-summary counters: apply the matching filter (delegate to the
+  // toolbar chip so the logic lives in one place) and jump to the results.
+  var toolbar = document.querySelector('.toolbar');
+  document.querySelectorAll('.pills .pill[data-k]').forEach(function(pill){
+    pill.addEventListener('click', function(){
+      var chip = document.querySelector('.fchip[data-k="' + pill.dataset.k + '"]');
+      if (chip) chip.click();
+      if (toolbar) window.scrollTo({ top: toolbar.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
+    });
+  });
 
   rows.forEach(function(row){
     var head = row.querySelector('.fhead'), body = row.querySelector('.fbody');

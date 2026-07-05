@@ -219,6 +219,8 @@
   .pill-fail { color:var(--red);   border-color:rgba(255,81,71,0.3);  background:rgba(255,81,71,0.07); }
   .pill-warn { color:var(--amber); border-color:rgba(255,178,61,0.3); background:rgba(255,178,61,0.06); }
   .pill-info { color:var(--cyan);  border-color:rgba(68,224,230,0.28);background:rgba(68,224,230,0.05); }
+  button.pill { transition:filter .15s, text-shadow .15s; }
+  button.pill:hover, button.pill:focus-visible { filter:brightness(1.4); text-shadow:0 0 9px currentColor; }
 
   /* donut */
   .donut-row { display:flex; align-items:center; gap:18px; }
@@ -316,6 +318,9 @@
 
   .fbody { padding:2px 16px 18px 59px; display:grid; gap:13px;
            border-top:1px solid var(--line-soft); background:rgba(0,0,0,0.18); }
+  /* display:grid above beats the UA's [hidden]{display:none} — collapse needs
+     an explicit author rule or the toggle can never hide the body */
+  .fbody[hidden] { display:none; }
   .fbody .fld { display:grid; grid-template-columns: 82px 1fr; gap:14px; align-items:start; }
   .fbody .fld .k { font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--faint); padding-top:2px; }
   .fbody .fld .vv { font-size:13px; color:var(--text); line-height:1.65; }
@@ -425,10 +430,10 @@
           <div class="summary-head">
             <span class="kicker">Executive Summary</span>
             <div class="pills">
-              <span class="pill pill-pass"><span class="n">34</span> passed</span>
-              <span class="pill pill-fail"><span class="n">3</span> failed</span>
-              <span class="pill pill-warn"><span class="n">3</span> warnings</span>
-              <span class="pill pill-info"><span class="n">13</span> info</span>
+              <button class="pill pill-pass" data-k="PASS" title="Show the passed checks"><span class="n">34</span> passed</button>
+              <button class="pill pill-fail" data-k="FAIL" title="Show the failed checks"><span class="n">3</span> failed</button>
+              <button class="pill pill-warn" data-k="WARN" title="Show the warnings"><span class="n">3</span> warnings</button>
+              <button class="pill pill-info" data-k="INFO" title="Show the info results"><span class="n">13</span> info</button>
             </div>
           </div>
           <div class="summary-body">The security posture of <b>WORKSTATION-07</b> has been assessed as <b>Fair</b> with an overall score of <b>75/100 (C)</b> across 53 security checks. <span class="hl-high">1 high-severity finding should be addressed promptly.</span> Of the checks performed, 3 checks failed and 3 checks issued warnings. The primary areas of concern are <b>Accounts</b>, <b>Hardening</b> and <b>Encryption</b>. Remediation should be prioritized by severity, addressing critical and high-severity findings first.</div>
@@ -742,7 +747,7 @@
       <div class="findings">
         
         <div class="frow" data-status="FAIL" data-text="password policy — minimum length accounts minimum password length: 0 characters. cis 1.1.4 net accounts /minpwlen:14">
-          <button class="fhead">
+          <button class="fhead is-open">
             <span class="ficon" style="color:#ff5147">✗</span>
             <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
             <span class="fname">
@@ -754,7 +759,7 @@
               <span class="chev">▶</span>
             </span>
           </button>
-          <div class="fbody" hidden>
+          <div class="fbody">
             <div class="fld"><span class="k">Checks</span><span class="vv">Minimum password length must be ≥8 (WARN if &lt;12).</span></div>
             <div class="fld"><span class="k">Found</span><span class="vv">Minimum password length: 0 characters.</span></div>
             
@@ -781,7 +786,7 @@
 # password policy -&gt; password must meet complexity requirements -&gt; enabled.
 # verify the current setting:
 secedit /export /cfg &#34;$env:temp\secpol.cfg&#34; | out-null; select-string -path &#34;$env:temp\secpol.cfg&#34; -pattern &#39;passwordcomplexity&#39;">
-          <button class="fhead">
+          <button class="fhead is-open">
             <span class="ficon" style="color:#ff5147">✗</span>
             <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
@@ -793,7 +798,7 @@ secedit /export /cfg &#34;$env:temp\secpol.cfg&#34; | out-null; select-string -p
               <span class="chev">▶</span>
             </span>
           </button>
-          <div class="fbody" hidden>
+          <div class="fbody">
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether password complexity requirements are enforced.</span></div>
             <div class="fld"><span class="k">Found</span><span class="vv">Password complexity requirement: disabled.</span></div>
             
@@ -1024,7 +1029,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       <div class="findings">
         
         <div class="frow" data-status="FAIL" data-text="bitlocker — g: encryption drive: g: | type: 1 | status: unknown | encrypted: 0% | protection: off cis 18.10.10 enable-bitlocker -mountpoint &#39;g:&#39; -encryptionmethod xtsaes256 -usedspaceonly -tpmprotector">
-          <button class="fhead">
+          <button class="fhead is-open">
             <span class="ficon" style="color:#ff5147">✗</span>
             <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
@@ -1036,7 +1041,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <span class="chev">▶</span>
             </span>
           </button>
-          <div class="fbody" hidden>
+          <div class="fbody">
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks BitLocker encryption status for drive G:.</span></div>
             <div class="fld"><span class="k">Found</span><span class="vv">Drive: G: | Type: 1 | Status: Unknown | Encrypted: 0% | Protection: Off</span></div>
             
@@ -1330,7 +1335,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       <div class="findings">
         
         <div class="frow" data-status="WARN" data-text="autoplay disabled hardening autoplay is partially disabled (nodrivetypeautorun = 158). some drive types may still trigger autoplay. cis 18.10.8.3 set-itemproperty -path &#39;hklm:\software\microsoft\windows\currentversion\policies\explorer&#39; -name nodrivetypeautorun -value 255 -type dword -force">
-          <button class="fhead">
+          <button class="fhead is-open">
             <span class="ficon" style="color:#ffb23d">!</span>
             <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
@@ -1342,7 +1347,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <span class="chev">▶</span>
             </span>
           </button>
-          <div class="fbody" hidden>
+          <div class="fbody">
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether AutoPlay is disabled for all drive types.</span></div>
             <div class="fld"><span class="k">Found</span><span class="vv">AutoPlay is partially disabled (NoDriveTypeAutoRun = 158). Some drive types may still trigger AutoPlay.</span></div>
             
@@ -1366,7 +1371,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
         </div>
         
         <div class="frow" data-status="WARN" data-text="audit policy hardening the following subcategories have auditing disabled: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;logon&#39; /success:enable /failure:enable">
-          <button class="fhead">
+          <button class="fhead is-open">
             <span class="ficon" style="color:#ffb23d">!</span>
             <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
             <span class="fname">
@@ -1378,7 +1383,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <span class="chev">▶</span>
             </span>
           </button>
-          <div class="fbody" hidden>
+          <div class="fbody">
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks that key audit policy subcategories log Success/Failure events.</span></div>
             <div class="fld"><span class="k">Found</span><span class="vv">The following subcategories have auditing disabled: Sensitive Privilege Use. Security-relevant events may not be recorded.</span></div>
             
@@ -1483,7 +1488,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       <div class="findings">
         
         <div class="frow" data-status="WARN" data-text="netbios over tcp/ip network 2 adapter(s) inherit netbios setting from dhcp. if the dhcp server does not explicitly disable netbios, it may be active.  (get-ciminstance win32_networkadapterconfiguration -filter &#39;ipenabled=true&#39;).settcpipnetbios(2)">
-          <button class="fhead">
+          <button class="fhead is-open">
             <span class="ficon" style="color:#ffb23d">!</span>
             <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
             <span class="fname">
@@ -1495,7 +1500,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <span class="chev">▶</span>
             </span>
           </button>
-          <div class="fbody" hidden>
+          <div class="fbody">
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether NetBIOS over TCP/IP is disabled on all network adapters.</span></div>
             <div class="fld"><span class="k">Found</span><span class="vv">2 adapter(s) inherit NetBIOS setting from DHCP. If the DHCP server does not explicitly disable NetBIOS, it may be active.</span></div>
             
@@ -2137,6 +2142,17 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
     });
   });
   search.addEventListener('input', apply);
+
+  // Executive-summary counters: apply the matching filter (delegate to the
+  // toolbar chip so the logic lives in one place) and jump to the results.
+  var toolbar = document.querySelector('.toolbar');
+  document.querySelectorAll('.pills .pill[data-k]').forEach(function(pill){
+    pill.addEventListener('click', function(){
+      var chip = document.querySelector('.fchip[data-k="' + pill.dataset.k + '"]');
+      if (chip) chip.click();
+      if (toolbar) window.scrollTo({ top: toolbar.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
+    });
+  });
 
   rows.forEach(function(row){
     var head = row.querySelector('.fhead'), body = row.querySelector('.fbody');
