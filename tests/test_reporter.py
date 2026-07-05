@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -143,6 +144,40 @@ class TestGenerateHtmlReport:
     def test_print_css_present(self):
         html = self._generate(_make_report())
         assert "@media print" in html
+
+    # ── Expand/collapse: the [hidden] toggle must actually hide content ────
+
+    @staticmethod
+    def _finding_rows(html: str) -> list[tuple[str, bool, bool]]:
+        """Per finding row: (status, header marked open, body hidden)."""
+        rows = []
+        for chunk in html.split('<div class="frow" ')[1:]:
+            status = re.search(r'data-status="(\w+)"', chunk).group(1)
+            is_open = 'class="fhead is-open"' in chunk
+            body_hidden = re.search(r'<div class="fbody"[^>]*\shidden', chunk) is not None
+            rows.append((status, is_open, body_hidden))
+        return rows
+
+    def test_fbody_hidden_css_rule_present(self):
+        """Regression: .fbody{display:grid} overrides the UA's [hidden] rule,
+        so an explicit author rule must hide collapsed bodies on screen —
+        without it every row renders permanently expanded."""
+        html = self._generate(_make_report())
+        assert re.search(r"\.fbody\[hidden\]\s*\{\s*display:\s*none", html)
+
+    def test_fail_warn_rows_expanded_by_default(self):
+        """FAIL/WARN rows start expanded (open header, visible body)."""
+        rows = self._finding_rows(self._generate(_make_report()))
+        triage = [r for r in rows if r[0] in ("FAIL", "WARN")]
+        assert triage, "fixture must contain FAIL/WARN rows"
+        assert all(is_open and not hidden for _, is_open, hidden in triage)
+
+    def test_pass_info_rows_collapsed_by_default(self):
+        """PASS/INFO rows start collapsed (closed header, hidden body)."""
+        rows = self._finding_rows(self._generate(_make_report()))
+        quiet = [r for r in rows if r[0] in ("PASS", "INFO")]
+        assert quiet, "fixture must contain PASS/INFO rows"
+        assert all(not is_open and hidden for _, is_open, hidden in quiet)
 
     def test_version_in_footer(self):
         html = self._generate(_make_report())

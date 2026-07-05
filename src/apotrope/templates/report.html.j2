@@ -316,6 +316,9 @@
 
   .fbody { padding:2px 16px 18px 59px; display:grid; gap:13px;
            border-top:1px solid var(--line-soft); background:rgba(0,0,0,0.18); }
+  /* display:grid above beats the UA's [hidden]{display:none} — collapse needs
+     an explicit author rule or the toggle can never hide the body */
+  .fbody[hidden] { display:none; }
   .fbody .fld { display:grid; grid-template-columns: 82px 1fr; gap:14px; align-items:start; }
   .fbody .fld .k { font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--faint); padding-top:2px; }
   .fbody .fld .vv { font-size:13px; color:var(--text); line-height:1.65; }
@@ -528,9 +531,14 @@
         </span>
       </div>
       <div class="findings">
+        {# Default state: FAIL/WARN rows start expanded so issues triage at a
+           glance; PASS/INFO (and ERROR) start collapsed. Keep the is-open
+           class and the hidden attribute in sync — the toggle JS relies on
+           [hidden] and the caret rotation on .is-open. #}
         {% for f in cat.findings %}
+        {% set f_open = f.status in ('FAIL', 'WARN') %}
         <div class="frow" data-status="{{ f.status }}" data-text="{{ f.check_name|lower }} {{ f.category|lower }} {{ f.details|lower }} {{ f.cis|lower }} {{ f.command|lower }}">
-          <button class="fhead">
+          <button class="fhead{% if f_open %} is-open{% endif %}">
             <span class="ficon" style="color:{{ f.status_color }}">{{ f.status_glyph }}</span>
             <span class="fsev" style="color:{{ f.sev_color }};border:1px solid {{ f.sev_color }};background:transparent">{{ f.severity }}</span>
             <span class="fname">
@@ -542,7 +550,7 @@
               <span class="chev">▶</span>
             </span>
           </button>
-          <div class="fbody" hidden>
+          <div class="fbody"{% if not f_open %} hidden{% endif %}>
             <div class="fld"><span class="k">Checks</span><span class="vv">{{ f.description }}</span></div>
             <div class="fld"><span class="k">Found</span><span class="vv">{{ f.details }}</span></div>
             {% if f.remediation or f.command %}
