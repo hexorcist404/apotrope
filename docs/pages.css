@@ -48,6 +48,23 @@ nav .wrap { display:flex; align-items:center; justify-content:space-between; hei
            color:var(--void); background:var(--accent); padding:8px 15px; border-radius:2px;
            box-shadow:0 0 16px rgba(43,255,136,0.3); transition:transform .12s; white-space:nowrap; }
 .nav-cta:hover { transform:translateY(-1px); }
+/* Compare dropdown — CSS-only (hover + focus-within), mirrors the homepage.
+   Full nav height = no hover dead-zone between button and menu. */
+.nav-drop { position:relative; display:flex; align-items:center; height:62px; }
+.nav-drop-btn { display:flex; align-items:center; gap:6px; font-family:"IBM Plex Mono",monospace;
+                font-size:12px; letter-spacing:0.12em; color:var(--muted); text-transform:uppercase;
+                background:none; border:none; cursor:pointer; padding:0; transition:color .15s; white-space:nowrap; }
+.nav-drop-btn .dcaret { font-size:9px; transition:transform .15s; }
+.nav-drop:hover .nav-drop-btn, .nav-drop:focus-within .nav-drop-btn { color:var(--bright); }
+.nav-drop:hover .dcaret, .nav-drop:focus-within .dcaret { transform:rotate(180deg); }
+.nav-drop-menu { display:none; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+                 background:rgba(8,13,17,0.97); border:1px solid var(--line); border-radius:3px;
+                 padding:7px 0; min-width:190px; box-shadow:0 16px 34px rgba(0,0,0,0.55); }
+.nav-drop:hover .nav-drop-menu, .nav-drop:focus-within .nav-drop-menu { display:block; }
+.nav-drop-menu a { display:block; padding:9px 18px; }
+.nav-drop-menu a:hover { background:rgba(43,255,136,0.05); }
+/* measured fit: the vs-page nav needs ~870px; below that, drop Compare first */
+@media (max-width:880px){ .nav-links .nav-drop { display:none; } }
 @media (max-width:760px){ .nav-links { display:none; } }
 
 /* ── Page content ── */
