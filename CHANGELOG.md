@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Docs
+- **README terminal screenshots recaptured with v0.1.10.** Both `assets/screenshots/`
+  captures now show the current release (75/100 C demo) and the same WORKSTATION-07
+  machine as the site's sample report and homepage demo.
 - **Sample report refreshed to v0.1.10.** `docs/report.html` is now a real (sanitized)
   v0.1.10 scan — 53 checks, 75/100 (C) — showcasing the remediation-caution and
   share-safely banners added in this release. The homepage terminal demo is aligned
