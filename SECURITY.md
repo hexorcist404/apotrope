@@ -25,7 +25,7 @@ If you discover a security vulnerability in Apotrope, **please do not open a pub
 
 Instead, please report it using GitHub's private vulnerability reporting feature, OR via email at:
 
-### <hexorcist404@pm.me>
+### <support@apotrope.sh>
 
 Include the following in your report:
 
