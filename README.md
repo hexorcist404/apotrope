@@ -92,7 +92,9 @@ expect a SmartScreen warning on first run). PyInstaller-packaged executables
 also sometimes trip antivirus machine-learning heuristics, so a few generic
 detections on VirusTotal are expected for this class of binary; if your AV
 quarantines the exe, `pip install apotrope` is the alternative channel.
-Instead of asking you to trust a bare binary, releases are verifiable two ways.
+Instead of asking you to trust a bare binary, the downloaded exe is verifiable
+two ways — both steps below operate on `apotrope.exe`, so they apply to the
+GitHub release only, not to a `pip install`.
 
 **1. Verify build provenance** — releases **from v0.1.10 onward** are built on
 GitHub-hosted CI and attested at build time. Requires the
@@ -128,7 +130,9 @@ step catches download corruption and tampered mirrors — not a compromised
 repository. Step 1 is the authenticity check; this is the quick integrity
 check.
 
-**Prefer not to run a downloaded exe at all?** `pip install apotrope` gets the
+**Installed with `pip`, or prefer not to run a downloaded exe at all?** Then
+there's no `apotrope.exe` on disk to hash or attest — the two steps above don't
+apply to you. `pip install apotrope` gets the
 same tool from PyPI, where every release is published straight from CI via
 [trusted publishing](https://docs.pypi.org/trusted-publishers/) (OpenID
 Connect, no long-lived tokens) with [PEP 740](https://peps.python.org/pep-0740/)
