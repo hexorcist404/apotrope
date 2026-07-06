@@ -415,7 +415,9 @@ def _check_tpm() -> list[CheckResult]:
 
     present = bool(data.get("TpmPresent", False))
     ready = bool(data.get("TpmReady", False))
-    version = str(data.get("ManufacturerVersion") or "Unknown")
+    # Get-Tpm's ManufacturerVersion can carry trailing NUL bytes from the
+    # firmware WMI string; strip them so they don't leak into report output.
+    version = str(data.get("ManufacturerVersion") or "").replace("\x00", "").strip() or "Unknown"
 
     if not present:
         return [CheckResult(

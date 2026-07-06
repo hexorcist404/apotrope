@@ -358,6 +358,23 @@ class TestCheckTpm:
         assert results[0].status == Status.PASS
         assert "Unknown" in results[0].details
 
+    def test_version_nul_bytes_stripped(self):
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=_tpm_json(present=True, ready=True,
+                                          version="7.2.3.1\x00\x00")):
+            results = os_info._check_tpm()
+        assert results[0].status == Status.PASS
+        assert "7.2.3.1" in results[0].details
+        assert "\x00" not in results[0].details
+
+    def test_version_all_nul_bytes_falls_back_to_unknown(self):
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=_tpm_json(present=True, ready=True,
+                                          version="\x00\x00")):
+            results = os_info._check_tpm()
+        assert results[0].status == Status.PASS
+        assert "Unknown" in results[0].details
+
 
 # ---------------------------------------------------------------------------
 # run() — integration
