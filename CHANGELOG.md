@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-07-06
+
+### Added
+- **Clickable executive-summary counters in the HTML report.** The passed / failed /
+  warnings / info counters are now real buttons: clicking one (or focusing it and
+  pressing Enter) applies the matching results filter and jumps to the results list.
+  They reuse the existing filter-tab logic and carry hover and focus affordances.
+
+### Fixed
+- **Report expand/collapse actually hides row details.** Clicking a finding's header
+  (or the EXPAND ALL / COLLAPSE controls) now toggles the detail body — previously the
+  caret rotated but the body never hid, because no CSS rule beat the grid display on
+  `[hidden]` rows. FAIL/WARN findings render expanded by default; PASS/INFO collapsed.
+- **TPM firmware version no longer carries NUL bytes.** `Get-Tpm`'s
+  `ManufacturerVersion` can include trailing NUL characters from the firmware WMI
+  string; they are now stripped before the value reaches report output, falling back
+  to "Unknown" when nothing printable remains.
+
 ### Docs
 - **README terminal screenshots recaptured with v0.1.10.** Both `assets/screenshots/`
   captures now show the current release (75/100 C demo) and the same WORKSTATION-07
@@ -15,6 +33,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   v0.1.10 scan — 53 checks, 75/100 (C) — showcasing the remediation-caution and
   share-safely banners added in this release. The homepage terminal demo is aligned
   to the same scan (score, check counts, top failures).
+- **COMPARE nav dropdown.** The three comparison pages (vs CIS-CAT, vs Harden Windows
+  Security, Lynis for Windows) now live under a single COMPARE dropdown in the site
+  nav instead of three separate links.
+- **pip vs release-exe integrity channels clarified.** The README and the homepage
+  download steps now explain which integrity guarantees apply to each install channel:
+  SHA-256 + CI build provenance for the release exe, PEP 740 attestations on PyPI for
+  pip installs.
+- **Security contact email updated** in `SECURITY.md`.
 
 ## [0.1.10] - 2026-07-04
 
