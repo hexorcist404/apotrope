@@ -141,6 +141,49 @@ class TestCompareReports:
 
 
 # ---------------------------------------------------------------------------
+# Errored checks: an ERROR in the current scan means "could not evaluate",
+# which is indeterminate — never proof of remediation.
+# ---------------------------------------------------------------------------
+
+class TestErroredChecks:
+    def test_fail_to_error_is_errored_not_resolved(self):
+        """A FAIL check that ERRORs in the current scan cannot be confirmed
+        remediated. It must be reported as errored, never resolved."""
+        baseline = _make_report([_make_result("Complexity", Status.FAIL)])
+        current  = _make_report([_make_result("Complexity", Status.ERROR)])
+        diff = compare_reports(baseline, current)
+        assert diff.resolved_findings == []
+        assert len(diff.errored_findings) == 1
+        assert diff.errored_findings[0].check_name == "Complexity"
+
+    def test_warn_to_error_is_errored_not_resolved(self):
+        baseline = _make_report([_make_result("Signature Age", Status.WARN)])
+        current  = _make_report([_make_result("Signature Age", Status.ERROR)])
+        diff = compare_reports(baseline, current)
+        assert diff.resolved_findings == []
+        assert len(diff.errored_findings) == 1
+
+    def test_error_to_pass_is_not_falsely_resolved(self):
+        """A check that was ERROR in baseline and PASSes now was never a known
+        finding — there is nothing to credit as resolved."""
+        baseline = _make_report([_make_result("X", Status.ERROR)])
+        current  = _make_report([_make_result("X", Status.PASS)])
+        diff = compare_reports(baseline, current)
+        assert diff.resolved_findings == []
+        assert diff.errored_findings == []
+        assert diff.unchanged_count == 1
+
+    def test_error_in_both_scans_is_not_a_finding(self):
+        """ERROR → ERROR is unchanged indeterminacy, not a resolved/new finding."""
+        baseline = _make_report([_make_result("Y", Status.ERROR)])
+        current  = _make_report([_make_result("Y", Status.ERROR)])
+        diff = compare_reports(baseline, current)
+        assert diff.resolved_findings == []
+        assert diff.errored_findings == []
+        assert diff.new_findings == []
+
+
+# ---------------------------------------------------------------------------
 # save_baseline / load_baseline
 # ---------------------------------------------------------------------------
 

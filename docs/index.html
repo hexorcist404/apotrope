@@ -59,7 +59,7 @@
     "@type": "FAQPage",
     "mainEntity": [
       { "@type": "Question", "name": "Does Apotrope send any data off the machine?", "acceptedAnswer": { "@type": "Answer", "text": "No. Apotrope is fully offline and read-only. It makes no network connections and has no telemetry." } },
-      { "@type": "Question", "name": "Does Apotrope change my system?", "acceptedAnswer": { "@type": "Answer", "text": "No. It is read-only. It queries configuration and does not modify settings, the registry, or files." } },
+      { "@type": "Question", "name": "Does Apotrope change my system?", "acceptedAnswer": { "@type": "Answer", "text": "No. It is read-only. It reads configuration to evaluate it and does not change your settings, the registry, or files. One check exports the current security policy to a temporary file that it reads and deletes immediately; nothing on your system is modified." } },
       { "@type": "Question", "name": "Which CIS Benchmark versions does it use?", "acceptedAnswer": { "@type": "Answer", "text": "CIS Microsoft Windows 11 Enterprise Benchmark v5.0.0 and Windows 10 v4.0.0, selected automatically from the OS build." } },
       { "@type": "Question", "name": "Is Apotrope free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Free and open source under the MIT license. No account or key." } },
       { "@type": "Question", "name": "Do I need Python?", "acceptedAnswer": { "@type": "Answer", "text": "No. The standalone apotrope.exe needs no Python. You can also install via pip on Python 3.12+." } }
@@ -634,7 +634,7 @@
         </details>
         <details class="faq-item">
           <summary>Does Apotrope change my system?</summary>
-          <p>No. It is read-only. It queries configuration and does not modify settings, the registry, or files.</p>
+          <p>No. It is read-only. It reads configuration to evaluate it and does not change your settings, the registry, or files. One check exports the current security policy to a temporary file that it reads and deletes immediately; nothing on your system is modified.</p>
         </details>
         <details class="faq-item">
           <summary>Which CIS Benchmark versions does it use?</summary>
@@ -666,7 +666,7 @@
           · <a href="/vs-cis-cat/">vs CIS-CAT Lite</a>
           · <a href="/vs-harden-windows-security/">vs Harden Windows Security</a>
         </div>
-        <div class="foot-auth">For authorized security assessment use only · <span class="nodata">No data left this machine</span></div>
+        <div class="foot-auth">For authorized security assessment use only · <span class="nodata">No data leaves this machine</span></div>
       </div>
       <div>◈ apotrope.sh</div>
     </div>
