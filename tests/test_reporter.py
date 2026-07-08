@@ -152,7 +152,9 @@ class TestGenerateHtmlReport:
         """Per finding row: (status, header marked open, body hidden)."""
         rows = []
         for chunk in html.split('<div class="frow" ')[1:]:
-            status = re.search(r'data-status="(\w+)"', chunk).group(1)
+            status_match = re.search(r'data-status="(\w+)"', chunk)
+            assert status_match is not None
+            status = status_match.group(1)
             is_open = 'class="fhead is-open"' in chunk
             body_hidden = re.search(r'<div class="fbody"[^>]*\shidden', chunk) is not None
             rows.append((status, is_open, body_hidden))
