@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Executable icon is now the official Apotrope brand mark.** `apotrope.exe` ships
+  with the eye-mark logo (cyan hexagon, orbital ring, orange core) centered on a
+  rounded dark brand tile (`#05090c`), replacing the procedurally generated blue
+  "A"-on-shield. `build_exe.py`'s icon generator now composites the committed brand
+  mark (`docs/apotrope-mark.png`) into the multi-resolution `assets/icon.ico`
+  (16→256 px) instead of drawing the shield, so the icon stays in sync with the mark
+  used across the site nav, terminal banner, and HTML report.
+
 ## [0.1.11] - 2026-07-06
 
 ### Added
