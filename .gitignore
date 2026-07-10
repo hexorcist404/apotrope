@@ -55,6 +55,7 @@ $RECYCLE.BIN/
 # Apotrope outputs
 *.html
 *.json
+!brand/tokens.json
 # docs/ is the published marketing site (GitHub Pages) — commit all of its HTML
 !docs/index.html
 !docs/report.html
