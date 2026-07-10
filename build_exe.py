@@ -23,8 +23,31 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 BRAND_MARK = ROOT / "docs" / "apotrope-mark.png"  # official brand eye-mark (512², transparent)
-TILE_RGB = (5, 9, 12)                             # brand background #05090c
+BRAND_MARK_SMALL = ROOT / "assets" / "icon-mark-16.png"  # simplified mark for tiny sizes, from assets/icon-16.svg
+BRAND_TOKENS = ROOT / "brand" / "tokens.json"     # single source of truth for brand colors
+MARK_GROUND_FALLBACK = (11, 13, 14)               # brand/tokens.json mark.ground #0B0D0E
 ICON_SIZES = [256, 128, 64, 48, 32, 16]           # multi-res frames baked into the ICO
+
+
+def _hex_to_rgb(h: str) -> tuple[int, int, int]:
+    h = h.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def _tile_rgb() -> tuple[int, int, int]:
+    """The app-icon tile color = brand token mark.ground (the mark's void ground).
+
+    Read from brand/tokens.json so the icon tile can never drift from the palette.
+    Falls back to the documented #0B0D0E if the tokens file is unreadable.
+    """
+    try:
+        import json
+        data = json.loads(BRAND_TOKENS.read_text(encoding="utf-8"))
+        return _hex_to_rgb(data["mark"]["ground"]["hex"])
+    except Exception as exc:  # missing/renamed token -> documented fallback, but say so
+        print(f"[build] Could not read mark.ground from {BRAND_TOKENS} ({exc}); "
+              f"using fallback {MARK_GROUND_FALLBACK}")
+        return MARK_GROUND_FALLBACK
 
 
 def _ensure_icon() -> Path:
@@ -33,8 +56,10 @@ def _ensure_icon() -> Path:
     The committed assets/icon.ico is what actually ships: the release CI has no
     Pillow and consumes the committed file verbatim (see release.yml). This
     generator is the local fallback — it composites the Apotrope brand mark
-    (docs/apotrope-mark.png) onto a rounded dark brand tile and writes a
-    multi-resolution ICO. To change the shipped icon, regenerate + commit locally.
+    (docs/apotrope-mark.png) onto a rounded tile colored by the brand token
+    mark.ground (brand/tokens.json) and writes a multi-resolution ICO. The vector
+    masters live at assets/icon.svg / icon-16.svg. To change the shipped icon,
+    regenerate + commit locally.
     """
     icon_path = ROOT / "assets" / "icon.ico"
     if icon_path.exists():
@@ -53,24 +78,35 @@ def _ensure_icon() -> Path:
         return icon_path  # caller checks .exists()
 
     mark = Image.open(BRAND_MARK).convert("RGBA")
+    # At tiny sizes the intricate mark (thin hexagon + 6 spokes) turns to mush, so
+    # the <=24px frame uses the simplified small master (spokes dropped, strokes
+    # thickened) rendered from assets/icon-16.svg. Its ~10% padding is baked in.
+    mark_small = (Image.open(BRAND_MARK_SMALL).convert("RGBA")
+                  if BRAND_MARK_SMALL.exists() else None)
+    tile_rgb = _tile_rgb()
 
     def _make_frame(size: int) -> Image.Image:
-        # Render at 4x then downscale so the rounded corners and the intricate
-        # mark stay clean at small sizes (there is no vector source to re-export).
+        # Render at 4x then downscale so the rounded corners and the mark stay
+        # clean at small sizes (there is no vector source to re-export).
         ss = 4
         big = size * ss
-        # Rounded dark brand tile: opaque #05090c inside the corner radius,
-        # fully transparent outside it.
+        # Rounded tile in the mark.ground token color, opaque inside the corner
+        # radius (16%, matching assets/icon.svg's rx) and transparent outside it.
         mask = Image.new("L", (big, big), 0)
         ImageDraw.Draw(mask).rounded_rectangle(
-            (0, 0, big - 1, big - 1), radius=int(big * 0.18), fill=255)
+            (0, 0, big - 1, big - 1), radius=int(big * 0.16), fill=255)
         tile = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-        tile.paste(Image.new("RGBA", (big, big), TILE_RGB + (255,)), (0, 0), mask)
-        # Brand mark centered with ~10% padding, using its own alpha as the mask.
-        inner = int(big * 0.80)
-        m = mark.resize((inner, inner), Image.LANCZOS)
-        off = (big - inner) // 2
-        tile.paste(m, (off, off), m)
+        tile.paste(Image.new("RGBA", (big, big), tile_rgb + (255,)), (0, 0), mask)
+        if size <= 24 and mark_small is not None:
+            # Simplified master already carries its padding — paste at full tile.
+            m = mark_small.resize((big, big), Image.LANCZOS)
+            tile.paste(m, (0, 0), m)
+        else:
+            # Full mark, centered with ~10% padding, using its own alpha as mask.
+            inner = int(big * 0.80)
+            m = mark.resize((inner, inner), Image.LANCZOS)
+            off = (big - inner) // 2
+            tile.paste(m, (off, off), m)
         return tile.resize((size, size), Image.LANCZOS)
 
     frames = [_make_frame(s) for s in ICON_SIZES]

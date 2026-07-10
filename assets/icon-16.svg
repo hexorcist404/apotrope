@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!--
+  Apotrope app-icon master, simplified for small sizes (16-24 px).
+  Spokes dropped and strokes thickened for legibility; same brand tokens as
+  assets/icon.svg (see brand/tokens.json). tile #0B0D0E = mark.ground.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 100 100">
+  <defs>
+  <radialGradient id="femb" cx="50%" cy="50%" r="50%">
+  <stop offset="0%" stop-color="#ffb066"></stop>
+  <stop offset="50%" stop-color="#e8702a"></stop>
+  <stop offset="100%" stop-color="#b34d12"></stop>
+  </radialGradient>
+  </defs>
+  <rect x="2" y="2" width="96" height="96" rx="16" fill="#0b0d0e"></rect>
+  <path d="M50.0,10.0 L84.6,30.0 L84.6,70.0 L50.0,90.0 L15.4,70.0 L15.4,30.0 Z" fill="none" stroke="#6fe0d6" stroke-width="4.34" stroke-linejoin="round"></path>
+  <path d="M20,50 Q50,35 80,50 Q50,65 20,50 Z" fill="#0b0d0e" stroke="#6fe0d6" stroke-width="7" stroke-linejoin="round"></path>
+  <circle cx="50" cy="50" r="13.5" fill="none" stroke="#bce7c0" stroke-width="4.34"></circle>
+  <circle cx="50" cy="50" r="6.9" fill="url(#femb)"></circle>
+</svg>
