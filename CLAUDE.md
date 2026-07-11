@@ -9,20 +9,11 @@ git config user.name "hexorcist404"
 git config user.email "hexorcist404@pm.me"
 ```
 
-The `Co-Authored-By` trailer should also use this identity:
-`Co-Authored-By: hexorcist404 <hexorcist404@pm.me>`
-
-## Git Commit Author
-
-Always use these credentials for commits in this repo:
-
-```
-git config user.name "hexorcist404"
-git config user.email "hexorcist404@pm.me"
-```
-
-The `Co-Authored-By` trailer should also use this identity:
-`Co-Authored-By: hexorcist404 <hexorcist404@pm.me>`
+Do **not** add a `Co-Authored-By` trailer for hexorcist404 — they are already
+the commit/PR author, so self-crediting is redundant noise. Only add a
+`Co-Authored-By` line for a genuine *additional* co-author who is not the
+recorded author. Keep commit messages clean (no AI-assistant co-author trailer
+either).
 
 ## Project Overview
 
