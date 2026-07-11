@@ -459,6 +459,7 @@ class Reporter:
         sections: list[tuple[str, str, list]] = [
             ("green",   "Resolved", diff.resolved_findings),
             ("magenta", "Not scanned (coverage lost)", diff.missing_findings),
+            (_MUTED,    "Errored (could not evaluate)", diff.errored_findings),
             ("red",     "New",      diff.new_findings),
             ("yellow",  "Worsened", diff.worsened_findings),
             ("yellow",  "Ongoing",  diff.unchanged_bad),
@@ -486,6 +487,7 @@ class Reporter:
         console.print(
             f"  Resolved: {len(diff.resolved_findings)}  |  "
             f"Not scanned: {len(diff.missing_findings)}  |  "
+            f"Errored: {len(diff.errored_findings)}  |  "
             f"New: {len(diff.new_findings)}  |  "
             f"Worsened: {len(diff.worsened_findings)}  |  "
             f"Unchanged: {diff.unchanged_count}"

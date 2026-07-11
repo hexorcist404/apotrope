@@ -23,10 +23,12 @@ from apotrope.models import AuditReport, CheckResult, Severity, Status
 
 log = logging.getLogger(__name__)
 
-# Statuses considered "bad" (contribute negatively)
+# Statuses considered "bad" — an active finding the user should act on.
 _BAD = {Status.FAIL, Status.WARN}
-# Statuses considered "good" (neutral or positive)
-_GOOD = {Status.PASS, Status.INFO, Status.ERROR}
+# ERROR means the check could not be evaluated: indeterminate, never "good".
+# Bucketed separately so a check that stops evaluating is never mistaken for a
+# remediated one — the same honesty principle as ``missing_findings``.
+_INDETERMINATE = {Status.ERROR}
 
 
 @dataclasses.dataclass
@@ -45,6 +47,10 @@ class ScanDiff:
                            a disabled/admin-gated check, an import failure, or a rename)
                            — NOT proof of remediation. Tracked separately so a reduced
                            scan is never mistaken for fixed risk.
+        errored_findings:  Checks that were FAIL/WARN in baseline but ERRORed in the
+                           current scan (present, but could not be evaluated). Like
+                           missing_findings this is indeterminate — never counted as
+                           resolved, because an unevaluable check is not a fixed one.
         worsened_findings: Checks that were PASS/INFO in baseline but are now FAIL/WARN.
         unchanged_bad:     Checks that were FAIL/WARN in both scans.
         unchanged_count:   Total number of checks with the same status in both scans.
@@ -59,6 +65,7 @@ class ScanDiff:
     unchanged_bad: list[CheckResult]
     unchanged_count: int
     missing_findings: list[CheckResult] = dataclasses.field(default_factory=list)
+    errored_findings: list[CheckResult] = dataclasses.field(default_factory=list)
 
 
 def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
@@ -83,6 +90,7 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
     new_findings: list[CheckResult] = []
     resolved_findings: list[CheckResult] = []
     missing_findings: list[CheckResult] = []
+    errored_findings: list[CheckResult] = []
     worsened_findings: list[CheckResult] = []
     unchanged_bad: list[CheckResult] = []
     unchanged_count = 0
@@ -110,8 +118,14 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
             assert b is not None and c is not None
             b_bad = b.status in _BAD
             c_bad = c.status in _BAD
+            c_indeterminate = c.status in _INDETERMINATE
 
-            if b_bad and not c_bad:
+            if b_bad and c_indeterminate:
+                # Was a finding, now unevaluable: cannot confirm remediation.
+                # Must be intercepted before the resolved branch, since ERROR
+                # is not in _BAD and would otherwise read as "no longer bad".
+                errored_findings.append(c)
+            elif b_bad and not c_bad:
                 resolved_findings.append(c)
             elif not b_bad and c_bad:
                 worsened_findings.append(c)
@@ -129,6 +143,7 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
         new_findings=new_findings,
         resolved_findings=resolved_findings,
         missing_findings=missing_findings,
+        errored_findings=errored_findings,
         worsened_findings=worsened_findings,
         unchanged_bad=unchanged_bad,
         unchanged_count=unchanged_count,

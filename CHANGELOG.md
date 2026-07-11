@@ -25,6 +25,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   read from `brand/tokens.json` (`mark.ground` `#0B0D0E`) rather than hardcoded, so it
   can't drift from the palette, and the 16 px frame uses the simplified `icon-16.svg`
   master so it stays crisp instead of muddying the intricate mark.
+  
+### Fixed
+- **Baseline comparison no longer reports errored checks as resolved.** A check that was
+  FAIL/WARN in the baseline but could not be evaluated in the current scan (status ERROR)
+  was miscounted as remediated. Such checks now appear in a dedicated "Errored (could not
+  evaluate)" category — indeterminate, never resolved — mirroring how checks that drop out
+  of coverage are already handled.
 
 ## [0.1.11] - 2026-07-06
 
