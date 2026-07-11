@@ -55,6 +55,10 @@ $RECYCLE.BIN/
 # Apotrope outputs
 *.html
 *.json
+# brand/ is the palette source of truth — track ALL of its JSON, not just one
+# file, so a future brand token (e.g. brand/palette.json) can't silently fall
+# back into the *.json ignore above.
+!brand/*.json
 # docs/ is the published marketing site (GitHub Pages) — commit all of its HTML
 !docs/index.html
 !docs/report.html

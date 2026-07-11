@@ -7,7 +7,7 @@ Usage:
 The resulting exe is written to dist/apotrope.exe and bundles:
   - All Python dependencies (rich, jinja2, ...)
   - The Jinja2 HTML template (src/apotrope/templates/report.html.j2)
-  - A Windows shield application icon (assets/icon.ico)
+  - The Apotrope brand mark on a dark tile as the Windows app icon (assets/icon.ico)
 
 The exe runs on any Windows 10/11 machine without a Python installation.
 """
@@ -22,72 +22,96 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent
+BRAND_MARK = ROOT / "docs" / "apotrope-mark.png"  # official brand eye-mark (512², transparent)
+BRAND_MARK_SMALL = ROOT / "assets" / "icon-mark-16.png"  # simplified mark for tiny sizes, from assets/icon-16.svg
+BRAND_TOKENS = ROOT / "brand" / "tokens.json"     # single source of truth for brand colors
+MARK_GROUND_FALLBACK = (11, 13, 14)               # brand/tokens.json mark.ground #0B0D0E
+ICON_SIZES = [256, 128, 64, 48, 32, 16]           # multi-res frames baked into the ICO
+
+
+def _hex_to_rgb(h: str) -> tuple[int, int, int]:
+    h = h.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+
+
+def _tile_rgb() -> tuple[int, int, int]:
+    """The app-icon tile color = brand token mark.ground (the mark's void ground).
+
+    Read from brand/tokens.json so the icon tile can never drift from the palette.
+    Falls back to the documented #0B0D0E if the tokens file is unreadable.
+    """
+    try:
+        import json
+        data = json.loads(BRAND_TOKENS.read_text(encoding="utf-8"))
+        return _hex_to_rgb(data["mark"]["ground"]["hex"])
+    except Exception as exc:  # missing/renamed token -> documented fallback, but say so
+        print(f"[build] Could not read mark.ground from {BRAND_TOKENS} ({exc}); "
+              f"using fallback {MARK_GROUND_FALLBACK}")
+        return MARK_GROUND_FALLBACK
 
 
 def _ensure_icon() -> Path:
-    """Return path to icon.ico, generating it with Pillow if absent."""
+    """Return path to assets/icon.ico, generating it from the brand mark if absent.
+
+    The committed assets/icon.ico is what actually ships: the release CI has no
+    Pillow and consumes the committed file verbatim (see release.yml). This
+    generator is the local fallback — it composites the Apotrope brand mark
+    (docs/apotrope-mark.png) onto a rounded tile colored by the brand token
+    mark.ground (brand/tokens.json) and writes a multi-resolution ICO. The vector
+    masters live at assets/icon.svg / icon-16.svg. To change the shipped icon,
+    regenerate + commit locally.
+    """
     icon_path = ROOT / "assets" / "icon.ico"
     if icon_path.exists():
         return icon_path
 
     icon_path.parent.mkdir(exist_ok=True)
-    print("[build] Generating assets/icon.ico …")
+    print("[build] Generating assets/icon.ico from brand mark …")
     try:
-        from PIL import Image, ImageDraw, ImageFont  # type: ignore[import]
+        from PIL import Image, ImageDraw  # type: ignore[import]
     except ImportError:
         print("[build] Pillow not installed — skipping icon (exe will use default)")
         return icon_path  # caller checks .exists()
 
-    def _draw_shield(draw, x0, y0, x1, y1, fill, outline=None, lw=0):
-        w, h = x1 - x0, y1 - y0
-        split = y0 + int(h * 0.62)
-        pts = [(x0, y0), (x1, y0), (x1, split), (x0 + w // 2, y1), (x0, split)]
-        draw.polygon(pts, fill=fill)
-        if outline and lw:
-            draw.line(pts + [pts[0]], fill=outline, width=lw)
+    if not BRAND_MARK.exists():
+        print(f"[build] Brand mark not found at {BRAND_MARK} — skipping icon")
+        return icon_path  # caller checks .exists()
+
+    mark = Image.open(BRAND_MARK).convert("RGBA")
+    # At tiny sizes the intricate mark (thin hexagon + 6 spokes) turns to mush, so
+    # the <=24px frame uses the simplified small master (spokes dropped, strokes
+    # thickened) rendered from assets/icon-16.svg. Its ~10% padding is baked in.
+    mark_small = (Image.open(BRAND_MARK_SMALL).convert("RGBA")
+                  if BRAND_MARK_SMALL.exists() else None)
+    tile_rgb = _tile_rgb()
 
     def _make_frame(size: int) -> Image.Image:
-        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        pad = max(2, size // 10)
-        steps = max(4, size // 16)
-        # Shadow
-        off = max(1, size // 32)
-        _draw_shield(draw, pad + off, pad + off, size - pad + off,
-                     size - pad // 2 + off, fill=(10, 30, 60, 120))
-        # Gradient fill (concentric layers)
-        for i in range(steps, 0, -1):
-            t = i / steps
-            shrink = (steps - i) * (pad / steps)
-            r = int(10 + (0 - 10) * (1 - t))
-            g = int(60 + (100 - 60) * (1 - t))
-            b = int(140 + (200 - 140) * (1 - t))
-            _draw_shield(draw,
-                         pad + shrink, pad + shrink,
-                         size - pad - shrink, size - pad // 2 - shrink,
-                         fill=(r, g, b, 255))
-        # Highlight outline
-        _draw_shield(draw, pad, pad, size - pad, size - pad // 2,
-                     fill=None, outline=(100, 180, 255, 200), lw=max(1, size // 32))
-        # "A" label
-        cx, cy = size // 2, int(size * 0.40)
-        font_size = max(8, int(size * 0.38))
-        try:
-            font = ImageFont.truetype("arial.ttf", font_size)
-        except Exception:
-            font = ImageFont.load_default()
-        for dx, dy in [(1, 1), (0, 0)]:
-            colour = (20, 40, 80, 200) if (dx, dy) == (1, 1) else (255, 255, 255, 255)
-            bb = draw.textbbox((0, 0), "A", font=font)
-            tw, th = bb[2] - bb[0], bb[3] - bb[1]
-            draw.text((cx - tw // 2 + dx, cy - th // 2 + dy), "A",
-                      font=font, fill=colour)
-        return img
+        # Render at 4x then downscale so the rounded corners and the mark stay
+        # clean at small sizes (there is no vector source to re-export).
+        ss = 4
+        big = size * ss
+        # Rounded tile in the mark.ground token color, opaque inside the corner
+        # radius (16%, matching assets/icon.svg's rx) and transparent outside it.
+        mask = Image.new("L", (big, big), 0)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (0, 0, big - 1, big - 1), radius=int(big * 0.16), fill=255)
+        tile = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+        tile.paste(Image.new("RGBA", (big, big), tile_rgb + (255,)), (0, 0), mask)
+        if size <= 24 and mark_small is not None:
+            # Simplified master already carries its padding — paste at full tile.
+            m = mark_small.resize((big, big), Image.LANCZOS)
+            tile.paste(m, (0, 0), m)
+        else:
+            # Full mark, centered with ~10% padding, using its own alpha as mask.
+            inner = int(big * 0.80)
+            m = mark.resize((inner, inner), Image.LANCZOS)
+            off = (big - inner) // 2
+            tile.paste(m, (off, off), m)
+        return tile.resize((size, size), Image.LANCZOS)
 
-    sizes = [256, 64, 48, 32, 16]
-    frames = [_make_frame(s) for s in sizes]
+    frames = [_make_frame(s) for s in ICON_SIZES]
     frames[0].save(str(icon_path), format="ICO",
-                   sizes=[(s, s) for s in sizes],
+                   sizes=[(s, s) for s in ICON_SIZES],
                    append_images=frames[1:])
     print(f"[build] icon.ico written ({icon_path.stat().st_size} bytes)")
     return icon_path

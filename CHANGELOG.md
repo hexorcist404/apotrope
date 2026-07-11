@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`brand/tokens.json` — single source of truth for the brand palette.** Codifies the
+  two canonical layers from the design system (the `mark` — cyan/mint/ember on void
+  ground `#0B0D0E` — and the `product` CRT/status palette) with the rules that travel
+  with them (never recolor the ember iris; the status scale must not drift). New
+  `tests/test_brand_assets.py` fails CI if the icon SVGs drift from these tokens.
+- **Vector icon masters `assets/icon.svg` + `assets/icon-16.svg`.** The eye-mark on its
+  void ground, with a small-size variant (spokes dropped, strokes thickened) for
+  legibility at 16–24 px.
+
+### Changed
+- **Executable icon is now the official Apotrope brand mark.** `apotrope.exe` ships with
+  the eye-mark logo (cyan hexagon, orbital ring, ember core) on a rounded tile,
+  replacing the procedurally generated blue "A"-on-shield. `build_exe.py` composites the
+  brand mark into the multi-resolution `assets/icon.ico` (16→256 px); the tile color is
+  read from `brand/tokens.json` (`mark.ground` `#0B0D0E`) rather than hardcoded, so it
+  can't drift from the palette, and the 16 px frame uses the simplified `icon-16.svg`
+  master so it stays crisp instead of muddying the intricate mark.
+  
 ### Fixed
 - **Baseline comparison no longer reports errored checks as resolved.** A check that was
   FAIL/WARN in the baseline but could not be evaluated in the current scan (status ERROR)
