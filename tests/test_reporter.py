@@ -103,7 +103,8 @@ class TestGenerateHtmlReport:
         """Findings must be in the static HTML (readable with JS disabled)."""
         html = self._generate(_make_report())
         assert 'class="findings"' in html
-        assert 'class="frow"' in html
+        # each row carries a status class (frow is-fail / is-pass / …)
+        assert re.search(r'class="frow is-\w+"', html)
         # the FAIL finding's status is baked into a filterable data attribute
         assert 'data-status="FAIL"' in html
 
@@ -151,7 +152,7 @@ class TestGenerateHtmlReport:
     def _finding_rows(html: str) -> list[tuple[str, bool, bool]]:
         """Per finding row: (status, header marked open, body hidden)."""
         rows = []
-        for chunk in html.split('<div class="frow" ')[1:]:
+        for chunk in html.split('<div class="frow ')[1:]:
             status_match = re.search(r'data-status="(\w+)"', chunk)
             assert status_match is not None
             status = status_match.group(1)
@@ -302,6 +303,27 @@ class TestGenerateHtmlReport:
             "Review before running — these commands run elevated and can change "
             "system settings, or require a reboot or maintenance window." in html
         )
+
+    def test_command_block_copy_source_is_clean(self):
+        """The command block renders a non-selectable ``PS>`` prompt (and a muted
+        ``#`` comment line) for readability, but the copy source ``data-cmd`` must
+        hold the RAW command — no prompt, no markup — so a paste runs verbatim."""
+        cmd = ("# comment line\n"
+               "Set-NetFirewallProfile -Profile Public -Enabled True")
+        with_command = CheckResult(
+            "Firewall", "Public Profile Cmd", Status.FAIL, Severity.HIGH,
+            "desc", "off", "Enable it", cmd,
+        )
+        html = self._generate(_make_report(extra_results=[with_command]))
+        # readability: rendered command carries the prompt + a muted comment line
+        assert '<span class="ps">PS&gt;</span>' in html
+        assert 'class="cl-c"' in html
+        # copy-correctness: every data-cmd value is free of the prompt and markup
+        raw_cmds = re.findall(r'data-cmd="(.*?)"', html, re.DOTALL)
+        assert raw_cmds, "expected a command block with a data-cmd attribute"
+        for raw in raw_cmds:
+            assert "PS&gt;" not in raw
+            assert "<span" not in raw
 
     def test_share_warning_rendered_in_footer(self):
         """The footer warns that the report embeds machine-identifying detail."""

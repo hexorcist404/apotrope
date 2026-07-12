@@ -578,12 +578,13 @@ class Reporter:
             key=lambda c: cast(int, c["score"]),  # score is always an int at runtime
         )
 
-        # ── Top issues: FAIL/WARN with remediation, CRITICAL/HIGH or any FAIL ─
+        # ── Top issues: crit/high FAIL/WARN with remediation (cap 8) ──────────
+        # Only CRITICAL/HIGH surface here; everything else lives in the full
+        # breakdown below and is counted by the "+N more" remainder note.
         candidates = [
             r for r in report.results
             if r.status in (Status.FAIL, Status.WARN) and r.remediation
-            and (r.severity in (Severity.CRITICAL, Severity.HIGH)
-                 or r.status == Status.FAIL)
+            and r.severity in (Severity.CRITICAL, Severity.HIGH)
         ]
         candidates.sort(key=lambda r: (_sev_ord.get(r.severity, 5),
                                        0 if r.status == Status.FAIL else 1))
@@ -598,9 +599,14 @@ class Reporter:
                 "category_slug": _slug(r.category),
                 "check_name":    r.check_name,
                 "remediation":   r.remediation,
+                "command":       r.command,
             }
-            for i, r in enumerate(candidates[:5])
+            for i, r in enumerate(candidates[:8])
         ]
+        # Every FAIL/WARN is an "open" finding; the remainder is those the Top
+        # Issues panel did not surface (drives the "+N more" link).
+        open_total = report.fail_count + report.warn_count
+        top_remainder = open_total - len(top_issues)
 
         # ── Score gauge: 40-tick ring + arc dash offset ───────────────────────
         band = _band(report.score)
@@ -665,6 +671,8 @@ class Reporter:
             "category_bars":      category_bars,
             "n_cats":             len(category_data),
             "top_issues":         top_issues,
+            "open_total":         open_total,
+            "top_remainder":      top_remainder,
             "cis_version":        _cis_version_for(report),
             "cis_caveat":         report.cis_caveat,
         }
