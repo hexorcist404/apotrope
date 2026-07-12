@@ -1192,7 +1192,7 @@ class Reporter:
                  "require elevation were skipped"
         )
         scope = (
-            f"On {date_str}, Apotrope evaluated {total} security "
+            f"On {date_str}, Apotrope attempted {total} security "
             f"control{'s' if total != 1 else ''} on <b>{host}</b> ({os_v}) "
             f"against thresholds aligned to the CIS Microsoft Windows "
             f"Benchmark {escape(_cis_version_for(report))}. The assessment "
@@ -1242,9 +1242,16 @@ class Reporter:
             if report.pass_count:
                 strengths = (f"{report.pass_count} of {total} controls "
                              "passed.")
-                open_cats = {r.category for r in open_findings}
+                categories = {result.category for result in report.results}
                 clean = sorted(
-                    {r.category for r in report.results} - open_cats)
+                    category
+                    for category in categories
+                    if all(
+                        result.status is Status.PASS
+                        for result in report.results
+                        if result.category == category
+                    )
+                )
                 if clean:
                     shown = ", ".join(escape(c) for c in clean[:3])
                     prefix = ("Categories including" if len(clean) > 3
@@ -1298,6 +1305,14 @@ class Reporter:
             if r.status in (Status.FAIL, Status.WARN)
             and r.severity in (Severity.CRITICAL, Severity.HIGH)
         )
+        if open_n == 0 and report.error_count:
+            count = report.error_count
+            noun = "control" if count == 1 else "controls"
+            return Markup(
+                f"No remediation findings were confirmed, but {count} {noun} "
+                "could not be evaluated. Resolve those errors and re-run the "
+                "assessment before treating this system as clear."
+            )
         if open_n == 0:
             return Markup(
                 "No corrective action is required. Maintain the current "
@@ -1410,7 +1425,7 @@ class Reporter:
 
     def _build_exec_commands(self, report: AuditReport) -> list[dict]:
         """Appendix B: numbered command blocks for open findings, P1→P3."""
-        commands = []
+        commands: list[dict[str, str]] = []
         for r in self._exec_open_sorted(report):
             if not r.command:
                 continue

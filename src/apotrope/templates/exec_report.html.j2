@@ -335,6 +335,12 @@ hr.rule { border: none; border-top: 1px solid var(--rule); margin: 14pt 0; }
       {% endfor %}
     </div>
     {% endfor %}
+    {% elif error_count %}
+    <div class="note-box assessment-incomplete">
+      <div class="fk">Assessment incomplete</div>
+      {{ error_count }} control{{ 's' if error_count != 1 }} could not be evaluated.
+      Resolve the errors and re-run the assessment before treating this system as clear.
+    </div>
     {% else %}
     <div class="note-box all-clear">
       <div class="fk">All clear</div>
@@ -365,10 +371,18 @@ hr.rule { border: none; border-top: 1px solid var(--rule); margin: 14pt 0; }
       {% endif %}
     </div>
     {% else %}
+      {% if error_count %}
+    <div class="note-box assessment-incomplete">
+      <div class="fk">Assessment incomplete</div>
+      {{ error_count }} control{{ 's' if error_count != 1 }} could not be evaluated.
+      Resolve the errors and re-run the assessment before treating this system as clear.
+    </div>
+      {% else %}
     <div class="note-box all-clear">
       <div class="fk">No open findings</div>
       Every evaluated control passed; there are no failed or warning findings to detail.
     </div>
+      {% endif %}
     {% endfor %}
   </section>
 

@@ -383,6 +383,30 @@ class TestGenerateExecutiveReport:
         assert "</html>" in html
         assert "Security Posture Assessment" in html
 
+    def test_error_only_report_renders_incomplete_not_all_clear(self):
+        results = [
+            CheckResult(
+                "Firewall", "FW", Status.PASS, Severity.HIGH, "d", "ok"
+            ),
+            CheckResult(
+                "Network", "Probe", Status.ERROR, Severity.INFO, "d", "failed"
+            ),
+        ]
+        html = self._generate(
+            AuditReport(
+                hostname="TEST-PC",
+                os_version="Windows 11",
+                scan_timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                scan_duration=1.0,
+                results=results,
+                score=100,
+                is_admin=True,
+            )
+        )
+
+        assert "Assessment incomplete" in html
+        assert "All clear" not in html
+
     def test_self_contained_and_script_free(self):
         """Offline and print-first: no network references and no JS at all."""
         html = self._generate(_make_report())
@@ -673,6 +697,21 @@ class TestExecNarrative:
         assert "routine maintenance" in str(
             r._build_exec_bottom_line(self._report(med_only, 85)))
 
+    def test_bottom_line_does_not_call_error_only_report_clean(self):
+        results = [
+            CheckResult(
+                "Firewall", "FW", Status.PASS, Severity.HIGH, "d", "ok"
+            ),
+            CheckResult(
+                "Network", "Probe", Status.ERROR, Severity.INFO, "d", "failed"
+            ),
+        ]
+
+        line = str(Reporter()._build_exec_bottom_line(self._report(results, 100)))
+
+        assert "could not be evaluated" in line
+        assert "No corrective action is required" not in line
+
     def test_paragraphs_scope_and_findings(self):
         results = [
             CheckResult("Firewall", "FW Check", Status.FAIL, Severity.HIGH,
@@ -690,6 +729,24 @@ class TestExecNarrative:
         assert "The primary area of concern is <b>Firewall</b>." in joined
         # Accounts has no open findings → named as a clean category.
         assert "Accounts" in joined
+
+    def test_error_category_is_not_claimed_as_fully_passed(self):
+        results = [
+            CheckResult(
+                "Firewall", "FW", Status.FAIL, Severity.HIGH, "d", "off", "fix"
+            ),
+            CheckResult(
+                "Network", "Known Good", Status.PASS, Severity.INFO, "d", "ok"
+            ),
+            CheckResult(
+                "Network", "Probe", Status.ERROR, Severity.INFO, "d", "failed"
+            ),
+        ]
+
+        paragraphs = Reporter()._build_exec_paragraphs(self._report(results, 90))
+        rendered = " ".join(str(paragraph) for paragraph in paragraphs)
+
+        assert "Network category passed all of its checks" not in rendered
 
     def test_paragraphs_non_admin_clause(self):
         results = [CheckResult("Firewall", "FW", Status.PASS, Severity.HIGH,
