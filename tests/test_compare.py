@@ -146,6 +146,33 @@ class TestCompareReports:
 # ---------------------------------------------------------------------------
 
 class TestErroredChecks:
+    def test_fail_to_error_makes_raw_score_delta_unreliable(self):
+        baseline = _make_report(
+            [_make_result("Firewall", Status.FAIL, severity=Severity.HIGH)],
+            score=90,
+        )
+        current = _make_report(
+            [_make_result("Firewall", Status.ERROR, severity=Severity.HIGH)],
+            score=100,
+        )
+
+        diff = compare_reports(baseline, current)
+
+        assert diff.score_delta == 10
+        assert diff.score_delta_reliable is False
+
+    def test_missing_bad_check_makes_raw_score_delta_unreliable(self):
+        baseline = _make_report([_make_result("Firewall", Status.FAIL)], score=90)
+        current = _make_report([], score=100)
+
+        assert compare_reports(baseline, current).score_delta_reliable is False
+
+    def test_complete_comparison_keeps_score_delta_reliable(self):
+        baseline = _make_report([_make_result("Firewall", Status.FAIL)], score=90)
+        current = _make_report([_make_result("Firewall", Status.PASS)], score=100)
+
+        assert compare_reports(baseline, current).score_delta_reliable is True
+
     def test_fail_to_error_is_errored_not_resolved(self):
         """A FAIL check that ERRORs in the current scan cannot be confirmed
         remediated. It must be reported as errored, never resolved."""

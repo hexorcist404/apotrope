@@ -39,6 +39,10 @@ class ScanDiff:
         baseline_score:    Security score from the baseline scan.
         current_score:     Security score from the current scan.
         score_delta:       current_score − baseline_score (positive = improved).
+                           This remains the raw numeric difference even when
+                           ``score_delta_reliable`` is ``False``.
+        score_delta_reliable: Whether coverage was complete enough to present the
+                              raw delta as a confirmed improvement or regression.
         new_findings:      Checks that are FAIL/WARN now but were not in baseline.
         resolved_findings: Checks that were FAIL/WARN in baseline but are now PASS/INFO
                            (present in BOTH scans — genuinely remediated).
@@ -66,6 +70,7 @@ class ScanDiff:
     unchanged_count: int
     missing_findings: list[CheckResult] = dataclasses.field(default_factory=list)
     errored_findings: list[CheckResult] = dataclasses.field(default_factory=list)
+    score_delta_reliable: bool = True
 
 
 def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
@@ -135,6 +140,7 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
                 unchanged_count += 1
 
     score_delta = current.score - baseline.score
+    score_delta_reliable = not missing_findings and not errored_findings
 
     return ScanDiff(
         baseline_score=baseline.score,
@@ -144,6 +150,7 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
         resolved_findings=resolved_findings,
         missing_findings=missing_findings,
         errored_findings=errored_findings,
+        score_delta_reliable=score_delta_reliable,
         worsened_findings=worsened_findings,
         unchanged_bad=unchanged_bad,
         unchanged_count=unchanged_count,

@@ -474,6 +474,7 @@ def _diff(
     worsened: list[CheckResult] | None = None,
     unchanged_bad: list[CheckResult] | None = None,
     unchanged_count: int = 0,
+    score_delta_reliable: bool = True,
 ) -> ScanDiff:
     return ScanDiff(
         baseline_score=baseline_score,
@@ -484,10 +485,20 @@ def _diff(
         worsened_findings=worsened or [],
         unchanged_bad=unchanged_bad or [],
         unchanged_count=unchanged_count,
+        score_delta_reliable=score_delta_reliable,
     )
 
 
 class TestPrintComparison:
+    def test_unreliable_positive_delta_is_not_rendered_green(self):
+        diff = _diff(90, 100, score_delta_reliable=False)
+
+        out = _render(Reporter(), "print_comparison", diff)
+
+        assert "+10 raw" in out
+        assert "indeterminate" in out
+        assert "[green]" not in out
+
     def test_score_transition_with_positive_delta(self):
         out = _render(Reporter(), "print_comparison", _diff(60, 75))
         assert "60" in out

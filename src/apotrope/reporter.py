@@ -602,14 +602,19 @@ class Reporter:
         console = self._make_console()
         sep = _u(console, "─", "-")
         delta_sign = "+" if diff.score_delta >= 0 else ""
-        delta_col = "green" if diff.score_delta >= 0 else "red"
+        if diff.score_delta_reliable:
+            delta_col = "green" if diff.score_delta >= 0 else "red"
+            delta_label = f"{delta_sign}{diff.score_delta}"
+        else:
+            delta_col = "yellow"
+            delta_label = f"{delta_sign}{diff.score_delta} raw · indeterminate"
 
         console.print()
         console.print(
             f"  [bold]Comparison vs baseline[/bold]  "
             f"Score: [dim]{diff.baseline_score}[/dim] \u2192 "
             f"[bold]{diff.current_score}[/bold]  "
-            f"([{delta_col}]{delta_sign}{diff.score_delta}[/{delta_col}])"
+            f"([{delta_col}]{delta_label}[/{delta_col}])"
         )
         console.print(f"  {sep * 65}")
 
