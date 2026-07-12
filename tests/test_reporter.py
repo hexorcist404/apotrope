@@ -334,6 +334,55 @@ class TestGenerateHtmlReport:
             "outside your organization." in html
         )
 
+    def test_footer_uses_canonical_privacy_copy(self) -> None:
+        html = self._generate(_make_report())
+        assert "No data leaves this machine" in html
+        assert "No data left this machine" not in html
+
+    def test_pass_and_info_are_deemphasized_but_error_is_not(self) -> None:
+        html = self._generate(_make_report())
+        assert ".frow.is-pass, .frow.is-info { opacity:0.62; }" in html
+        assert ".frow.is-pass, .frow.is-error { opacity:0.62; }" not in html
+
+    def test_top_remainder_is_not_called_lower_severity(self) -> None:
+        extras = [
+            CheckResult(
+                "Firewall",
+                f"Critical {index}",
+                Status.FAIL,
+                Severity.CRITICAL,
+                "d",
+                "off",
+                "fix",
+            )
+            for index in range(9)
+        ]
+        html = self._generate(_make_report(extra_results=extras))
+        assert "additional open findings not shown here" in html
+        assert "more lower-severity" not in html
+
+    def test_top_issue_command_toggle_has_aria_contract(self) -> None:
+        command = CheckResult(
+            "Firewall",
+            "Command Finding",
+            Status.FAIL,
+            Severity.HIGH,
+            "d",
+            "off",
+            "fix",
+            "Set-NetFirewallProfile -Enabled True",
+        )
+        html = self._generate(_make_report(extra_results=[command]))
+
+        match = re.search(
+            r'<button class="ti-cmd-toggle"[^>]*aria-expanded="false"'
+            r'[^>]*aria-controls="([^"]+)"[^>]*>',
+            html,
+        )
+        assert match is not None
+        assert f'id="{match.group(1)}"' in html
+        assert "btn.setAttribute('aria-expanded', String(opening));" in html
+
     def test_exec_link_rendered_when_href_given(self):
         """Header links to a co-generated executive report via exec_href."""
         reporter = Reporter()
