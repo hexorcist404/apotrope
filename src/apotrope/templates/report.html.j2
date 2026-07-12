@@ -42,7 +42,7 @@
     --pad: 22px;
     --maxw: 1180px;
 
-    --glitch: 1;       /* 0..1 scanline/glow intensity */
+    --glitch: 0;       /* 0..1 scanline/glow intensity — 0 = calm (wordmark glitch stays on) */
     --row-pad: 13px;   /* density */
     --fs: 15px;
   }
@@ -160,6 +160,25 @@
             vertical-align: -2px; margin-left: 3px; animation: blink 1.05s steps(2) infinite; }
   @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
 
+  /* glitch text — opacity is intentionally NOT tied to --glitch so the wordmark
+     keeps its chromatic split even when the CRT atmosphere is dialed to 0. */
+  .glitch { position: relative; }
+  .glitch[data-txt]::before, .glitch[data-txt]::after {
+    content: attr(data-txt);
+    position: absolute; left: 0; top: 0; width: 100%;
+    opacity: 0.85;
+    pointer-events: none;
+  }
+  .glitch[data-txt]::before { color: var(--cyan); transform: translate(-1.5px, 0); clip-path: inset(0 0 55% 0); mix-blend-mode: screen; animation: gx 4.2s infinite steps(40); }
+  .glitch[data-txt]::after  { color: var(--red);  transform: translate(1.5px, 0);  clip-path: inset(55% 0 0 0); mix-blend-mode: screen; animation: gx 3.1s infinite reverse steps(40); }
+  @keyframes gx {
+    0%,92%,100% { transform: translate(0,0); }
+    93% { transform: translate(-2px, 1px); }
+    95% { transform: translate(2px, -1px); }
+    97% { transform: translate(-1px, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .glitch::before, .glitch::after { animation: none; } }
+
   /* focus rings */
   button, input, select { font-family: inherit; color: inherit; }
   button { cursor: pointer; background: none; border: none; }
@@ -230,19 +249,20 @@
   .leg .lk { color:var(--muted); flex:1; letter-spacing:0.08em; }
   .leg .lv { color:var(--bright); font-weight:600; font-variant-numeric:tabular-nums; }
 
-  /* category bars */
-  .cbar { display:grid; grid-template-columns: 116px 1fr 42px; align-items:center; gap:11px;
-          padding:6px 0; cursor:pointer; border:none; width:100%; text-align:left; }
-  .cbar:hover .cbar-name { color:var(--bright); }
-  .cbar:hover .cbar-track { box-shadow: inset 0 0 0 1px var(--line); }
-  .cbar-name { font-size:11.5px; color:var(--text); letter-spacing:0.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .cbar-track { height:13px; background:#0a130d; border:1px solid rgba(43,255,136,0.12); border-radius:2px; overflow:hidden; position:relative; }
-  .cbar-fill { display:block; height:100%; width:0; border-radius:0; transition:width .6s cubic-bezier(.2,.7,.2,1); }
-  /* HP-bar segmentation: 20 cells, score maps to filled cells */
-  .cbar-track::after { content:""; position:absolute; inset:0; pointer-events:none; z-index:2;
-     background: repeating-linear-gradient(90deg, transparent 0 calc(5% - 2px), var(--panel) calc(5% - 2px) 5%); }
-  .cbar-val { font-size:11.5px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
-  .cbar.flagged .cbar-name::before { content:"› "; color:var(--accent); }
+  /* category scores — plain numeric "90 / 100" list (calm; no bars).
+     Passing categories stay neutral so only warn/fail draw the eye. */
+  .cscore-list { display:flex; flex-direction:column; }
+  .cscore-row { display:flex; align-items:center; justify-content:space-between; gap:12px;
+                padding:6px 0; border:none; width:100%; text-align:left; cursor:pointer;
+                background:none; border-bottom:1px solid var(--line-soft); }
+  .cscore-row:last-child { border-bottom:none; }
+  .cscore-name { font-size:12px; color:var(--text); letter-spacing:0.04em; white-space:nowrap;
+                 overflow:hidden; text-overflow:ellipsis; }
+  .cscore-row:hover .cscore-name { color:var(--bright); }
+  .cscore-val { font-variant-numeric:tabular-nums; white-space:nowrap; font-size:12.5px; }
+  .cscore-val b { font-weight:700; }
+  .cscore-of { color:var(--faint); font-weight:400; }
+  .cscore-row.flagged .cscore-name::before { content:"› "; color:var(--accent); }
 
   /* toolbar */
   .toolbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:var(--gap) 0 14px;
@@ -284,6 +304,20 @@
   .ti-tags { display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
   .ti-fix { font-size:12px; color:var(--muted); line-height:1.6; }
   .ti-fix b { color:var(--text); font-weight:500; }
+  .ti-item .code { margin-top:11px; }
+  .ti-cmd-toggle { display:inline-flex; align-items:center; gap:8px; margin-top:11px;
+                   font-size:10.5px; letter-spacing:0.09em; text-transform:uppercase; font-weight:600;
+                   color:var(--cyan); border:1px solid rgba(68,224,230,0.28); cursor:pointer;
+                   background:rgba(68,224,230,0.05); padding:6px 12px; border-radius:2px; transition:all .12s; }
+  .ti-cmd-toggle:hover { border-color:var(--cyan); background:rgba(68,224,230,0.1); }
+  .ti-cmd-toggle .chev { color:var(--cyan); font-size:9px; transition:transform .18s; }
+  .ti-cmd-toggle[data-on="true"] .chev { transform:rotate(90deg); }
+  .ti-note { margin-top:15px; padding-top:13px; border-top:1px solid rgba(255,81,71,0.16);
+             font-size:11.5px; letter-spacing:0.04em; color:var(--muted); }
+  .ti-note-clean { color:var(--green); border-top:none; padding-top:0; margin-top:2px; }
+  .ti-note-link { font:inherit; color:var(--accent); letter-spacing:0.04em; cursor:pointer;
+                  border:none; background:none; border-bottom:1px dashed rgba(43,255,136,0.45); padding-bottom:1px; transition:all .12s; }
+  .ti-note-link:hover { color:var(--bright); border-bottom-color:var(--accent); }
 
   /* category section */
   .cat-section { margin-top:var(--gap); }
@@ -301,16 +335,36 @@
               border-bottom-left-radius:var(--r); border-bottom-right-radius:var(--r); overflow:hidden; }
   .frow { border-top:1px solid var(--line-soft); }
   .frow:first-child { border-top:none; }
-  .fhead { display:grid; grid-template-columns: 30px 86px 1fr auto; align-items:center; gap:13px;
-           padding:var(--row-pad) 16px; width:100%; text-align:left; transition:background .12s; }
-  .fhead:hover { background:rgba(43,255,136,0.025); }
-  .fhead.is-open { background:rgba(43,255,136,0.03); }
-  .ficon { font-size:14px; text-align:center; font-weight:700; }
+  .fhead { display:grid; grid-template-columns: 62px 74px 1fr auto; align-items:center; gap:14px;
+           padding:var(--row-pad) 16px var(--row-pad) 15px; width:100%; text-align:left; transition:background .12s; }
+  .fhead:hover { background:rgba(255,255,255,0.022); }
+  .fhead.is-open { background:rgba(255,255,255,0.03); }
+
+  /* status-colored left accent on each row + de-emphasis for non-issues */
+  .frow.is-fail { box-shadow: inset 3px 0 0 var(--red); }
+  .frow.is-warn { box-shadow: inset 3px 0 0 var(--amber); }
+  .frow.is-info { box-shadow: inset 3px 0 0 rgba(68,224,230,0.5); }
+  .frow.is-pass, .frow.is-error { opacity:0.62; }
+  .frow.is-pass:hover, .frow.is-error:hover { opacity:1; }
+  .frow.is-pass:has(.is-open), .frow.is-error:has(.is-open) { opacity:1; }
+  .frow.is-pass .fname b { font-weight:400; color:var(--text); }
+
+  /* status pill — the primary at-a-glance signal (replaces the single glyph) */
+  .spill { font-size:10px; font-weight:700; letter-spacing:0.13em; text-transform:uppercase;
+           padding:4px 0; border-radius:2px; text-align:center; white-space:nowrap; }
+  .spill-fail { color:#1a0405; background:var(--red); }
+  .spill-warn { color:#1a1102; background:var(--amber); }
+  .spill-info { color:var(--cyan); background:rgba(68,224,230,0.10); border:1px solid rgba(68,224,230,0.32); padding:3px 0; }
+  .spill-pass { color:var(--green); background:rgba(43,255,136,0.08); border:1px solid rgba(43,255,136,0.26); padding:3px 0; }
+  .spill-error{ color:var(--muted); background:rgba(120,200,170,0.07); border:1px solid var(--line); padding:3px 0; }
+
+  .fsevcell { display:flex; }
   .fsev { font-size:10px; letter-spacing:0.1em; font-weight:600; text-transform:uppercase;
           padding:3px 7px; border-radius:2px; text-align:center; white-space:nowrap; }
   .fname { font-size:13.5px; color:var(--text); }
   .fname .fcat { color:var(--faint); font-size:11px; margin-right:8px; letter-spacing:0.06em; }
   .fname .fsnip { color:var(--muted); font-size:12px; margin-top:2px; }
+  .fhead.is-open .fsnip { display:none; }   /* snippet only when collapsed */
   .fname b { color:var(--bright); font-weight:500; }
   .fright { display:flex; align-items:center; gap:12px; }
   .chev { color:var(--muted); font-size:11px; transition:transform .2s; }
@@ -327,19 +381,28 @@
   .rem { display:grid; gap:11px; }
   .rem-note { font-size:13px; color:var(--text); line-height:1.65; }
   .code { font-size:12.5px; background:#02060a; border:1px solid var(--line);
-          border-left:2px solid var(--accent); border-radius:2px; overflow:hidden; }
+          border-radius:3px; overflow:hidden; }
   .code-bar { display:flex; align-items:center; justify-content:space-between; gap:12px;
-              padding:6px 8px 6px 11px; background:rgba(43,255,136,0.05);
-              border-bottom:1px solid var(--line); }
-  .code-tag { font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); }
-  .code .copy { font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase; flex-shrink:0;
-                color:var(--muted); border:1px solid var(--line); padding:3px 9px; border-radius:2px;
-                background:var(--void); cursor:pointer; }
-  .code .copy:hover { color:var(--accent); border-color:var(--accent); }
-  .code-cmd { font-family:"IBM Plex Mono","Cascadia Code","Consolas",monospace; font-size:12.5px;
-              color:var(--green); white-space:pre-wrap; word-break:break-word; padding:11px 13px; margin:0; }
-  .code-warn { font-size:10.5px; line-height:1.5; color:#ffb23d; padding:6px 13px; margin:0;
-               background:rgba(255,178,61,0.06); border-top:1px solid rgba(255,178,61,0.18); }
+              padding:8px 8px 8px 12px; background:rgba(68,224,230,0.06);
+              border-bottom:1px solid rgba(68,224,230,0.18); }
+  .code-tag { display:flex; align-items:center; gap:8px; font-size:10px; letter-spacing:0.1em;
+              text-transform:uppercase; color:var(--cyan); font-weight:600; }
+  .code-tag .shield { font-size:12px; }
+  .code .copy { display:inline-flex; align-items:center; gap:6px; font-size:10.5px; letter-spacing:0.08em;
+                text-transform:uppercase; font-weight:600; flex-shrink:0;
+                color:var(--cyan); border:1px solid rgba(68,224,230,0.35); padding:5px 13px;
+                border-radius:2px; background:rgba(68,224,230,0.06); cursor:pointer; transition:all .12s; }
+  .code .copy:hover { color:var(--void); background:var(--cyan); border-color:var(--cyan); }
+  .code .copy.done { color:var(--void); background:var(--green); border-color:var(--green); }
+  .code-cmd { font-family:var(--mono); font-size:12.5px; line-height:1.7;
+              white-space:pre-wrap; word-break:break-word; padding:12px 14px; margin:0; }
+  .code-cmd .cl-c { color:var(--muted); }                 /* # comment lines       */
+  .code-cmd .cl-x { color:var(--bright); }                /* actual command lines  */
+  .code-cmd .cl-x .ps { color:var(--cyan); user-select:none; margin-right:8px; opacity:0.65; }
+  .code-cmd .cl-b { min-height:1em; }                     /* blank-line spacer     */
+  /* elevated-command caution — kept, but dialed down so it reads as a note */
+  .code-warn { font-size:10px; line-height:1.5; color:rgba(255,178,61,0.68); padding:6px 13px; margin:0;
+               background:rgba(255,178,61,0.035); border-top:1px solid rgba(255,178,61,0.12); }
   .cis { display:inline-flex; align-items:center; gap:6px; font-size:11px; letter-spacing:0.06em;
          color:var(--cyan); border:1px solid rgba(68,224,230,0.28); background:rgba(68,224,230,0.05);
          padding:3px 9px; border-radius:2px; }
@@ -371,10 +434,14 @@
     .cat-bar { position:static; background:#f2f2f2 !important; }
     .cat-name, .brand .name, .ti-name, .fname b, .meta-item .v b { color:#111 !important; }
     .fbody[hidden] { display:grid !important; }   /* show all details on paper */
+    .frow.is-fail, .frow.is-warn, .frow.is-info { box-shadow:none !important; }
+    .frow.is-pass, .frow.is-error { opacity:1 !important; }
+    .glitch::before, .glitch::after { display:none !important; }   /* no chromatic ghosting */
     .code { background:#f6f6f6 !important; }
     .code-bar { background:#ececec !important; border-bottom-color:#ccc !important; }
     .code-tag { color:#444 !important; }
-    .code-cmd { color:#111 !important; }
+    .code-cmd, .code-cmd .cl-c, .code-cmd .cl-x { color:#111 !important; }
+    .code-cmd .cl-x .ps { color:#777 !important; }
   }
 {% endraw %}</style>
 </head>
@@ -388,7 +455,7 @@
     <div class="topbar">
       <div class="brand">
         {% if logo_data_uri %}<img class="diamond" src="{{ logo_data_uri }}" width="26" height="26" alt="Apotrope">{% else %}<span class="diamond">◈</span>{% endif %}
-        <span class="name">APOTROPE</span>
+        <span class="name glitch" data-txt="APOTROPE">APOTROPE</span>
         <span class="ver">v{{ version }}</span>
       </div>
       <div class="topbar-meta">
@@ -464,25 +531,28 @@
 
           <div class="bars-panel panel rise">
             <div class="panel-h"><span class="label">Category Scores</span><span class="label">{{ n_cats }} areas</span></div>
-            {% for c in category_bars %}
-            <button class="cbar{% if c.score < 80 %} flagged{% endif %}" onclick="apoJump('{{ c.slug }}')">
-              <span class="cbar-name">{{ c.name }}</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:{{ c.score }}%;background:{{ c.band }};box-shadow:0 0 8px {{ c.band }}"></span></span>
-              <span class="cbar-val" style="color:{{ c.band }}">{{ c.score }}</span>
-            </button>
-            {% endfor %}
+            <div class="cscore-list">
+              {% for c in category_bars %}
+              {% set col = 'var(--bright)' if c.score >= 80 else c.band %}
+              <button class="cscore-row" onclick="apoJump('{{ c.slug }}')" title="Jump to {{ c.name }}">
+                <span class="cscore-name">{{ c.name }}</span>
+                <span class="cscore-val"><b style="color:{{ col }}">{{ c.score }}</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              {% endfor %}
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    {% if top_issues %}
-    <!-- ── Top issues ──────────────────────────────────────────────────── -->
-    <div class="top-issues panel">
+    {% if open_total %}
+    <!-- ── Top issues (critical & high severity) ───────────────────────── -->
+    <div class="top-issues panel rise">
       <div class="ti-head">
         <span class="ti-flag">⚑ Top Issues</span>
-        <span class="label">Prioritized remediation · {{ top_issues|length }}</span>
+        <span class="label">Critical &amp; high severity · {{ top_issues|length }} of {{ open_total }} open findings</span>
       </div>
+      {% if top_issues %}
       <div class="ti-list">
         {% for r in top_issues %}
         <div class="ti-item">
@@ -495,15 +565,32 @@
             </div>
             <div class="ti-name">{{ r.check_name }}</div>
             <div class="ti-fix"><b>Fix:</b> {{ r.remediation }}</div>
+            {% if r.command %}
+            <button class="ti-cmd-toggle" type="button" data-on="false"><span class="chev">▶</span><span class="lbl">Show remediation command</span></button>
+            <div class="code" data-cmd="{{ r.command }}" hidden>
+              <div class="code-bar">
+                <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
+                <button class="copy" type="button">⧉ Copy</button>
+              </div>
+              <pre class="code-cmd">{% for ln in r.command.split('\n') %}{% if ln.strip() == '' %}<div class="cl-b"> </div>{% elif ln.lstrip().startswith('#') %}<div class="cl-c">{{ ln }}</div>{% else %}<div class="cl-x"><span class="ps">PS&gt;</span>{{ ln }}</div>{% endif %}{% endfor %}</pre>
+              <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings.</div>
+            </div>
+            {% endif %}
           </div>
         </div>
         {% endfor %}
       </div>
+      {% else %}
+      <div class="ti-note ti-note-clean">No critical or high-severity issues flagged.</div>
+      {% endif %}
+      {% if top_remainder > 0 %}
+      <div class="ti-note">+ {{ top_remainder }} more lower-severity {{ 'finding' if top_remainder == 1 else 'findings' }} not shown here — <button class="ti-note-link" type="button" onclick="apoScrollFindings()">see the full breakdown below ↓</button></div>
+      {% endif %}
     </div>
     {% endif %}
 
     <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
-    <div class="toolbar panel">
+    <div class="toolbar panel" id="all-findings">
       <div class="filters">
         <button class="fchip f-all"  data-on="true"  data-k="ALL">ALL <span class="fn">{{ total_checks }}</span></button>
         <button class="fchip f-fail" data-on="false" data-k="FAIL">FAIL <span class="fn">{{ fail_count }}</span></button>
@@ -541,10 +628,10 @@
            [hidden] and the caret rotation on .is-open. #}
         {% for f in cat.findings %}
         {% set f_open = f.status in ('FAIL', 'WARN') %}
-        <div class="frow" data-status="{{ f.status }}" data-text="{{ f.check_name|lower }} {{ f.category|lower }} {{ f.details|lower }} {{ f.cis|lower }} {{ f.command|lower }}">
+        <div class="frow is-{{ f.status|lower }}" data-status="{{ f.status }}" data-text="{{ f.check_name|lower }} {{ f.category|lower }} {{ f.details|lower }} {{ f.cis|lower }} {{ f.command|lower }}">
           <button class="fhead{% if f_open %} is-open{% endif %}">
-            <span class="ficon" style="color:{{ f.status_color }}">{{ f.status_glyph }}</span>
-            <span class="fsev" style="color:{{ f.sev_color }};border:1px solid {{ f.sev_color }};background:transparent">{{ f.severity }}</span>
+            <span class="spill spill-{{ f.status|lower }}">{{ f.status }}</span>
+            <span class="fsevcell">{% if f.status in ('FAIL', 'WARN') %}<span class="fsev" style="color:{{ f.sev_color }};border:1px solid {{ f.sev_color }};background:transparent">{{ f.severity }}</span>{% endif %}</span>
             <span class="fname">
               <b>{{ f.check_name }}</b>
               {% if f.snippet %}<div class="fsnip">{{ f.snippet }}</div>{% endif %}
@@ -562,12 +649,12 @@
               <div class="rem">
                 {% if f.remediation %}<div class="rem-note">{{ f.remediation }}</div>{% endif %}
                 {% if f.command %}
-                <div class="code">
+                <div class="code" data-cmd="{{ f.command }}">
                   <div class="code-bar">
-                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
-                    <button class="copy" type="button">copy</button>
+                    <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd">{{ f.command }}</pre>
+                  <pre class="code-cmd">{% for ln in f.command.split('\n') %}{% if ln.strip() == '' %}<div class="cl-b"> </div>{% elif ln.lstrip().startswith('#') %}<div class="cl-c">{{ ln }}</div>{% else %}<div class="cl-x"><span class="ps">PS&gt;</span>{{ ln }}</div>{% endif %}{% endfor %}</pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 {% endif %}
@@ -629,12 +716,24 @@
 
   // Executive-summary counters: apply the matching filter (delegate to the
   // toolbar chip so the logic lives in one place) and jump to the results.
-  var toolbar = document.querySelector('.toolbar');
   document.querySelectorAll('.pills .pill[data-k]').forEach(function(pill){
     pill.addEventListener('click', function(){
       var chip = document.querySelector('.fchip[data-k="' + pill.dataset.k + '"]');
       if (chip) chip.click();
-      if (toolbar) window.scrollTo({ top: toolbar.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
+      apoScrollFindings();
+    });
+  });
+
+  // Top-issue "Show remediation command" toggles reveal the adjacent .code block.
+  document.querySelectorAll('.ti-cmd-toggle').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var code = btn.nextElementSibling;
+      if (!code || !code.classList.contains('code')) return;
+      var opening = code.hasAttribute('hidden');
+      if (opening){ code.removeAttribute('hidden'); btn.dataset.on = 'true'; }
+      else { code.setAttribute('hidden', ''); btn.dataset.on = 'false'; }
+      var lbl = btn.querySelector('.lbl');
+      if (lbl) lbl.textContent = opening ? 'Hide command' : 'Show remediation command';
     });
   });
 
@@ -658,11 +757,14 @@
   document.querySelectorAll('.code .copy').forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
-      // Copy ONLY the command text, not the label bar or button.
-      var pre = btn.closest('.code').querySelector('.code-cmd');
-      var code = pre ? pre.textContent.replace(/\s+$/, '') : '';
+      // Copy the RAW command from data-cmd. The rendered lines carry a
+      // non-selectable "PS>" prompt that must never reach the clipboard.
+      var box = btn.closest('.code');
+      var code = box ? (box.getAttribute('data-cmd') || '') : '';
       if (navigator.clipboard) navigator.clipboard.writeText(code);
-      var t = btn.textContent; btn.textContent = 'copied'; setTimeout(function(){ btn.textContent = t; }, 1300);
+      btn.classList.add('done');
+      var t = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(function(){ btn.textContent = t; btn.classList.remove('done'); }, 1400);
     });
   });
 
@@ -670,6 +772,13 @@
     var el = document.getElementById('cat-' + slug);
     if (!el) return;
     window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
+  };
+
+  // Shared scroll target for the exec-summary pills and the "+N more" link.
+  window.apoScrollFindings = function(){
+    var el = document.getElementById('all-findings');
+    if (!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 14, behavior: 'smooth' });
   };
 })();
 {% endraw %}</script>
