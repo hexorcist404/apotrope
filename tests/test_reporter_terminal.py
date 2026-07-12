@@ -408,6 +408,16 @@ class TestFooter:
                       json_path="report.json")
         assert "report.json written" in out
 
+    def test_exec_path_mentioned(self):
+        out = _render(Reporter(), "print_terminal", _report(_default_results()),
+                      exec_path="brief.html")
+        assert "brief.html written" in out
+        assert "executive summary for decision makers" in out
+
+    def test_no_exec_hint_by_default(self):
+        out = _render(Reporter(), "print_terminal", _report(_default_results()))
+        assert "executive summary" not in out
+
     def test_error_caveat_admin_points_to_debug(self):
         results = [_result(name="Broken", status=Status.ERROR, severity=Severity.INFO)]
         out = _render(Reporter(), "print_terminal", _report(results, score=100))

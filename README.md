@@ -203,8 +203,8 @@ to that subprocess and does not change the machine's policy setting.
 
 ### Sharing reports safely
 
-Generated reports (`--html` / `--json`) are written **only to your machine** — Apotrope
-never uploads them. But because a report's job is to inventory your security posture, it
+Generated reports (`--html` / `--exec-report` / `--json`) are written **only to your
+machine** — Apotrope never uploads them. But because a report's job is to inventory your security posture, it
 embeds machine-identifying and configuration detail: hostname, domain/workgroup, local
 administrator account names, listening ports and the processes behind them, service
 executable paths, and startup/scheduled-task names. Treat a saved report like any other
@@ -221,6 +221,8 @@ apotrope [OPTIONS]
 
 Options:
   --html PATH          Save a self-contained HTML report to PATH
+  --exec-report PATH   Save a plain-English executive report (Security Posture
+                       Assessment) to PATH — print-first, for decision makers
   --json PATH          Save a JSON report to PATH
   --baseline FILE      Save current scan as a JSON baseline for future comparisons
   --compare  FILE      Compare current scan against a saved baseline
@@ -248,6 +250,10 @@ apotrope
 
 # Save HTML report
 apotrope --html report.html
+
+# Technical report + plain-English executive report (the technical report's
+# header links to the executive one when both are generated together)
+apotrope --html report.html --exec-report assessment.html
 
 # Save JSON for automation / SIEM integration
 apotrope --json report.json

@@ -8,6 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Executive report (`--exec-report FILE`) — the Security Posture Assessment.** A
+  plain-English, print-first HTML document for non-technical decision makers: cover
+  with grade box and generated verdict, executive-summary narrative built strictly
+  from scan data, posture-at-a-glance tiles and result distribution, a P1/P2/P3
+  prioritized remediation roadmap, detailed findings with per-category business-impact
+  context, a passed-controls attestation appendix, and a remediation-commands appendix.
+  Self-contained, script-free, letter-size print CSS (editorial serif direction from
+  the design system). When `--html` and `--exec-report` are generated in the same run,
+  the technical report's header links to the executive report ("Executive Report ↗").
 - **`brand/tokens.json` — single source of truth for the brand palette.** Codifies the
   two canonical layers from the design system (the `mark` — cyan/mint/ember on void
   ground `#0B0D0E` — and the `product` CRT/status palette) with the rules that travel

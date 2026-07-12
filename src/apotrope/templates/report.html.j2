@@ -200,6 +200,11 @@
             text-transform:uppercase; color:var(--cyan); border:1px solid rgba(68,224,230,0.3);
             background:rgba(68,224,230,0.06); padding:5px 10px; border-radius:2px; white-space:nowrap; }
   .ro-tag .dot { width:6px; height:6px; border-radius:50%; background:var(--cyan); box-shadow:0 0 7px var(--cyan); }
+  .exec-link { display:inline-flex; align-items:center; gap:7px; font-size:10px; letter-spacing:0.16em;
+               text-transform:uppercase; color:var(--accent); border:1px solid var(--accent);
+               background:var(--accent-dim); padding:5px 11px; border-radius:2px; white-space:nowrap;
+               transition:background .15s, color .15s, box-shadow .15s; }
+  .exec-link:hover { background:var(--accent); color:var(--void); box-shadow:0 0 12px var(--accent-dim); }
 
   /* hero grid */
   .hero { display:grid; grid-template-columns: 320px 1fr; gap:var(--gap); margin-top:var(--gap); align-items:start; }
@@ -430,7 +435,7 @@
     .wrap { padding-bottom:0; }
     .panel { background:#fff !important; border-color:#bbb !important; }
     .panel::before, .panel::after { display:none; }
-    .toolbar, .tool-right, .search, .filters { display:none !important; }
+    .toolbar, .tool-right, .search, .filters, .exec-link { display:none !important; }
     .cat-bar { position:static; background:#f2f2f2 !important; }
     .cat-name, .brand .name, .ti-name, .fname b, .meta-item .v b { color:#111 !important; }
     .fbody[hidden] { display:grid !important; }   /* show all details on paper */
@@ -463,6 +468,7 @@
         <div class="meta-item"><span class="label">System</span><span class="v">{{ os_version }}</span></div>
         <div class="meta-item"><span class="label">Scan</span><span class="v">{{ scan_timestamp }} <span style="color:var(--faint)">· {{ scan_duration }}s</span></span></div>
         <span class="ro-tag"><span class="dot"></span>Read-only audit</span>
+        {% if exec_href %}<a class="exec-link" href="{{ exec_href }}" title="Plain-English summary for decision makers">Executive Report ↗</a>{% endif %}
       </div>
     </div>
 
