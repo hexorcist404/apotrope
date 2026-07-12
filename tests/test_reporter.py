@@ -383,7 +383,7 @@ class TestGenerateExecutiveReport:
         assert "</html>" in html
         assert "Security Posture Assessment" in html
 
-    def test_error_only_report_renders_incomplete_not_all_clear(self):
+    def test_error_only_report_renders_incomplete_not_all_clear(self) -> None:
         results = [
             CheckResult(
                 "Firewall", "FW", Status.PASS, Severity.HIGH, "d", "ok"
@@ -697,7 +697,7 @@ class TestExecNarrative:
         assert "routine maintenance" in str(
             r._build_exec_bottom_line(self._report(med_only, 85)))
 
-    def test_bottom_line_does_not_call_error_only_report_clean(self):
+    def test_bottom_line_does_not_call_error_only_report_clean(self) -> None:
         results = [
             CheckResult(
                 "Firewall", "FW", Status.PASS, Severity.HIGH, "d", "ok"
@@ -730,7 +730,7 @@ class TestExecNarrative:
         # Accounts has no open findings → named as a clean category.
         assert "Accounts" in joined
 
-    def test_error_category_is_not_claimed_as_fully_passed(self):
+    def test_error_category_is_not_claimed_as_fully_passed(self) -> None:
         results = [
             CheckResult(
                 "Firewall", "FW", Status.FAIL, Severity.HIGH, "d", "off", "fix"
@@ -747,6 +747,24 @@ class TestExecNarrative:
         rendered = " ".join(str(paragraph) for paragraph in paragraphs)
 
         assert "Network category passed all of its checks" not in rendered
+
+    def test_error_only_paragraphs_describe_incomplete_assessment(self) -> None:
+        results = [
+            CheckResult(
+                "Firewall", "FW", Status.PASS, Severity.HIGH, "d", "ok"
+            ),
+            CheckResult(
+                "Network", "Probe", Status.ERROR, Severity.INFO, "d", "failed"
+            ),
+        ]
+
+        paragraphs = Reporter()._build_exec_paragraphs(self._report(results, 100))
+        rendered = " ".join(str(paragraph) for paragraph in paragraphs)
+
+        assert "assessment is incomplete" in rendered
+        assert "could not be evaluated" in rendered
+        assert "Every evaluated control passed" not in rendered
+        assert "system's configuration is in line" not in rendered
 
     def test_paragraphs_non_admin_clause(self):
         results = [CheckResult("Firewall", "FW", Status.PASS, Severity.HIGH,

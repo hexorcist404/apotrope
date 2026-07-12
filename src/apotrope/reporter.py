@@ -1263,6 +1263,14 @@ class Reporter:
                         strengths += (f" {prefix} {shown} passed all of "
                                       "their checks.")
                 paragraphs.append(Markup(strengths))
+        elif report.error_count:
+            count = report.error_count
+            noun = "control" if count == 1 else "controls"
+            paragraphs.append(Markup(
+                f"The assessment is incomplete because {count} {noun} could "
+                "not be evaluated. Resolve those errors and re-run the "
+                "assessment before treating this system as clear."
+            ))
         else:
             # P2-alt — all clear.
             paragraphs.append(Markup(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -428,7 +429,9 @@ class TestMainErrorPaths:
             mock_report, "brief.html"
         )
 
-    def test_html_and_exec_report_must_use_distinct_paths(self, capsys):
+    def test_html_and_exec_report_must_use_distinct_paths(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         mock_reporter, _ = self._reporter_with_report()
         with pytest.raises(SystemExit, match="2"):
             self._run_main(
@@ -442,8 +445,8 @@ class TestMainErrorPaths:
         mock_reporter.run_with_progress.assert_not_called()
 
     def test_html_and_exec_report_reject_equivalent_paths(
-        self, tmp_path, capsys
-    ):
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         target = tmp_path / "report.html"
         equivalent = tmp_path / "." / "report.html"
         mock_reporter, _ = self._reporter_with_report()
