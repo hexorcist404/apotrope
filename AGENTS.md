@@ -9,8 +9,8 @@ git config user.name "hexorcist404"
 git config user.email "hexorcist404@pm.me"
 ```
 
-The `Co-Authored-By` trailer should also use this identity:
-`Co-Authored-By: hexorcist404 <hexorcist404@pm.me>`
+Do not add a `Co-Authored-By` trailer for `hexorcist404` when the commit is
+already authored by `hexorcist404`; that trailer is redundant.
 
 ## Project Overview
 
