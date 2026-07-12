@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
+    from markupsafe import Markup
+
     from apotrope.scanner import Scanner
 
 from apotrope import __version__
@@ -123,6 +125,112 @@ _HTML_SEVERITY: dict[Severity, str] = {
     Severity.LOW:      _CYAN,
     Severity.INFO:     _MUTED,
 }
+
+# ── Executive report (Security Posture Assessment) presentation config ────────
+# Curated plain-English "business impact" copy for the executive report's
+# finding cards, keyed by the canonical CATEGORY strings the check modules use.
+# These are category-level statements about why the control area matters — the
+# scan-derived specifics live in the finding's `details`, never here.
+
+_EXEC_IMPACT: dict[str, str] = {
+    "Accounts": (
+        "Weak account and password settings make it easier for an attacker to "
+        "guess or reuse credentials and take control of this machine."
+    ),
+    "Antivirus": (
+        "Gaps in malware protection mean malicious software can run, spread, "
+        "or persist without being detected or blocked."
+    ),
+    "Encryption": (
+        "If this device is lost or stolen, data on an unencrypted or "
+        "unprotected drive can be read by anyone with physical access."
+    ),
+    "Firewall": (
+        "Without firewall protection the machine accepts unsolicited network "
+        "traffic, exposing its services directly to attackers on the same "
+        "network."
+    ),
+    "Hardening": (
+        "Convenience features left enabled give attackers well-known shortcuts "
+        "to run code or gather information on this machine."
+    ),
+    "Network": (
+        "Insecure network protocols allow attackers on the local network to "
+        "intercept traffic or impersonate services this machine trusts."
+    ),
+    "System": (
+        "Platform integrity features protect the machine before Windows even "
+        "starts; gaps here undermine every other control."
+    ),
+    "PowerShell": (
+        "Loose PowerShell controls let malicious scripts run unrestricted and "
+        "leave little forensic record of what they did."
+    ),
+    "Remote Access": (
+        "Weak remote-access settings can let an attacker sign in to this "
+        "machine from elsewhere on the network or the internet."
+    ),
+    "Services": (
+        "Unnecessary or misconfigured services widen the attack surface and "
+        "can be abused to gain or escalate access."
+    ),
+    "File Sharing": (
+        "Legacy or unsigned file-sharing protocols are a primary path for "
+        "ransomware and lateral movement between machines."
+    ),
+    "Persistence": (
+        "Unreviewed startup entries and scheduled tasks are how malware "
+        "survives a reboot and keeps running unnoticed."
+    ),
+    "Access Control": (
+        "Weakened elevation prompts let software make administrator-level "
+        "changes without a person approving them."
+    ),
+    "Patching": (
+        "Missing updates leave publicly known vulnerabilities open — the most "
+        "common way machines are compromised."
+    ),
+}
+
+_EXEC_IMPACT_FALLBACK = (
+    "This finding weakens the machine's overall security posture and "
+    "increases the likelihood or impact of a compromise."
+)
+
+
+def _impact_for(category: str) -> str:
+    """Plain-English impact statement for a check category (with fallback)."""
+    return _EXEC_IMPACT.get(category, _EXEC_IMPACT_FALLBACK)
+
+
+# Remediation roadmap tiers: (key, label, time window). Assignment is by
+# severity of the open (FAIL/WARN) finding: CRITICAL/HIGH → P1, MEDIUM → P2,
+# everything else → P3.
+_EXEC_TIERS: tuple[tuple[str, str, str], ...] = (
+    ("P1", "Immediate",        "This week"),
+    ("P2", "Near-term",        "This maintenance cycle"),
+    ("P3", "Review & hygiene", "Next review"),
+)
+
+
+def _tier_index(r: CheckResult) -> int:
+    """Roadmap tier (0-based index into _EXEC_TIERS) for an open finding."""
+    if r.severity in (Severity.CRITICAL, Severity.HIGH):
+        return 0
+    if r.severity is Severity.MEDIUM:
+        return 1
+    return 2
+
+
+# Severity → CSS chip class in the executive report (light theme).
+_EXEC_SEV_CLASS: dict[Severity, str] = {
+    Severity.CRITICAL: "crit",
+    Severity.HIGH:     "high",
+    Severity.MEDIUM:   "med",
+    Severity.LOW:      "low",
+    Severity.INFO:     "info",
+}
+
 
 def _cis_version_for(report: AuditReport) -> str:
     """CIS Benchmark edition to display for *report*.
@@ -320,6 +428,7 @@ class Reporter:
         report: AuditReport,
         html_path: str | None = None,
         json_path: str | None = None,
+        exec_path: str | None = None,
     ) -> None:
         """Print the completed audit report to the terminal.
 
@@ -327,6 +436,7 @@ class Reporter:
             report:    Completed :class:`~apotrope.models.AuditReport`.
             html_path: If set, shown in footer as the saved HTML path.
             json_path: If set, shown in footer as the saved JSON path.
+            exec_path: If set, shown in footer as the saved executive report.
         """
         try:
             from rich.console import Console  # noqa: F401 – ensure Rich is present
@@ -348,14 +458,35 @@ class Reporter:
         else:
             self._print_category_boxes(console, report,
                                        only_issues=not self.verbose)
-        self._print_footer(console, report, html_path, json_path)
+        self._print_footer(console, report, html_path, json_path, exec_path)
 
-    def generate_html_report(self, report: AuditReport, path: str) -> None:
+    @staticmethod
+    def _resolve_template_dir() -> Path:
+        """Directory holding the Jinja2 templates (frozen-bundle aware)."""
+        import sys
+        if getattr(sys, "frozen", False):
+            # Running inside a PyInstaller one-file bundle; templates were
+            # added with --add-data "...;templates" so they extract to
+            # sys._MEIPASS/templates/
+            return Path(sys._MEIPASS) / "templates"  # type: ignore[attr-defined]
+        # Templates ship as package data inside apotrope/templates/, so the
+        # directory sits next to this module for both editable and installed
+        # (pip / PyPI) installs.
+        return Path(__file__).parent / "templates"
+
+    def generate_html_report(
+        self,
+        report: AuditReport,
+        path: str,
+        exec_href: str | None = None,
+    ) -> None:
         """Render and save a self-contained HTML report via the Jinja2 template.
 
         Args:
-            report: Completed :class:`~apotrope.models.AuditReport`.
-            path:   Destination file path for the HTML file.
+            report:    Completed :class:`~apotrope.models.AuditReport`.
+            path:      Destination file path for the HTML file.
+            exec_href: Optional href to a co-generated executive report; when
+                       set, the header renders an "Executive Report ↗" link.
         """
         try:
             from jinja2 import Environment, FileSystemLoader
@@ -363,17 +494,7 @@ class Reporter:
             log.error("Jinja2 not installed — cannot generate HTML report")
             return
 
-        import sys
-        if getattr(sys, "frozen", False):
-            # Running inside a PyInstaller one-file bundle; templates were
-            # added with --add-data "...;templates" so they extract to
-            # sys._MEIPASS/templates/
-            template_dir = Path(sys._MEIPASS) / "templates"  # type: ignore[attr-defined]
-        else:
-            # Templates ship as package data inside apotrope/templates/, so the
-            # directory sits next to this module for both editable and installed
-            # (pip / PyPI) installs.
-            template_dir = Path(__file__).parent / "templates"
+        template_dir = self._resolve_template_dir()
         env = Environment(
             loader=FileSystemLoader(str(template_dir)),
             autoescape=True,  # Always escape — the template is always HTML.
@@ -388,9 +509,45 @@ class Reporter:
 
         ctx = self._build_template_context(report)
         ctx["logo_data_uri"] = self._encode_logo_data_uri(template_dir)
+        ctx["exec_href"] = exec_href
         html = template.render(**ctx)
         Path(path).write_text(html, encoding="utf-8")
         log.info("HTML report saved to %s", path)
+
+    def generate_executive_report(self, report: AuditReport, path: str) -> None:
+        """Render and save the executive report (Security Posture Assessment).
+
+        A plain-English, print-first HTML document for non-technical decision
+        makers: generated narrative, prioritized remediation roadmap, detailed
+        findings with business impact, a passed-controls attestation, and a
+        remediation-commands appendix. Self-contained and script-free.
+
+        Args:
+            report: Completed :class:`~apotrope.models.AuditReport`.
+            path:   Destination file path for the HTML file.
+        """
+        try:
+            from jinja2 import Environment, FileSystemLoader
+        except ImportError:
+            log.error("Jinja2 not installed — cannot generate executive report")
+            return
+
+        template_dir = self._resolve_template_dir()
+        env = Environment(
+            loader=FileSystemLoader(str(template_dir)),
+            autoescape=True,  # Always escape — the template is always HTML.
+        )
+        try:
+            template = env.get_template("exec_report.html.j2")
+        except Exception as exc:
+            log.error("Could not load executive report template: %s", exc)
+            return
+
+        ctx = self._build_exec_template_context(report)
+        ctx["logo_data_uri"] = self._encode_logo_data_uri(template_dir)
+        html = template.render(**ctx)
+        Path(path).write_text(html, encoding="utf-8")
+        log.info("Executive report saved to %s", path)
 
     @staticmethod
     def _encode_logo_data_uri(template_dir: Path) -> str | None:
@@ -860,6 +1017,410 @@ class Reporter:
 
         return Markup(" ".join(parts))
 
+    # ── Executive report (Security Posture Assessment) ───────────────────────
+
+    @staticmethod
+    def _exec_open_sorted(report: AuditReport) -> list[CheckResult]:
+        """Open (FAIL/WARN) findings in roadmap order.
+
+        Tier (P1→P3), then FAIL before WARN, then severity, then
+        (category, check_name) so output is deterministic.
+        """
+        open_findings = [
+            r for r in report.results if r.status in (Status.FAIL, Status.WARN)
+        ]
+        open_findings.sort(key=lambda r: (
+            _tier_index(r),
+            0 if r.status == Status.FAIL else 1,
+            _SEV_ORDER.get(r.severity, 5),
+            r.category,
+            r.check_name,
+        ))
+        return open_findings
+
+    def _build_exec_template_context(self, report: AuditReport) -> dict:
+        """Template variable dict for the executive report.
+
+        Reuses the technical report's context (counts, grade, categories,
+        CIS version, formatted timestamp) and layers on the executive
+        document's generated narrative and section data.
+        """
+        ctx = self._build_template_context(report)
+
+        open_findings = self._exec_open_sorted(report)
+        p_counts = [0, 0, 0]
+        for r in open_findings:
+            p_counts[_tier_index(r)] += 1
+
+        ts = report.scan_timestamp
+        ctx.update({
+            "assessment_date":  f"{ts.day} {ts.strftime('%B %Y')}",
+            "assessment_mode":  "Read-only · non-invasive",
+            "privilege_level":  "Administrator" if report.is_admin
+                                else "Standard user",
+            "deck":             self._build_exec_deck(report),
+            "verdict":          self._build_exec_verdict(report),
+            "lede":             self._build_exec_lede(report),
+            "exec_paragraphs":  self._build_exec_paragraphs(report),
+            "bottom_line":      self._build_exec_bottom_line(report),
+            "p1_count":         p_counts[0],
+            "p2_count":         p_counts[1],
+            "p3_count":         p_counts[2],
+            "dist_segments":    self._build_distribution(report),
+            "tiers":            self._build_exec_tiers(report),
+            "findings_cards":   self._build_exec_findings_cards(report),
+            "attestation_groups": self._build_attestation_groups(report),
+            "commands":         self._build_exec_commands(report),
+            "scoring_note": (
+                "Scores start at 100 and deduct weighted points per finding: "
+                "failed controls deduct 15, 10, 5, or 2 points for critical, "
+                "high, medium, or low severity respectively; warnings deduct "
+                "7, 5, 2, or 1. Informational items and checks that could not "
+                "be evaluated do not affect the score."
+            ),
+        })
+        return ctx
+
+    def _build_exec_deck(self, report: AuditReport) -> "Markup":
+        """Cover deck sentence (escaped scan data, our markup)."""
+        from markupsafe import Markup, escape
+
+        host  = escape(report.hostname)
+        total = len(report.results)
+        open_n = report.fail_count + report.warn_count
+        tail = (
+            "with a prioritized plan for remediation." if open_n
+            else "in which all evaluated controls passed."
+        )
+        return Markup(
+            f"An independent, read-only evaluation of endpoint <b>{host}</b> "
+            f"against {total} security controls aligned to the CIS Microsoft "
+            f"Windows Benchmarks, {tail}"
+        )
+
+    def _build_exec_verdict(self, report: AuditReport) -> str:
+        """One-sentence gradebox verdict (plain text, counts only)."""
+        total  = len(report.results)
+        open_n = report.fail_count + report.warn_count
+        p1 = sum(
+            1 for r in report.results
+            if r.status in (Status.FAIL, Status.WARN)
+            and r.severity in (Severity.CRITICAL, Severity.HIGH)
+        )
+
+        if total == 0:
+            return "No controls could be evaluated in this assessment."
+        if open_n == 0 and report.error_count == 0:
+            return (f"All {total} evaluated controls passed; no corrective "
+                    "action is required at this time.")
+        if open_n == 0:
+            e = report.error_count
+            return (f"All evaluated controls passed; {e} "
+                    f"control{'s' if e != 1 else ''} could not be evaluated.")
+        if p1:
+            rest = open_n - p1
+            head = (f"{p1} high-priority finding{'s' if p1 != 1 else ''} "
+                    "should be addressed this week")
+            if rest:
+                return (f"{head}; {rest} further "
+                        f"item{'s' if rest != 1 else ''} can be scheduled "
+                        "into routine maintenance.")
+            return f"{head}."
+        if report.score >= 90:
+            return (f"Overall posture is strong; the {open_n} open "
+                    f"item{'s' if open_n != 1 else ''} below are low-impact "
+                    "refinements.")
+        if report.score >= 80:
+            return (f"Overall posture is good, with {open_n} open "
+                    f"item{'s' if open_n != 1 else ''} to fold into routine "
+                    "maintenance.")
+        if report.score >= 70:
+            return ("Overall posture is fair; a focused round of remediation "
+                    "is recommended.")
+        if report.score >= 60:
+            return ("Overall posture is below standard; remediation should "
+                    "begin promptly.")
+        return "Overall posture requires prompt attention."
+
+    def _build_exec_lede(self, report: AuditReport) -> "Markup":
+        """§1 lede sentence (escaped scan data, our markup)."""
+        from markupsafe import Markup, escape
+
+        letter, label = score_grade(report.score)
+        host   = escape(report.hostname)
+        open_n = report.fail_count + report.warn_count
+        cats   = len({r.category for r in report.results
+                      if r.status in (Status.FAIL, Status.WARN)})
+
+        lede = (f"<b>{host}</b> scored <b>{report.score} out of 100</b> — "
+                f"“{label}” ({letter}) on Apotrope's A–F scale.")
+        if open_n:
+            lede += (f" {open_n} finding{'s are' if open_n != 1 else ' is'} "
+                     f"open for remediation across "
+                     f"{cats} area{'s' if cats != 1 else ''}.")
+        return Markup(lede)
+
+    def _build_exec_paragraphs(self, report: AuditReport) -> "list[Markup]":
+        """§1 executive-summary paragraphs (2–4, strictly data-derived)."""
+        from collections import Counter
+
+        from markupsafe import Markup, escape
+
+        letter, label = score_grade(report.score)
+        total  = len(report.results)
+        host   = escape(report.hostname)
+        os_v   = escape(report.os_version)
+        open_findings = [
+            r for r in report.results if r.status in (Status.FAIL, Status.WARN)
+        ]
+        p1 = [r for r in open_findings
+              if r.severity in (Severity.CRITICAL, Severity.HIGH)]
+        paragraphs: list[Markup] = []
+
+        # P1 — scope (always present).
+        ts = report.scan_timestamp
+        date_str = f"{ts.day} {ts.strftime('%B %Y')}"
+        priv = (
+            "with administrator privileges"
+            if report.is_admin
+            else "without administrator privileges, so some checks that "
+                 "require elevation were skipped"
+        )
+        scope = (
+            f"On {date_str}, Apotrope evaluated {total} security "
+            f"control{'s' if total != 1 else ''} on <b>{host}</b> ({os_v}) "
+            f"against thresholds aligned to the CIS Microsoft Windows "
+            f"Benchmark {escape(_cis_version_for(report))}. The assessment "
+            f"ran in read-only mode {priv} and made no changes to the "
+            f"system. The device scored <b>{report.score}/100 "
+            f"({letter} — {label})</b>."
+        )
+        if report.cis_caveat:
+            scope += f" {escape(report.cis_caveat)}."
+        paragraphs.append(Markup(scope))
+
+        if open_findings:
+            # P2 — findings.
+            detail_parts: list[str] = []
+            if report.fail_count:
+                n = report.fail_count
+                detail_parts.append(f"{n} check{'s' if n != 1 else ''} failed")
+            if report.warn_count:
+                n = report.warn_count
+                detail_parts.append(
+                    f"{n} check{'s' if n != 1 else ''} issued warnings")
+            findings_p = f"Of the checks performed, {' and '.join(detail_parts)}."
+            if p1:
+                names = ", ".join(
+                    f"<b>{escape(r.check_name)}</b>" for r in p1[:3])
+                more = ", among others" if len(p1) > 3 else ""
+                findings_p += (
+                    f" Of these, {len(p1)} "
+                    f"{'is' if len(p1) == 1 else 'are'} high priority: "
+                    f"{names}{more}."
+                )
+            else:
+                findings_p += (" None of the open findings are critical or "
+                               "high severity.")
+            issue_cats = Counter(r.category for r in open_findings)
+            top_cats = [escape(c) for c, _ in issue_cats.most_common(3)]
+            if len(top_cats) == 1:
+                findings_p += (f" The primary area of concern is "
+                               f"<b>{top_cats[0]}</b>.")
+            elif top_cats:
+                joined = (", ".join(f"<b>{c}</b>" for c in top_cats[:-1])
+                          + f" and <b>{top_cats[-1]}</b>")
+                findings_p += f" The primary areas of concern are {joined}."
+            paragraphs.append(Markup(findings_p))
+
+            # P3 — strengths.
+            if report.pass_count:
+                strengths = (f"{report.pass_count} of {total} controls "
+                             "passed.")
+                open_cats = {r.category for r in open_findings}
+                clean = sorted(
+                    {r.category for r in report.results} - open_cats)
+                if clean:
+                    shown = ", ".join(escape(c) for c in clean[:3])
+                    prefix = ("Categories including" if len(clean) > 3
+                              else "The" if len(clean) == 1 else "Categories")
+                    if len(clean) == 1:
+                        strengths += (f" The {shown} category passed all of "
+                                      "its checks.")
+                    else:
+                        strengths += (f" {prefix} {shown} passed all of "
+                                      "their checks.")
+                paragraphs.append(Markup(strengths))
+        else:
+            # P2-alt — all clear.
+            paragraphs.append(Markup(
+                "Every evaluated control passed — no failures or warnings "
+                "were detected. The system's configuration is in line with "
+                "the evaluated Windows security baselines."
+            ))
+
+        # P4 — caveats.
+        caveats: list[str] = []
+        if report.error_count:
+            n = report.error_count
+            hint = (
+                "see the per-check detail for the cause"
+                if report.is_admin
+                else "run as Administrator for full results"
+            )
+            caveats.append(
+                f"Note: {n} check{'s' if n != 1 else ''} could not "
+                f"complete — {hint}."
+            )
+        info_n = sum(1 for r in report.results if r.status == Status.INFO)
+        if info_n:
+            caveats.append(
+                f"{info_n} informational item{'s were' if info_n != 1 else ' was'} "
+                "recorded for context; they do not affect the score."
+            )
+        if caveats:
+            paragraphs.append(Markup(escape(" ".join(caveats))))
+
+        return paragraphs
+
+    def _build_exec_bottom_line(self, report: AuditReport) -> "Markup":
+        """The "Bottom line" note-box sentence."""
+        from markupsafe import Markup
+
+        open_n = report.fail_count + report.warn_count
+        p1 = sum(
+            1 for r in report.results
+            if r.status in (Status.FAIL, Status.WARN)
+            and r.severity in (Severity.CRITICAL, Severity.HIGH)
+        )
+        if open_n == 0:
+            return Markup(
+                "No corrective action is required. Maintain the current "
+                "configuration and re-assess after significant system changes."
+            )
+        if p1:
+            rest = open_n - p1
+            msg = (f"Address the {p1} Priority 1 "
+                   f"item{'s' if p1 != 1 else ''} within the week")
+            if rest:
+                msg += (f"; schedule the remaining {rest} "
+                        f"item{'s' if rest != 1 else ''} into the next "
+                        "maintenance cycle.")
+            else:
+                msg += "."
+            return Markup(msg)
+        return Markup(
+            f"No urgent action is required — fold the {open_n} open "
+            f"item{'s' if open_n != 1 else ''} into routine maintenance and "
+            "re-assess afterwards."
+        )
+
+    @staticmethod
+    def _build_distribution(report: AuditReport) -> list[dict]:
+        """Result-distribution bar segments (flex-grow widths, % legend)."""
+        total = len(report.results)
+        info_n = sum(1 for r in report.results if r.status == Status.INFO)
+        segments = [
+            ("Passed",        report.pass_count,  "seg-pass"),
+            ("Failed",        report.fail_count,  "seg-fail"),
+            ("Warnings",      report.warn_count,  "seg-warn"),
+            ("Informational", info_n,             "seg-info"),
+        ]
+        if report.error_count:
+            segments.append(("Not evaluated", report.error_count, "seg-err"))
+        return [
+            {
+                "label": label,
+                "count": count,
+                "pct":   round(count / (total or 1) * 100),
+                "css":   css,
+            }
+            for label, count, css in segments
+        ]
+
+    def _build_exec_tiers(self, report: AuditReport) -> list[dict]:
+        """P1/P2/P3 roadmap tiers with their (possibly empty) rows."""
+        open_findings = self._exec_open_sorted(report)
+        tiers: list[dict] = [
+            {"key": key, "label": label, "window": window, "rows": []}
+            for key, label, window in _EXEC_TIERS
+        ]
+        for r in open_findings:
+            tiers[_tier_index(r)]["rows"].append({
+                "category":   r.category,
+                "check_name": r.check_name,
+                "action":     r.remediation
+                              or "See the detailed findings section for context.",
+                "severity":   r.severity.value,
+                "sev_class":  _EXEC_SEV_CLASS.get(r.severity, "info"),
+                "status":     r.status.value,
+                "cis":        r.cis_reference,
+            })
+        return tiers
+
+    def _build_exec_findings_cards(self, report: AuditReport) -> list[dict]:
+        """§4 finding cards: every open finding, roadmap order."""
+        cards = []
+        for r in self._exec_open_sorted(report):
+            cards.append({
+                "status":       r.status.value,
+                "status_class": "fail" if r.status == Status.FAIL else "warn",
+                "status_label": "Failed" if r.status == Status.FAIL
+                                else "Warning",
+                "severity":     r.severity.value,
+                "sev_class":    _EXEC_SEV_CLASS.get(r.severity, "info"),
+                "category":     r.category,
+                "cis":          r.cis_reference,
+                "check_name":   r.check_name,
+                "details":      r.details,
+                "impact":       _impact_for(r.category),
+                "remediation":  r.remediation,
+                "tier_key":     _EXEC_TIERS[_tier_index(r)][0],
+            })
+        return cards
+
+    @staticmethod
+    def _build_attestation_groups(report: AuditReport) -> list[dict]:
+        """Appendix A: PASS controls grouped by category (alphabetical)."""
+        from collections import defaultdict
+
+        by_cat: dict[str, list[CheckResult]] = defaultdict(list)
+        for r in report.results:
+            if r.status == Status.PASS:
+                by_cat[r.category].append(r)
+        return [
+            {
+                "name": cat,
+                "rows": [
+                    {
+                        "check_name": r.check_name,
+                        "details":    r.details,
+                        "cis":        r.cis_reference,
+                    }
+                    for r in sorted(by_cat[cat], key=lambda r: r.check_name)
+                ],
+            }
+            for cat in sorted(by_cat)
+        ]
+
+    def _build_exec_commands(self, report: AuditReport) -> list[dict]:
+        """Appendix B: numbered command blocks for open findings, P1→P3."""
+        commands = []
+        for r in self._exec_open_sorted(report):
+            if not r.command:
+                continue
+            commands.append({
+                "num":        f"{len(commands) + 1:02d}",
+                "check_name": r.check_name,
+                "category":   r.category,
+                "severity":   r.severity.value,
+                "sev_class":  _EXEC_SEV_CLASS.get(r.severity, "info"),
+                "tier_key":   _EXEC_TIERS[_tier_index(r)][0],
+                "cis":        r.cis_reference,
+                "command":    r.command,
+            })
+        return commands
+
     def _make_console(self):
         import sys
 
@@ -1197,6 +1758,7 @@ class Reporter:
         report: AuditReport,
         html_path: str | None,
         json_path: str | None,
+        exec_path: str | None = None,
     ) -> None:
         """Print the single-arrow summary footer (plus any caveats, muted)."""
         g = _glyphs(console)
@@ -1219,6 +1781,12 @@ class Reporter:
                 tail += f" {g['sep']} --verbose for per-check detail"
             console.print(_text("  ", (head, _GREEN), (tail, _MUTED)))
 
+        if exec_path:
+            console.print(_text(
+                "  ",
+                (f"{g['sep']} {exec_path} written", _MUTED),
+                (" — executive summary for decision makers", _MUTED),
+            ))
         if json_path:
             console.print(_text("  ", (f"{g['sep']} {json_path} written", _MUTED)))
         if report.error_count:

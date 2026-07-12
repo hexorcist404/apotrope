@@ -27,6 +27,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Examples:\n"
             "  apotrope                             Full audit, terminal output\n"
             "  apotrope --html report.html          Also save HTML report\n"
+            "  apotrope --html r.html --exec-report brief.html\n"
+            "                                       Technical + executive reports\n"
             "  apotrope --json report.json          Also save JSON report\n"
             "  apotrope --baseline b.json           Save scan as a baseline\n"
             "  apotrope --compare  b.json           Compare scan against baseline\n"
@@ -49,6 +51,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--html",
         metavar="FILE",
         help="Save an HTML report to FILE",
+    )
+    parser.add_argument(
+        "--exec-report",
+        metavar="FILE",
+        help=(
+            "Save a plain-English executive report "
+            "(Security Posture Assessment) to FILE"
+        ),
     )
     parser.add_argument(
         "--json",
@@ -108,6 +118,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Internal logging verbosity (default: WARNING)",
     )
     return parser
+
+
+def _exec_href(html_path: str, exec_path: str) -> str:
+    """Href from the technical report to the executive report.
+
+    Relative when both live on the same drive (portable — the pair can be
+    moved or shared together); a ``file://`` URI when a Windows cross-drive
+    relpath is impossible. Percent-encoded either way.
+    """
+    import os
+    import urllib.parse
+    from pathlib import Path
+
+    try:
+        rel = os.path.relpath(
+            os.path.abspath(exec_path),
+            os.path.dirname(os.path.abspath(html_path)) or ".",
+        )
+    except ValueError:  # different drives on Windows
+        return Path(exec_path).resolve().as_uri()
+    return urllib.parse.quote(rel.replace(os.sep, "/"), safe="/")
 
 
 def main() -> None:
@@ -175,9 +206,19 @@ def main() -> None:
         print(f"\n[FATAL] Scan could not complete: {exc}", file=sys.stderr)
         sys.exit(2)
 
-    # Save outputs
+    # Save outputs. The executive report is generated first so the technical
+    # report's header link is only rendered once the target actually exists
+    # (generation is a no-op when Jinja2 or the template is unavailable).
+    if args.exec_report:
+        reporter.generate_executive_report(report, args.exec_report)
+
     if args.html:
-        reporter.generate_html_report(report, args.html)
+        exec_href = None
+        if args.exec_report:
+            from pathlib import Path
+            if Path(args.exec_report).exists():
+                exec_href = _exec_href(args.html, args.exec_report)
+        reporter.generate_html_report(report, args.html, exec_href=exec_href)
 
     if args.json:
         reporter.generate_json_report(report, args.json)
@@ -187,7 +228,8 @@ def main() -> None:
         save_baseline(report, args.baseline)
 
     # Terminal output
-    reporter.print_terminal(report, html_path=args.html, json_path=args.json)
+    reporter.print_terminal(report, html_path=args.html, json_path=args.json,
+                            exec_path=args.exec_report)
 
     # Comparison diff display
     if baseline is not None:

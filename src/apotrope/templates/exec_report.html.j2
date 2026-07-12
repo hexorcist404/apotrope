@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Security Posture Assessment — {{ hostname }}</title>
+<style>{% raw %}
+/* Apotrope — Security Posture Assessment (executive report).
+   Print-first, self-contained, script-free. Editorial visual direction:
+   serif display, warm ivory ink, deep evergreen accent. Offline font
+   stacks only — no web fonts, no network. */
+
+* { box-sizing: border-box; }
+
+:root {
+  /* semantic severity — tuned for legibility on white */
+  --crit:  #9e1b32;
+  --high:  #b4451f;
+  --med:   #8a6a00;
+  --ok:    #0d6b4f;
+  --info:  #3f6ea3;
+  --crit-bg: #f7e9ec; --high-bg: #f8ece5; --med-bg: #f6f0dd; --ok-bg: #e6f1ec; --info-bg: #eaf0f6;
+
+  /* editorial theme tokens */
+  --ink:    #1c1a16;
+  --body:   #35322b;
+  --muted:  #6f6a60;
+  --faint:  #9d988c;
+  --rule:   #e0dbd0;
+  --rule-2: #cfc9bb;
+  --accent: #0b5d4e;
+  --accent-2: #094a3e;
+  --accent-soft: #ecf2ef;
+  --card:   #ffffff;
+  --tint:   #faf8f3;
+  --f-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-body: "Libre Franklin", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+}
+
+html, body { margin: 0; padding: 0; }
+body { background: #d8d6d0; }
+
+/* On screen: a paper sheet. In print: hand the page over to @page margins. */
+.sheet {
+  max-width: 8.5in;
+  margin: 28px auto;
+  background: var(--card);
+  box-shadow: 0 2px 26px rgba(0,0,0,0.16);
+  padding: 0.8in;
+  color: var(--body);
+  font-family: var(--f-body);
+  font-size: 10.6pt;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 { color: var(--ink); font-family: var(--f-display); font-weight: 600; letter-spacing: -0.01em; }
+p { margin: 0 0 9pt; }
+a { color: var(--accent); }
+strong, b { color: var(--ink); font-weight: 600; }
+
+.mono { font-family: var(--f-mono); }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+
+/* ── Cover ─────────────────────────────────────────────────────────────── */
+.cover { padding: 6pt 0 0; }
+.cover-top { display: flex; align-items: center; justify-content: space-between; gap: 16pt; padding-bottom: 12pt; border-bottom: 1.5pt solid var(--ink); }
+.brandlock { display: flex; align-items: center; gap: 10pt; }
+.brandlock img { width: 34pt; height: 34pt; display: block; border-radius: 6pt; }
+.brandlock .glyph { width: 34pt; height: 34pt; display: flex; align-items: center; justify-content: center; font-size: 22pt; color: var(--accent); }
+.brandlock .wm { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.26em; font-size: 13pt; color: var(--ink); text-transform: uppercase; }
+.brandlock .sub { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
+.cover-class { font-family: var(--f-mono); font-size: 7.6pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); padding: 4pt 8pt; border-radius: 3pt; white-space: nowrap; }
+
+.cover-title { margin-top: 30pt; }
+.cover-title .eyebrow { font-family: var(--f-mono); font-size: 8.5pt; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 8pt; }
+.cover-title h1 { font-size: 33pt; line-height: 1.04; margin: 0; letter-spacing: -0.015em; }
+.cover-title .deck { font-family: var(--f-body); font-size: 12pt; color: var(--muted); margin-top: 10pt; max-width: 34em; line-height: 1.45; }
+
+.cover-panel { margin-top: 26pt; display: grid; grid-template-columns: 1.35fr 1fr; gap: 22pt; align-items: stretch; break-inside: avoid; page-break-inside: avoid; }
+.cover-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt 20pt; align-content: start; }
+.cmeta { border-top: 1px solid var(--rule); padding-top: 6pt; }
+.cmeta .k { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.cmeta .v { font-size: 10.5pt; color: var(--ink); margin-top: 2pt; }
+
+/* grade badge */
+.gradebox { border: 1.5pt solid var(--ink); border-radius: 6pt; padding: 16pt 18pt; display: flex; flex-direction: column; justify-content: center; background: var(--tint); break-inside: avoid; page-break-inside: avoid; }
+.gradebox .gline { display: flex; align-items: baseline; gap: 12pt; }
+.gradebox .letter { font-family: var(--f-display); font-size: 52pt; line-height: 0.8; font-weight: 700; color: var(--ink); }
+.gradebox .scorewrap { display: flex; flex-direction: column; }
+.gradebox .score { font-family: var(--f-mono); font-size: 20pt; font-weight: 600; color: var(--ink); line-height: 1; }
+.gradebox .score span { color: var(--faint); font-size: 12pt; }
+.gradebox .band { font-family: var(--f-mono); font-size: 8pt; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-top: 3pt; }
+.gradebox .verdict { margin-top: 12pt; padding-top: 11pt; border-top: 1px solid var(--rule-2); font-size: 10pt; color: var(--body); line-height: 1.45; }
+.gradebox .verdict b { color: var(--ink); }
+
+/* ── Sections ──────────────────────────────────────────────────────────── */
+.doc-section { margin-top: 26pt; }
+.sec-h { display: flex; align-items: baseline; gap: 10pt; padding-bottom: 6pt; border-bottom: 1px solid var(--rule-2); margin-bottom: 12pt; break-after: avoid; page-break-after: avoid; }
+.sec-h .n { font-family: var(--f-display); font-size: 12pt; font-weight: 700; color: var(--accent); min-width: 1.6em; }
+.sec-h h2 { font-size: 15.5pt; margin: 0; flex: 1; }
+.sec-h .tag { font-family: var(--f-mono); font-size: 7.6pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+
+.lede { font-size: 12.5pt; line-height: 1.5; color: var(--ink); font-family: var(--f-display); font-weight: 400; margin-bottom: 12pt; }
+
+/* stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10pt; margin: 14pt 0; }
+.tile { border: 1px solid var(--rule); border-radius: 4pt; padding: 11pt 12pt; break-inside: avoid; page-break-inside: avoid; }
+.tile .k { font-family: var(--f-mono); font-size: 7.2pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.tile .v { font-family: var(--f-mono); font-size: 21pt; font-weight: 600; color: var(--ink); line-height: 1.1; margin-top: 4pt; }
+.tile .v small { font-size: 11pt; color: var(--faint); }
+.tile .note { font-size: 8.4pt; color: var(--muted); margin-top: 2pt; }
+.tile.accent { border-color: var(--accent); background: var(--accent-soft); }
+.tile.accent .v { color: var(--accent-2); }
+
+/* distribution bar — segment widths are proportional via flex-grow */
+.distrib { display: flex; height: 12pt; border-radius: 3pt; overflow: hidden; margin: 4pt 0 6pt; border: 1px solid var(--rule); }
+.distrib > span { display: block; height: 100%; }
+.seg-pass { background: var(--ok); }
+.seg-fail { background: var(--high); }
+.seg-warn { background: var(--med); }
+.seg-info { background: var(--info); }
+.seg-err  { background: var(--faint); }
+.distrib-legend { display: flex; flex-wrap: wrap; gap: 4pt 16pt; font-family: var(--f-mono); font-size: 8.4pt; color: var(--muted); }
+.distrib-legend .li { display: inline-flex; align-items: center; gap: 6pt; }
+.distrib-legend .sw { width: 8pt; height: 8pt; border-radius: 2pt; display: inline-block; }
+.distrib-legend b { color: var(--ink); }
+
+/* ── Roadmap ───────────────────────────────────────────────────────────── */
+.tier { margin-bottom: 14pt; break-inside: avoid; page-break-inside: avoid; }
+.tier-h { display: flex; align-items: center; gap: 9pt; margin-bottom: 7pt; }
+.tier-badge { font-family: var(--f-mono); font-size: 8pt; font-weight: 700; letter-spacing: 0.08em; color: #fff; padding: 3pt 8pt; border-radius: 3pt; }
+.tier-badge.p1 { background: var(--crit); }
+.tier-badge.p2 { background: var(--high); }
+.tier-badge.p3 { background: var(--med); }
+.tier-h .lbl { font-family: var(--f-display); font-size: 11.5pt; font-weight: 600; color: var(--ink); }
+.tier-h .when { font-family: var(--f-mono); font-size: 8pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-left: auto; }
+.tier-empty { font-size: 9.4pt; color: var(--faint); padding: 4pt 0 2pt; border-top: 1px solid var(--rule); }
+
+.rm-item { display: grid; grid-template-columns: 1.5fr 1fr auto; gap: 6pt 16pt; padding: 8pt 0; border-top: 1px solid var(--rule); break-inside: avoid; page-break-inside: avoid; }
+.rm-item:first-of-type { border-top: 1px solid var(--rule-2); }
+.rm-title { font-weight: 600; color: var(--ink); font-size: 10.4pt; }
+.rm-title .cat { font-family: var(--f-mono); font-size: 7.6pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 1pt; }
+.rm-action { color: var(--body); font-size: 9.6pt; }
+.rm-meta { text-align: right; white-space: nowrap; }
+.rm-meta .cis-ref { display: block; font-family: var(--f-mono); font-size: 8pt; letter-spacing: 0.06em; color: var(--muted); margin-top: 4pt; }
+
+/* ── Findings ──────────────────────────────────────────────────────────── */
+.finding { border: 1px solid var(--rule); border-radius: 5pt; padding: 13pt 15pt; margin-bottom: 11pt; break-inside: avoid; page-break-inside: avoid; background: var(--card); }
+.finding-h { display: flex; align-items: center; gap: 9pt; margin-bottom: 9pt; flex-wrap: wrap; }
+.chip { font-family: var(--f-mono); font-size: 7.4pt; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 3pt 7pt; border-radius: 3pt; border: 1px solid transparent; white-space: nowrap; }
+.chip.status { color: #fff; }
+.chip.st-fail { background: var(--high); }
+.chip.st-warn { background: var(--med); }
+.sev { font-family: var(--f-mono); font-size: 7.4pt; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 2.5pt 7pt; border-radius: 3pt; }
+.sev.crit { color: var(--crit); background: var(--crit-bg); border: 1px solid var(--crit); }
+.sev.high { color: var(--high); background: var(--high-bg); border: 1px solid var(--high); }
+.sev.med { color: var(--med); background: var(--med-bg); border: 1px solid var(--med); }
+.sev.low { color: var(--info); background: var(--info-bg); border: 1px solid var(--info); }
+.sev.info { color: var(--muted); background: var(--tint); border: 1px solid var(--rule-2); }
+.finding-h .fcat { font-family: var(--f-mono); font-size: 8pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.finding-h .fcis { font-family: var(--f-mono); font-size: 8pt; color: var(--faint); margin-left: auto; }
+.finding-h .fname { flex-basis: 100%; font-family: var(--f-display); font-size: 12.5pt; font-weight: 600; color: var(--ink); margin-top: 1pt; letter-spacing: -0.005em; }
+
+.finding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt 20pt; }
+.fblock .fk { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 3pt; }
+.fblock p { margin: 0; font-size: 9.8pt; line-height: 1.46; }
+.fblock p.fdetails { white-space: pre-line; }
+.fblock.full { grid-column: 1 / -1; }
+.finding .action { border-left: 2.5pt solid var(--accent); padding: 6pt 11pt; margin-top: 9pt; background: var(--accent-soft); border-radius: 0 3pt 3pt 0; }
+.finding .action .fk { color: var(--accent-2); }
+.finding .action p { color: var(--ink); }
+
+/* ── Attestation table (Appendix A) ────────────────────────────────────── */
+.attest { width: 100%; border-collapse: collapse; font-size: 9.4pt; }
+.attest thead th { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 6pt 8pt; border-bottom: 1.5pt solid var(--ink); font-weight: 500; }
+.attest td { padding: 5pt 8pt; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.attest tr { break-inside: avoid; page-break-inside: avoid; }
+.attest .cat-row td { font-family: var(--f-mono); font-size: 7.8pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-2); font-weight: 600; padding-top: 10pt; border-bottom: 1px solid var(--rule-2); background: var(--tint); }
+.attest .ck { color: var(--ink); font-weight: 500; }
+.attest .st { font-family: var(--f-mono); font-size: 7.6pt; font-weight: 600; letter-spacing: 0.06em; color: var(--ok); }
+.attest .cis { font-family: var(--f-mono); font-size: 8pt; color: var(--faint); white-space: nowrap; }
+.attest .dt { color: var(--muted); font-size: 9pt; white-space: pre-line; }
+
+/* ── Command blocks (Appendix B) ───────────────────────────────────────── */
+.cmd { margin-bottom: 12pt; break-inside: avoid; page-break-inside: avoid; }
+.cmd-h { display: flex; align-items: baseline; gap: 9pt; margin-bottom: 5pt; }
+.cmd-h .num { font-family: var(--f-mono); font-size: 8.5pt; font-weight: 700; color: var(--accent); }
+.cmd-h .t { font-weight: 600; color: var(--ink); font-size: 10.2pt; }
+.cmd-h .c { font-family: var(--f-mono); font-size: 8pt; color: var(--muted); margin-left: auto; }
+.cmd pre { font-family: var(--f-mono); font-size: 8.6pt; line-height: 1.55; background: #0f1412; color: #d7e6df; border-radius: 4pt; padding: 10pt 12pt; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #1c2723; }
+.cmd pre .cmt { color: #6f8a80; }
+
+/* ── Callout / note ────────────────────────────────────────────────────── */
+.note-box { border: 1px solid var(--rule-2); border-radius: 4pt; padding: 10pt 13pt; background: var(--tint); font-size: 9.6pt; color: var(--body); break-inside: avoid; page-break-inside: avoid; }
+.note-box .fk { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 3pt; }
+.all-clear { border-color: var(--ok); background: var(--ok-bg); }
+.all-clear .fk { color: var(--ok); }
+
+/* running footer (static, end of document) */
+.doc-foot { display: flex; justify-content: space-between; align-items: center; gap: 14pt; flex-wrap: wrap; margin-top: 26pt; padding-top: 10pt; border-top: 1px solid var(--rule); font-family: var(--f-mono); font-size: 7.6pt; letter-spacing: 0.08em; color: var(--faint); text-transform: uppercase; }
+.doc-foot .b { color: var(--muted); }
+
+hr.rule { border: none; border-top: 1px solid var(--rule); margin: 14pt 0; }
+
+/* ── Print ─────────────────────────────────────────────────────────────── */
+@page { size: letter; margin: 0.8in; }
+/* Margin boxes: static tool copy only (never scan data — CSS string context).
+   Supported by Chromium 131+; older engines ignore them harmlessly. */
+@page {
+  @bottom-center { content: "Apotrope · Security Posture Assessment · Confidential"; font-family: monospace; font-size: 7pt; color: #9d988c; }
+  @bottom-right { content: counter(page); font-family: monospace; font-size: 7pt; color: #9d988c; }
+}
+.page-break { break-before: page; page-break-before: always; }
+
+@media print {
+  body { background: #fff; }
+  .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; }
+  a { color: inherit; text-decoration: none; }
+}
+{% endraw %}</style>
+</head>
+<body>
+<div class="sheet">
+
+  <!-- ═══ COVER ═══ -->
+  <section class="cover">
+    <div class="cover-top">
+      <div class="brandlock">
+        {% if logo_data_uri %}<img src="{{ logo_data_uri }}" alt="Apotrope" />{% else %}<span class="glyph">◈</span>{% endif %}
+        <div>
+          <div class="wm">Apotrope</div>
+          <div class="sub">Windows Security Tooling</div>
+        </div>
+      </div>
+      <div class="cover-class">Confidential</div>
+    </div>
+
+    <div class="cover-title">
+      <div class="eyebrow">Endpoint Security Assessment</div>
+      <h1>Security Posture Assessment</h1>
+      <p class="deck">{{ deck }}</p>
+    </div>
+
+    <div class="cover-panel">
+      <div class="cover-meta">
+        <div class="cmeta"><div class="k">Host</div><div class="v">{{ hostname }}</div></div>
+        <div class="cmeta"><div class="k">Operating system</div><div class="v">{{ os_version }}</div></div>
+        <div class="cmeta"><div class="k">Assessment date</div><div class="v">{{ assessment_date }}</div></div>
+        <div class="cmeta"><div class="k">Controls evaluated</div><div class="v">{{ total_checks }} across {{ n_cats }} area{{ 's' if n_cats != 1 }}</div></div>
+        <div class="cmeta"><div class="k">Assessment mode</div><div class="v">{{ assessment_mode }}</div></div>
+        <div class="cmeta"><div class="k">Privileges</div><div class="v">{{ privilege_level }}</div></div>
+        <div class="cmeta"><div class="k">Tool</div><div class="v">Apotrope v{{ version }}</div></div>
+        <div class="cmeta"><div class="k">Scan duration</div><div class="v">{{ scan_duration }} seconds</div></div>
+      </div>
+
+      <div class="gradebox">
+        <div class="gline">
+          <div class="letter">{{ grade_letter }}</div>
+          <div class="scorewrap">
+            <div class="score">{{ score }}<span>/100</span></div>
+            <div class="band">{{ grade_label }}</div>
+          </div>
+        </div>
+        <div class="verdict">{{ verdict }}</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 1. EXECUTIVE SUMMARY ═══ -->
+  <section class="doc-section" id="summary">
+    <div class="sec-h"><span class="n">1</span><h2>Executive summary</h2><span class="tag">Plain language</span></div>
+
+    <p class="lede">{{ lede }}</p>
+
+    {% for para in exec_paragraphs %}
+    <p>{{ para }}</p>
+    {% endfor %}
+
+    <div class="note-box{% if not open_total %} all-clear{% endif %}">
+      <div class="fk">Bottom line</div>
+      {{ bottom_line }}
+    </div>
+  </section>
+
+  <!-- ═══ 2. POSTURE AT A GLANCE ═══ -->
+  <section class="doc-section" id="glance">
+    <div class="sec-h"><span class="n">2</span><h2>Posture at a glance</h2></div>
+
+    {% set pass_pct = ((pass_count * 100 / total_checks) | round | int) if total_checks else 0 %}
+    <div class="tiles">
+      <div class="tile accent"><div class="k">Overall score</div><div class="v tnum">{{ score }}<small>/100</small></div><div class="note">Grade {{ grade_letter }} — {{ grade_label }}</div></div>
+      <div class="tile"><div class="k">Controls passed</div><div class="v tnum">{{ pass_count }}<small>/{{ total_checks }}</small></div><div class="note">{{ pass_pct }}% compliant</div></div>
+      <div class="tile"><div class="k">Open findings</div><div class="v tnum">{{ open_total }}</div><div class="note">{{ fail_count }} failed · {{ warn_count }} warning{{ 's' if warn_count != 1 }}</div></div>
+      <div class="tile"><div class="k">High-severity</div><div class="v tnum">{{ p1_count }}</div><div class="note">Priority-1 item{{ 's' if p1_count != 1 }}</div></div>
+    </div>
+
+    {% if total_checks %}
+    <div class="distrib">
+      {% for s in dist_segments %}{% if s.count %}<span class="{{ s.css }}" style="flex-grow:{{ s.count }}"></span>{% endif %}{% endfor %}
+    </div>
+    <div class="distrib-legend">
+      {% for s in dist_segments %}
+      <span class="li"><span class="sw {{ s.css }}"></span>{{ s.label }} <b>{{ s.count }}</b> ({{ s.pct }}%)</span>
+      {% endfor %}
+    </div>
+    {% if info_count %}
+    <p class="muted" style="font-size:9.4pt;margin-top:8pt;">{{ info_count }} informational item{{ 's' if info_count != 1 }} (system inventory and context) {{ 'are' if info_count != 1 else 'is' }} recorded for reference and do{{ 'es' if info_count == 1 }} not affect the score.</p>
+    {% endif %}
+    {% else %}
+    <p class="muted">No controls were evaluated in this assessment.</p>
+    {% endif %}
+  </section>
+
+  <!-- ═══ 3. REMEDIATION ROADMAP ═══ -->
+  <section class="doc-section" id="roadmap">
+    <div class="sec-h"><span class="n">3</span><h2>Prioritized remediation roadmap</h2><span class="tag">{{ open_total }} action{{ 's' if open_total != 1 }}</span></div>
+
+    {% if open_total %}
+    {% for tier in tiers %}
+    <div class="tier">
+      <div class="tier-h"><span class="tier-badge {{ tier.key | lower }}">{{ tier.key }}</span><span class="lbl">{{ tier.label }}</span><span class="when">{{ tier.window }}</span></div>
+      {% for row in tier.rows %}
+      <div class="rm-item">
+        <div class="rm-title"><span class="cat">{{ row.category }}</span>{{ row.check_name }}</div>
+        <div class="rm-action">{{ row.action }}</div>
+        <div class="rm-meta"><span class="sev {{ row.sev_class }}">{{ row.severity }}</span>{% if row.cis %}<span class="cis-ref">{{ row.cis }}</span>{% endif %}</div>
+      </div>
+      {% else %}
+      <div class="tier-empty">No items in this tier.</div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="note-box all-clear">
+      <div class="fk">All clear</div>
+      Every evaluated control passed — there are no remediation actions to prioritize.
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- ═══ 4. DETAILED FINDINGS ═══ -->
+  <section class="doc-section" id="findings">
+    <div class="sec-h"><span class="n">4</span><h2>Detailed findings</h2><span class="tag">Open items only</span></div>
+
+    {% for f in findings_cards %}
+    <div class="finding">
+      <div class="finding-h">
+        <span class="chip status st-{{ f.status_class }}">{{ f.status_label }}</span>
+        <span class="sev {{ f.sev_class }}">{{ f.severity }}</span>
+        <span class="fcat">{{ f.category }}</span>
+        {% if f.cis %}<span class="fcis">{{ f.cis }}</span>{% endif %}
+        <span class="fname">{{ f.check_name }}</span>
+      </div>
+      <div class="finding-grid">
+        <div class="fblock"><div class="fk">Finding</div><p class="fdetails">{{ f.details }}</p></div>
+        <div class="fblock"><div class="fk">Business impact</div><p>{{ f.impact }}</p></div>
+      </div>
+      {% if f.remediation %}
+      <div class="fblock full action"><div class="fk">Recommended action</div><p>{{ f.remediation }}</p></div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="note-box all-clear">
+      <div class="fk">No open findings</div>
+      Every evaluated control passed; there are no failed or warning findings to detail.
+    </div>
+    {% endfor %}
+  </section>
+
+  <!-- ═══ APPENDIX A — ATTESTATION ═══ -->
+  <section class="doc-section page-break" id="appendix-a">
+    <div class="sec-h"><span class="n">A</span><h2>Attestation — controls passed</h2><span class="tag">{{ pass_count }} control{{ 's' if pass_count != 1 }}</span></div>
+
+    {% if attestation_groups %}
+    <p class="muted" style="font-size:9.6pt;margin-bottom:10pt;">The following controls were evaluated and passed. This record can serve as evidence of the endpoint's compliant configuration at the time of assessment.</p>
+
+    <table class="attest">
+      <thead>
+        <tr><th style="width:32%;">Control</th><th style="width:10%;">Result</th><th style="width:42%;">Detail</th><th style="width:16%;">Benchmark</th></tr>
+      </thead>
+      <tbody>
+        {% for group in attestation_groups %}
+        <tr class="cat-row"><td colspan="4">{{ group.name }}</td></tr>
+        {% for row in group.rows %}
+        <tr><td class="ck">{{ row.check_name }}</td><td class="st">Pass</td><td class="dt">{{ row.details }}</td><td class="cis">{{ row.cis or '—' }}</td></tr>
+        {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No controls passed in this assessment, so there is nothing to attest.</p>
+    {% endif %}
+  </section>
+
+  <!-- ═══ APPENDIX B — REMEDIATION COMMANDS ═══ -->
+  <section class="doc-section page-break" id="appendix-b">
+    <div class="sec-h"><span class="n">B</span><h2>Remediation commands</h2><span class="tag">For IT</span></div>
+
+    {% if commands %}
+    <div class="note-box" style="margin-bottom:13pt;">
+      <div class="fk">Before you run these</div>
+      Run in an <b>elevated</b> PowerShell prompt. Commands mirror the findings above; review each against your environment and change-management process before applying to a production device.
+    </div>
+
+    {% for c in commands %}
+    <div class="cmd">
+      <div class="cmd-h"><span class="num">{{ c.num }}</span><span class="t">{{ c.check_name }}</span><span class="c">{{ c.category }} · {{ c.tier_key }}</span></div>
+      <pre>{% for ln in c.command.split('\n') %}{% if ln.strip() == '' %}<div> </div>{% elif ln.lstrip().startswith('#') %}<div class="cmt">{{ ln }}</div>{% else %}<div>{{ ln }}</div>{% endif %}{% endfor %}</pre>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="muted">No scripted remediation applies to the findings in this assessment.</p>
+    {% endif %}
+
+    <hr class="rule" />
+    <p class="muted" style="font-size:9pt;">About this assessment — Apotrope performs a read-only, non-invasive scan of Windows security configuration, scoring against thresholds aligned to the CIS Microsoft Windows Benchmark {{ cis_version }}{% if cis_caveat %} ({{ cis_caveat }}){% endif %}. No changes are made to the system during assessment. {{ scoring_note }} The scan completed in {{ scan_duration }} seconds. When printing, disable the browser's own header and footer — this document supplies its own.</p>
+  </section>
+
+  <div class="doc-foot">
+    <span class="b">Apotrope v{{ version }} · Security Posture Assessment</span>
+    <span>{{ hostname }}</span>
+    <span>Confidential</span>
+  </div>
+
+</div>
+</body>
+</html>

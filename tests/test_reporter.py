@@ -334,6 +334,378 @@ class TestGenerateHtmlReport:
             "outside your organization." in html
         )
 
+    def test_exec_link_rendered_when_href_given(self):
+        """Header links to a co-generated executive report via exec_href."""
+        reporter = Reporter()
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            path = f.name
+        try:
+            reporter.generate_html_report(
+                _make_report(), path, exec_href="brief%20v1.html")
+            html = Path(path).read_text(encoding="utf-8")
+        finally:
+            os.unlink(path)
+        assert 'class="exec-link"' in html
+        assert 'href="brief%20v1.html"' in html
+        assert "Executive Report" in html
+
+    def test_no_exec_link_by_default(self):
+        """Without exec_href, no dead 'Executive Report' link is rendered."""
+        html = self._generate(_make_report())
+        assert 'class="exec-link"' not in html
+        assert "Executive Report" not in html
+
+
+# ---------------------------------------------------------------------------
+# Executive report (Security Posture Assessment) generation
+# ---------------------------------------------------------------------------
+
+class TestGenerateExecutiveReport:
+    def _generate(self, report: AuditReport) -> str:
+        reporter = Reporter()
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            path = f.name
+        try:
+            reporter.generate_executive_report(report, path)
+            return Path(path).read_text(encoding="utf-8")
+        finally:
+            os.unlink(path)
+
+    @staticmethod
+    def _section(html: str, start_id: str, end_id: str | None = None) -> str:
+        """Slice the document between two section ids."""
+        part = html.split(f'id="{start_id}"', 1)[1]
+        return part.split(f'id="{end_id}"', 1)[0] if end_id else part
+
+    def test_valid_html_document(self):
+        html = self._generate(_make_report())
+        assert html.startswith("<!DOCTYPE html>")
+        assert "</html>" in html
+        assert "Security Posture Assessment" in html
+
+    def test_self_contained_and_script_free(self):
+        """Offline and print-first: no network references and no JS at all."""
+        html = self._generate(_make_report())
+        assert "cdn." not in html
+        assert "googleapis.com" not in html
+        assert "<script" not in html
+
+    def test_cover_meta_admin(self):
+        html = self._generate(_make_report(is_admin=True))
+        assert "TEST-PC" in html
+        assert "Windows 11 Pro 10.0.22621" in html
+        assert "Read-only · non-invasive" in html
+        assert "Administrator" in html
+        assert "Apotrope v" in html
+
+    def test_cover_meta_standard_user(self):
+        html = self._generate(_make_report(is_admin=False))
+        assert "Standard user" in html
+
+    def test_gradebox_and_verdict(self):
+        # Fixture: 1 CRITICAL FAIL + 1 MEDIUM WARN open → 1 P1, 1 remainder.
+        html = self._generate(_make_report(score=80))
+        assert 'class="letter">B<' in html
+        assert (
+            "1 high-priority finding should be addressed this week; "
+            "1 further item can be scheduled into routine maintenance." in html
+        )
+
+    def test_stat_tiles_and_distribution(self):
+        html = self._generate(_make_report())
+        assert "Controls passed" in html
+        assert "Open findings" in html
+        assert "flex-grow:" in html
+        assert "Priority-1 item" in html
+
+    def test_tier_assignment_and_order(self):
+        low = CheckResult("Hardening", "Low Hygiene Item", Status.FAIL,
+                          Severity.LOW, "desc", "found", "Tidy it up")
+        html = self._generate(_make_report(extra_results=[low]))
+        roadmap = self._section(html, "roadmap", "findings")
+        # P1 (CRITICAL fail) before P2 (MEDIUM warn) before P3 (LOW fail).
+        i_p1 = roadmap.index("Public Profile")
+        i_p2 = roadmap.index("Risky Services")
+        i_p3 = roadmap.index("Low Hygiene Item")
+        assert i_p1 < i_p2 < i_p3
+        assert "No items in this tier." not in roadmap.split("Low Hygiene")[0]
+
+    def test_severity_chip_classes(self):
+        extras = [
+            CheckResult("Hardening", "Low Sev Item", Status.FAIL,
+                        Severity.LOW, "d", "f", "fix"),
+            CheckResult("Network", "Info Sev Item", Status.WARN,
+                        Severity.INFO, "d", "f", "fix"),
+        ]
+        html = self._generate(_make_report(extra_results=extras))
+        assert 'sev low"' in html
+        assert 'sev info"' in html
+
+    def test_cis_ref_shown_when_present(self):
+        extra = CheckResult("Firewall", "CIS Tagged Check", Status.FAIL,
+                            Severity.HIGH, "d", "f", "fix",
+                            cis_reference="CIS 9.9.9")
+        html = self._generate(_make_report(extra_results=[extra]))
+        assert "CIS 9.9.9" in html
+
+    def test_findings_cards_open_only(self):
+        html = self._generate(_make_report())
+        findings = self._section(html, "findings", "appendix-a")
+        assert "Public Profile" in findings   # FAIL — has a card
+        assert "Risky Services" in findings   # WARN — has a card
+        assert "Domain Profile" not in findings  # PASS — attestation only
+        assert "OS Version" not in findings      # INFO — not open
+
+    def test_impact_copy_known_category_and_fallback(self):
+        from markupsafe import escape
+
+        from apotrope.reporter import _EXEC_IMPACT, _EXEC_IMPACT_FALLBACK
+        unknown = CheckResult("CustomCat", "Odd Check", Status.FAIL,
+                              Severity.HIGH, "d", "f", "fix")
+        html = self._generate(_make_report(extra_results=[unknown]))
+        # Compare the autoescaped forms (the copy contains apostrophes).
+        assert str(escape(_EXEC_IMPACT["Firewall"])) in html
+        assert str(escape(_EXEC_IMPACT_FALLBACK)) in html
+
+    def test_attestation_pass_only(self):
+        html = self._generate(_make_report())
+        attest = self._section(html, "appendix-a", "appendix-b")
+        assert "Domain Profile" in attest      # the PASS control
+        assert "Public Profile" not in attest  # the FAIL control
+        assert "OS Version" not in attest      # INFO is not attested
+
+    def test_commands_ordered_numbered_comment_styled(self):
+        extras = [
+            CheckResult("Hardening", "Low Cmd Item", Status.FAIL, Severity.LOW,
+                        "d", "f", "fix", "Set-Low -Value 1"),
+            CheckResult("Firewall", "Crit Cmd Item", Status.FAIL,
+                        Severity.CRITICAL, "d", "f", "fix",
+                        "# review first\nSet-Crit -Value 1"),
+        ]
+        html = self._generate(_make_report(extra_results=extras))
+        appendix = self._section(html, "appendix-b")
+        # P1 command is numbered 01 and appears before the P3 command.
+        assert appendix.index("Crit Cmd Item") < appendix.index("Low Cmd Item")
+        assert ">01<" in appendix
+        assert '<div class="cmt"># review first</div>' in appendix
+        assert "PS&gt;" not in appendix  # paper copies must retype clean
+
+    def test_commands_empty_note(self):
+        # Base fixture has open findings but none carry a command.
+        html = self._generate(_make_report())
+        assert "No scripted remediation applies" in html
+
+    def test_clean_report_all_clear(self):
+        results = [
+            CheckResult("Firewall", "Domain Profile", Status.PASS,
+                        Severity.HIGH, "desc", "ok"),
+            CheckResult("Accounts", "Guest Account", Status.PASS,
+                        Severity.HIGH, "desc", "ok"),
+        ]
+        report = AuditReport(
+            hostname="TEST-PC", os_version="Windows 11",
+            scan_timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            scan_duration=1.0, results=results, score=100, is_admin=True,
+        )
+        html = self._generate(report)
+        assert ("All 2 evaluated controls passed; no corrective action is "
+                "required at this time." in html)
+        assert "No corrective action is required." in html
+        assert "no remediation actions to prioritize" in html
+        assert "no failed or warning findings" in html
+
+    def test_error_results_excluded_and_noted(self):
+        err = CheckResult("Network", "Broken Check", Status.ERROR,
+                          Severity.INFO, "d", "probe failed")
+        html = self._generate(_make_report(extra_results=[err]))
+        findings = self._section(html, "findings", "appendix-a")
+        attest = self._section(html, "appendix-a", "appendix-b")
+        assert "Broken Check" not in findings
+        assert "Broken Check" not in attest
+        assert "could not" in html  # caveat sentence in the narrative
+
+    def test_html_special_chars_escaped(self):
+        """Autoescape must cover every scan-derived field in this template too."""
+        xss = "<script>alert(1)</script>"
+        report = AuditReport(
+            hostname=f"HOST-{xss}",
+            os_version="10.0.22631",
+            scan_timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            scan_duration=1.0,
+            results=[
+                CheckResult(
+                    "Security", "XSS Check", Status.FAIL, Severity.HIGH,
+                    "desc", f"Details: {xss}", f"Remediate {xss}",
+                    f"Set-Item {xss}",
+                ),
+            ],
+            score=50,
+            is_admin=False,
+        )
+        html = self._generate(report)
+        assert "<script>alert(1)</script>" not in html
+        assert "&lt;script&gt;" in html
+
+    def test_print_css_present(self):
+        html = self._generate(_make_report())
+        assert "@page" in html
+        assert "size: letter" in html
+        assert "break-before: page" in html
+
+    def test_footer_line(self):
+        html = self._generate(_make_report())
+        foot = html.split('class="doc-foot"')[1]
+        assert "Security Posture Assessment" in foot
+        assert "TEST-PC" in foot
+        assert "Confidential" in foot
+
+    def test_no_file_written_when_jinja2_missing(self):
+        import sys
+        from unittest import mock
+
+        reporter = Reporter()
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            path = f.name
+        os.unlink(path)
+        try:
+            with mock.patch.dict(sys.modules, {"jinja2": None}):
+                reporter.generate_executive_report(_make_report(), path)
+            assert not os.path.exists(path)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_no_file_written_when_template_load_fails(self):
+        from unittest import mock
+
+        from jinja2 import Environment
+
+        reporter = Reporter()
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+            path = f.name
+        os.unlink(path)
+        try:
+            with mock.patch.object(
+                Environment, "get_template", side_effect=OSError("boom")
+            ):
+                reporter.generate_executive_report(_make_report(), path)
+            assert not os.path.exists(path)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_frozen_bundle_uses_meipass_template_dir(self):
+        """PyInstaller path: templates resolve under sys._MEIPASS/templates."""
+        import sys
+        from unittest import mock
+
+        import apotrope.reporter as reporter_mod
+
+        package_dir = Path(reporter_mod.__file__).parent
+        with mock.patch.object(sys, "frozen", True, create=True), \
+             mock.patch.object(sys, "_MEIPASS", str(package_dir), create=True):
+            html = self._generate(_make_report())
+        assert "<!DOCTYPE html>" in html
+
+
+# ---------------------------------------------------------------------------
+# Executive report narrative builders
+# ---------------------------------------------------------------------------
+
+class TestExecNarrative:
+    @staticmethod
+    def _report(results, score=80, is_admin=True):
+        return AuditReport(
+            hostname="TEST-PC", os_version="Windows 11 Pro 10.0.22621",
+            scan_timestamp=datetime(2026, 3, 15, 12, 0, tzinfo=timezone.utc),
+            scan_duration=2.0, results=results, score=score, is_admin=is_admin,
+        )
+
+    def test_verdict_no_controls(self):
+        verdict = Reporter()._build_exec_verdict(self._report([]))
+        assert verdict == "No controls could be evaluated in this assessment."
+
+    def test_verdict_clean(self):
+        results = [CheckResult("Firewall", "FW", Status.PASS, Severity.HIGH,
+                               "d", "ok")]
+        verdict = Reporter()._build_exec_verdict(self._report(results, 100))
+        assert "All 1 evaluated controls passed" in verdict
+
+    def test_verdict_clean_with_errors(self):
+        results = [
+            CheckResult("Firewall", "FW", Status.PASS, Severity.HIGH, "d", "ok"),
+            CheckResult("Network", "NB", Status.ERROR, Severity.INFO, "d", "x"),
+        ]
+        verdict = Reporter()._build_exec_verdict(self._report(results, 100))
+        assert "1 control could not be evaluated" in verdict
+
+    def test_verdict_p1(self):
+        results = [CheckResult("Firewall", "FW", Status.FAIL,
+                               Severity.CRITICAL, "d", "off", "fix")]
+        verdict = Reporter()._build_exec_verdict(self._report(results, 85))
+        assert "1 high-priority finding should be addressed this week." == verdict
+
+    def test_verdict_score_bands_without_p1(self):
+        med = [CheckResult("Services", "Svc", Status.WARN, Severity.MEDIUM,
+                           "d", "warn", "fix")]
+        r = Reporter()
+        assert "strong" in r._build_exec_verdict(self._report(med, 92))
+        assert "good" in r._build_exec_verdict(self._report(med, 85))
+        assert "fair" in r._build_exec_verdict(self._report(med, 75))
+        assert "below standard" in r._build_exec_verdict(self._report(med, 65))
+        assert "prompt attention" in r._build_exec_verdict(self._report(med, 40))
+
+    def test_bottom_line_branches(self):
+        r = Reporter()
+        clean = [CheckResult("Firewall", "FW", Status.PASS, Severity.HIGH,
+                             "d", "ok")]
+        assert "No corrective action" in str(
+            r._build_exec_bottom_line(self._report(clean, 100)))
+        p1 = [CheckResult("Firewall", "FW", Status.FAIL, Severity.HIGH,
+                          "d", "off", "fix"),
+              CheckResult("Services", "Svc", Status.WARN, Severity.MEDIUM,
+                          "d", "warn", "fix")]
+        line = str(r._build_exec_bottom_line(self._report(p1, 70)))
+        assert "Address the 1 Priority 1 item within the week" in line
+        assert "remaining 1 item" in line
+        med_only = [CheckResult("Services", "Svc", Status.WARN,
+                                Severity.MEDIUM, "d", "warn", "fix")]
+        assert "routine maintenance" in str(
+            r._build_exec_bottom_line(self._report(med_only, 85)))
+
+    def test_paragraphs_scope_and_findings(self):
+        results = [
+            CheckResult("Firewall", "FW Check", Status.FAIL, Severity.HIGH,
+                        "d", "off", "fix"),
+            CheckResult("Accounts", "Guest", Status.PASS, Severity.HIGH,
+                        "d", "ok"),
+        ]
+        paras = Reporter()._build_exec_paragraphs(self._report(results, 70))
+        joined = " ".join(str(p) for p in paras)
+        assert len(paras) >= 2
+        assert "15 March 2026" in joined
+        assert "with administrator privileges" in joined
+        assert "1 check failed" in joined
+        assert "FW Check" in joined
+        assert "The primary area of concern is <b>Firewall</b>." in joined
+        # Accounts has no open findings → named as a clean category.
+        assert "Accounts" in joined
+
+    def test_paragraphs_non_admin_clause(self):
+        results = [CheckResult("Firewall", "FW", Status.PASS, Severity.HIGH,
+                               "d", "ok")]
+        paras = Reporter()._build_exec_paragraphs(
+            self._report(results, 100, is_admin=False))
+        joined = " ".join(str(p) for p in paras)
+        assert "without administrator privileges" in joined
+
+    def test_paragraphs_clean_report(self):
+        results = [CheckResult("Firewall", "FW", Status.PASS, Severity.HIGH,
+                               "d", "ok")]
+        paras = Reporter()._build_exec_paragraphs(self._report(results, 100))
+        joined = " ".join(str(p) for p in paras)
+        assert "Every evaluated control passed" in joined
+
 
 # ---------------------------------------------------------------------------
 # JSON report generation

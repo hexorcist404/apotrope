@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from apotrope.cli import build_parser
+from apotrope.cli import _exec_href, build_parser
 
 
 # ---------------------------------------------------------------------------
@@ -29,6 +29,14 @@ class TestBuildParser:
     def test_html_flag(self):
         ns = self._parse("--html", "report.html")
         assert ns.html == "report.html"
+
+    def test_exec_report_flag(self):
+        ns = self._parse("--exec-report", "brief.html")
+        assert ns.exec_report == "brief.html"
+
+    def test_exec_report_default_none(self):
+        ns = self._parse()
+        assert ns.exec_report is None
 
     def test_json_flag(self):
         ns = self._parse("--json", "out.json")
@@ -82,6 +90,30 @@ class TestBuildParser:
 
     def test_fix_hidden_from_help(self):
         assert "--fix" not in build_parser().format_help()
+
+
+# ---------------------------------------------------------------------------
+# _exec_href — link from the technical report to the executive report
+# ---------------------------------------------------------------------------
+
+class TestExecHref:
+    def test_same_directory_is_basename(self):
+        assert _exec_href("report.html", "brief.html") == "brief.html"
+
+    def test_subdirectory_uses_forward_slashes_and_encoding(self):
+        href = _exec_href("out/report.html", "out/sub/exec report.html")
+        assert href == "sub/exec%20report.html"
+
+    def test_parent_directory_relpath(self):
+        href = _exec_href("out/deep/report.html", "out/brief.html")
+        assert href == "../brief.html"
+
+    def test_cross_drive_falls_back_to_file_uri(self):
+        with patch("os.path.relpath",
+                   side_effect=ValueError("different drives")):
+            href = _exec_href("C:/reports/report.html", "D:/other/brief.html")
+        assert href.startswith("file:///")
+        assert href.endswith("brief.html")
 
 
 # ---------------------------------------------------------------------------
@@ -385,7 +417,51 @@ class TestMainErrorPaths:
         mock_reporter, mock_report = self._reporter_with_report()
         self._run_main(["--html", "out.html", "--json", "out.json"], mock_reporter)
         mock_reporter.print_terminal.assert_called_once_with(
-            mock_report, html_path="out.html", json_path="out.json"
+            mock_report, html_path="out.html", json_path="out.json",
+            exec_path=None,
+        )
+
+    def test_exec_report_saved_when_flag_provided(self):
+        mock_reporter, mock_report = self._reporter_with_report()
+        self._run_main(["--exec-report", "brief.html"], mock_reporter)
+        mock_reporter.generate_executive_report.assert_called_once_with(
+            mock_report, "brief.html"
+        )
+
+    def test_no_exec_report_by_default(self):
+        mock_reporter, _ = self._reporter_with_report()
+        self._run_main([], mock_reporter)
+        mock_reporter.generate_executive_report.assert_not_called()
+
+    def test_exec_href_passed_when_both_outputs(self):
+        """The technical report links to the exec report only when it exists."""
+        mock_reporter, mock_report = self._reporter_with_report()
+        with patch("pathlib.Path.exists", return_value=True):
+            self._run_main(
+                ["--html", "out.html", "--exec-report", "brief.html"],
+                mock_reporter,
+            )
+        mock_reporter.generate_html_report.assert_called_once_with(
+            mock_report, "out.html", exec_href="brief.html"
+        )
+
+    def test_exec_href_none_when_exec_file_missing(self):
+        """No dangling header link when exec generation wrote nothing."""
+        mock_reporter, mock_report = self._reporter_with_report()
+        with patch("pathlib.Path.exists", return_value=False):
+            self._run_main(
+                ["--html", "out.html", "--exec-report", "brief.html"],
+                mock_reporter,
+            )
+        mock_reporter.generate_html_report.assert_called_once_with(
+            mock_report, "out.html", exec_href=None
+        )
+
+    def test_exec_href_none_when_only_html(self):
+        mock_reporter, mock_report = self._reporter_with_report()
+        self._run_main(["--html", "out.html"], mock_reporter)
+        mock_reporter.generate_html_report.assert_called_once_with(
+            mock_report, "out.html", exec_href=None
         )
 
     def test_fix_flag_is_noop_with_notice(self, capsys):
