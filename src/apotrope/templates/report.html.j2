@@ -345,10 +345,11 @@
   .fhead:hover { background:rgba(255,255,255,0.022); }
   .fhead.is-open { background:rgba(255,255,255,0.03); }
 
-  /* status-colored left accent on each row + de-emphasis for non-issues */
+  /* Row emphasis: FAIL/WARN carry a status-colored accent bar; PASS/INFO are
+     quiet (dimmed, no bar); ERROR stays full-strength — a check that could
+     not run deserves attention, not de-emphasis. */
   .frow.is-fail { box-shadow: inset 3px 0 0 var(--red); }
   .frow.is-warn { box-shadow: inset 3px 0 0 var(--amber); }
-  .frow.is-info { box-shadow: inset 3px 0 0 rgba(68,224,230,0.5); }
   .frow.is-pass, .frow.is-info { opacity:0.62; }
   .frow.is-pass:hover, .frow.is-info:hover { opacity:1; }
   .frow.is-pass:has(.is-open), .frow.is-info:has(.is-open) { opacity:1; }
@@ -439,7 +440,7 @@
     .cat-bar { position:static; background:#f2f2f2 !important; }
     .cat-name, .brand .name, .ti-name, .fname b, .meta-item .v b { color:#111 !important; }
     .fbody[hidden] { display:grid !important; }   /* show all details on paper */
-    .frow.is-fail, .frow.is-warn, .frow.is-info { box-shadow:none !important; }
+    .frow.is-fail, .frow.is-warn { box-shadow:none !important; }
     .frow.is-pass, .frow.is-info { opacity:1 !important; }
     .glitch::before, .glitch::after { display:none !important; }   /* no chromatic ghosting */
     .code { background:#f6f6f6 !important; }

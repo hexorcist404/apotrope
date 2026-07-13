@@ -343,6 +343,12 @@ class TestGenerateHtmlReport:
         html = self._generate(_make_report())
         assert ".frow.is-pass, .frow.is-info { opacity:0.62; }" in html
         assert ".frow.is-pass, .frow.is-error { opacity:0.62; }" not in html
+        # De-emphasized INFO rows must not also carry the cyan accent bar —
+        # a dimmed row with an emphasis marker is a contradiction. Only the
+        # actionable FAIL/WARN rows keep their accent.
+        assert ".frow.is-info { box-shadow" not in html
+        assert ".frow.is-fail { box-shadow: inset 3px 0 0 var(--red); }" in html
+        assert ".frow.is-warn { box-shadow: inset 3px 0 0 var(--amber); }" in html
 
     def test_top_remainder_is_not_called_lower_severity(self) -> None:
         extras = [
