@@ -490,14 +490,17 @@ def _diff(
 
 
 class TestPrintComparison:
-    def test_unreliable_positive_delta_is_not_rendered_green(self):
+    def test_unreliable_positive_delta_is_yellow_not_green_markup(self) -> None:
         diff = _diff(90, 100, score_delta_reliable=False)
+        console = mock.Mock()
+        console.encoding = "utf-8"
 
-        out = _render(Reporter(), "print_comparison", diff)
+        with mock.patch.object(Reporter, "_make_console", return_value=console):
+            Reporter().print_comparison(diff)
 
-        assert "+10 raw" in out
-        assert "indeterminate" in out
-        assert "[green]" not in out
+        comparison_markup = console.print.call_args_list[1].args[0]
+        assert "[yellow]+10 raw · indeterminate[/yellow]" in comparison_markup
+        assert "[green]+10 raw · indeterminate[/green]" not in comparison_markup
 
     def test_score_transition_with_positive_delta(self):
         out = _render(Reporter(), "print_comparison", _diff(60, 75))

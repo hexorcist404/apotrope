@@ -37,6 +37,7 @@ Issues = "https://github.com/hexorcist404/apotrope/issues"
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pillow>=10.0",
     "build>=1.0",
     "twine>=5.0",
 ]
