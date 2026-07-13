@@ -1266,7 +1266,7 @@ class Reporter:
         elif report.error_count:
             count = report.error_count
             noun = "control" if count == 1 else "controls"
-            paragraphs.append(Markup(
+            paragraphs.append(Markup.escape(
                 f"The assessment is incomplete because {count} {noun} could "
                 "not be evaluated. Resolve those errors and re-run the "
                 "assessment before treating this system as clear."
@@ -1316,7 +1316,7 @@ class Reporter:
         if open_n == 0 and report.error_count:
             count = report.error_count
             noun = "control" if count == 1 else "controls"
-            return Markup(
+            return Markup.escape(
                 f"No remediation findings were confirmed, but {count} {noun} "
                 "could not be evaluated. Resolve those errors and re-run the "
                 "assessment before treating this system as clear."
