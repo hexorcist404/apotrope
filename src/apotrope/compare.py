@@ -42,7 +42,8 @@ class ScanDiff:
                            This remains the raw numeric difference even when
                            ``score_delta_reliable`` is ``False``.
         score_delta_reliable: Whether coverage was complete enough to present the
-                              raw delta as a confirmed improvement or regression.
+                              raw delta as confirmed. False when current coverage
+                              is missing or any current check has ERROR status.
         new_findings:      Checks that are FAIL/WARN now but were not in baseline.
         resolved_findings: Checks that were FAIL/WARN in baseline but are now PASS/INFO
                            (present in BOTH scans — genuinely remediated).
@@ -140,7 +141,8 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
                 unchanged_count += 1
 
     score_delta = current.score - baseline.score
-    score_delta_reliable = not missing_findings and not errored_findings
+    current_has_error = any(result.status == Status.ERROR for result in current.results)
+    score_delta_reliable = not missing_findings and not current_has_error
 
     return ScanDiff(
         baseline_score=baseline.score,

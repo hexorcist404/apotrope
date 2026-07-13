@@ -161,6 +161,26 @@ class TestErroredChecks:
         assert diff.score_delta == 10
         assert diff.score_delta_reliable is False
 
+    def test_current_only_error_makes_raw_score_delta_unreliable(self) -> None:
+        baseline = _make_report([], score=90)
+        current = _make_report(
+            [_make_result("Current Only", Status.ERROR)],
+            score=100,
+        )
+
+        diff = compare_reports(baseline, current)
+
+        assert diff.score_delta == 10
+        assert diff.score_delta_reliable is False
+
+    def test_pass_to_error_makes_raw_score_delta_unreliable(self) -> None:
+        baseline = _make_report([_make_result("Firewall", Status.PASS)], score=85)
+        current = _make_report([_make_result("Firewall", Status.ERROR)], score=100)
+
+        diff = compare_reports(baseline, current)
+
+        assert diff.score_delta == 15
+        assert diff.score_delta_reliable is False
     def test_missing_bad_check_makes_raw_score_delta_unreliable(self):
         baseline = _make_report([_make_result("Firewall", Status.FAIL)], score=90)
         current = _make_report([], score=100)

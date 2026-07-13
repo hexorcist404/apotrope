@@ -453,6 +453,14 @@ class TestGenerateExecutiveReport:
             )
         )
 
+        cover = html.split('id="summary"', 1)[0]
+        deck = cover.split('<p class="deck">', 1)[1].split("</p>", 1)[0]
+        summary = self._section(html, "summary", "glance")
+
+        assert "assessment is incomplete" in deck.lower()
+        assert "all evaluated controls passed" not in deck.lower()
+        assert 'class="note-box assessment-incomplete"' in summary
+        assert 'class="note-box all-clear"' not in summary
         assert "Assessment incomplete" in html
         assert "All clear" not in html
 

@@ -1093,10 +1093,17 @@ class Reporter:
         host  = escape(report.hostname)
         total = len(report.results)
         open_n = report.fail_count + report.warn_count
-        tail = (
-            "with a prioritized plan for remediation." if open_n
-            else "in which all evaluated controls passed."
-        )
+        if open_n:
+            tail = "with a prioritized plan for remediation."
+        elif report.error_count:
+            count = report.error_count
+            noun = "control" if count == 1 else "controls"
+            tail = (
+                "with no open findings identified, but the assessment is incomplete "
+                f"because {count} {noun} could not be evaluated."
+            )
+        else:
+            tail = "in which all evaluated controls passed."
         return Markup(
             f"An independent, read-only evaluation of endpoint <b>{host}</b> "
             f"against {total} security controls aligned to the CIS Microsoft "
