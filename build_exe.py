@@ -53,9 +53,11 @@ def _tile_rgb() -> tuple[int, int, int]:
 def _ensure_icon() -> Path:
     """Return path to assets/icon.ico, generating it from the brand mark if absent.
 
-    The committed assets/icon.ico is what actually ships: the release CI has no
-    Pillow and consumes the committed file verbatim (see release.yml). This
-    generator is the local fallback — it composites the Apotrope brand mark
+    The committed assets/icon.ico is what actually ships: CI validates it via
+    tests/test_brand_assets.py and consumes the committed file verbatim — this
+    branch of the code returns early whenever the ICO exists, so Pillow is never
+    needed for a normal build. This generator is the local fallback when the
+    ICO is absent — it composites the Apotrope brand mark
     (docs/apotrope-mark.png) onto a rounded tile colored by the brand token
     mark.ground (brand/tokens.json) and writes a multi-resolution ICO. The vector
     masters live at assets/icon.svg / icon-16.svg. To change the shipped icon,
