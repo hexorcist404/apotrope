@@ -69,3 +69,6 @@ apotrope_report_*
 gen_sample_report.py
 sample_report.html
 .gstack/
+
+# Local agent planning scratch (never publish — docs/ is the live site)
+.superpowers/
