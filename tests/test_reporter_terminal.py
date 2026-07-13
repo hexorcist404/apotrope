@@ -474,6 +474,7 @@ def _diff(
     worsened: list[CheckResult] | None = None,
     unchanged_bad: list[CheckResult] | None = None,
     unchanged_count: int = 0,
+    score_delta_reliable: bool = True,
 ) -> ScanDiff:
     return ScanDiff(
         baseline_score=baseline_score,
@@ -484,10 +485,23 @@ def _diff(
         worsened_findings=worsened or [],
         unchanged_bad=unchanged_bad or [],
         unchanged_count=unchanged_count,
+        score_delta_reliable=score_delta_reliable,
     )
 
 
 class TestPrintComparison:
+    def test_unreliable_positive_delta_is_yellow_not_green_markup(self) -> None:
+        diff = _diff(90, 100, score_delta_reliable=False)
+        console = mock.Mock()
+        console.encoding = "utf-8"
+
+        with mock.patch.object(Reporter, "_make_console", return_value=console):
+            Reporter().print_comparison(diff)
+
+        comparison_markup = console.print.call_args_list[1].args[0]
+        assert "[yellow]+10 raw · indeterminate[/yellow]" in comparison_markup
+        assert "[green]+10 raw · indeterminate[/green]" not in comparison_markup
+
     def test_score_transition_with_positive_delta(self):
         out = _render(Reporter(), "print_comparison", _diff(60, 75))
         assert "60" in out

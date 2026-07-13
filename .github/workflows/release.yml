@@ -49,9 +49,8 @@ jobs:
         run: pytest tests/ -q --tb=short --cov --cov-fail-under=95
 
       - name: Ensure release icon is present
-        # assets/icon.ico is committed. build_exe.py silently builds WITHOUT
-        # an icon if it is missing (Pillow is not installed here to regenerate
-        # it). Fail loudly rather than ship an iconless release exe.
+        # assets/icon.ico is committed and validated by test_brand_assets.py.
+        # Keep this cheap explicit guard so the release never ships iconless.
         shell: bash
         run: test -f assets/icon.ico
 

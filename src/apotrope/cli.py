@@ -141,10 +141,25 @@ def _exec_href(html_path: str, exec_path: str) -> str:
     return urllib.parse.quote(rel.replace(os.sep, "/"), safe="/")
 
 
+def _validate_output_paths(
+    parser: argparse.ArgumentParser,
+    html_path: str | None,
+    exec_path: str | None,
+) -> None:
+    """Reject technical and executive reports that resolve to one file."""
+    if not html_path or not exec_path:
+        return
+    from pathlib import Path
+
+    if Path(html_path).resolve() == Path(exec_path).resolve():
+        parser.error("--html and --exec-report must use different files")
+
+
 def main() -> None:
     """Parse arguments, run the audit, and produce output."""
     parser = build_parser()
     args = parser.parse_args()
+    _validate_output_paths(parser, args.html, args.exec_report)
 
     logging.basicConfig(
         level=getattr(logging, args.log_level),

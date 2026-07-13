@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -427,6 +428,38 @@ class TestMainErrorPaths:
         mock_reporter.generate_executive_report.assert_called_once_with(
             mock_report, "brief.html"
         )
+
+    def test_html_and_exec_report_must_use_distinct_paths(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mock_reporter, _ = self._reporter_with_report()
+        with pytest.raises(SystemExit, match="2"):
+            self._run_main(
+                ["--html", "report.html", "--exec-report", "report.html"],
+                mock_reporter,
+            )
+        assert (
+            "--html and --exec-report must use different files"
+            in capsys.readouterr().err
+        )
+        mock_reporter.run_with_progress.assert_not_called()
+
+    def test_html_and_exec_report_reject_equivalent_paths(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        target = tmp_path / "report.html"
+        equivalent = tmp_path / "." / "report.html"
+        mock_reporter, _ = self._reporter_with_report()
+        with pytest.raises(SystemExit, match="2"):
+            self._run_main(
+                ["--html", str(target), "--exec-report", str(equivalent)],
+                mock_reporter,
+            )
+        assert (
+            "--html and --exec-report must use different files"
+            in capsys.readouterr().err
+        )
+        mock_reporter.run_with_progress.assert_not_called()
 
     def test_no_exec_report_by_default(self):
         mock_reporter, _ = self._reporter_with_report()

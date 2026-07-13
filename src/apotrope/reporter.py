@@ -602,14 +602,19 @@ class Reporter:
         console = self._make_console()
         sep = _u(console, "─", "-")
         delta_sign = "+" if diff.score_delta >= 0 else ""
-        delta_col = "green" if diff.score_delta >= 0 else "red"
+        if diff.score_delta_reliable:
+            delta_col = "green" if diff.score_delta >= 0 else "red"
+            delta_label = f"{delta_sign}{diff.score_delta}"
+        else:
+            delta_col = "yellow"
+            delta_label = f"{delta_sign}{diff.score_delta} raw · indeterminate"
 
         console.print()
         console.print(
             f"  [bold]Comparison vs baseline[/bold]  "
             f"Score: [dim]{diff.baseline_score}[/dim] \u2192 "
             f"[bold]{diff.current_score}[/bold]  "
-            f"([{delta_col}]{delta_sign}{diff.score_delta}[/{delta_col}])"
+            f"([{delta_col}]{delta_label}[/{delta_col}])"
         )
         console.print(f"  {sep * 65}")
 
@@ -1088,10 +1093,17 @@ class Reporter:
         host  = escape(report.hostname)
         total = len(report.results)
         open_n = report.fail_count + report.warn_count
-        tail = (
-            "with a prioritized plan for remediation." if open_n
-            else "in which all evaluated controls passed."
-        )
+        if open_n:
+            tail = "with a prioritized plan for remediation."
+        elif report.error_count:
+            count = report.error_count
+            noun = "control" if count == 1 else "controls"
+            tail = (
+                "with no open findings identified, but the assessment is incomplete "
+                f"because {count} {noun} could not be evaluated."
+            )
+        else:
+            tail = "in which all evaluated controls passed."
         return Markup(
             f"An independent, read-only evaluation of endpoint <b>{host}</b> "
             f"against {total} security controls aligned to the CIS Microsoft "
@@ -1187,7 +1199,7 @@ class Reporter:
                  "require elevation were skipped"
         )
         scope = (
-            f"On {date_str}, Apotrope evaluated {total} security "
+            f"On {date_str}, Apotrope attempted {total} security "
             f"control{'s' if total != 1 else ''} on <b>{host}</b> ({os_v}) "
             f"against thresholds aligned to the CIS Microsoft Windows "
             f"Benchmark {escape(_cis_version_for(report))}. The assessment "
@@ -1237,9 +1249,16 @@ class Reporter:
             if report.pass_count:
                 strengths = (f"{report.pass_count} of {total} controls "
                              "passed.")
-                open_cats = {r.category for r in open_findings}
+                categories = {result.category for result in report.results}
                 clean = sorted(
-                    {r.category for r in report.results} - open_cats)
+                    category
+                    for category in categories
+                    if all(
+                        result.status is Status.PASS
+                        for result in report.results
+                        if result.category == category
+                    )
+                )
                 if clean:
                     shown = ", ".join(escape(c) for c in clean[:3])
                     prefix = ("Categories including" if len(clean) > 3
@@ -1251,6 +1270,14 @@ class Reporter:
                         strengths += (f" {prefix} {shown} passed all of "
                                       "their checks.")
                 paragraphs.append(Markup(strengths))
+        elif report.error_count:
+            count = report.error_count
+            noun = "control" if count == 1 else "controls"
+            paragraphs.append(Markup.escape(
+                f"The assessment is incomplete because {count} {noun} could "
+                "not be evaluated. Resolve those errors and re-run the "
+                "assessment before treating this system as clear."
+            ))
         else:
             # P2-alt — all clear.
             paragraphs.append(Markup(
@@ -1293,6 +1320,14 @@ class Reporter:
             if r.status in (Status.FAIL, Status.WARN)
             and r.severity in (Severity.CRITICAL, Severity.HIGH)
         )
+        if open_n == 0 and report.error_count:
+            count = report.error_count
+            noun = "control" if count == 1 else "controls"
+            return Markup.escape(
+                f"No remediation findings were confirmed, but {count} {noun} "
+                "could not be evaluated. Resolve those errors and re-run the "
+                "assessment before treating this system as clear."
+            )
         if open_n == 0:
             return Markup(
                 "No corrective action is required. Maintain the current "
@@ -1405,7 +1440,7 @@ class Reporter:
 
     def _build_exec_commands(self, report: AuditReport) -> list[dict]:
         """Appendix B: numbered command blocks for open findings, P1→P3."""
-        commands = []
+        commands: list[dict[str, str]] = []
         for r in self._exec_open_sorted(report):
             if not r.command:
                 continue

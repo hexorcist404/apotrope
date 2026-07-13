@@ -345,13 +345,14 @@
   .fhead:hover { background:rgba(255,255,255,0.022); }
   .fhead.is-open { background:rgba(255,255,255,0.03); }
 
-  /* status-colored left accent on each row + de-emphasis for non-issues */
+  /* Row emphasis: FAIL/WARN carry a status-colored accent bar; PASS/INFO are
+     quiet (dimmed, no bar); ERROR stays full-strength — a check that could
+     not run deserves attention, not de-emphasis. */
   .frow.is-fail { box-shadow: inset 3px 0 0 var(--red); }
   .frow.is-warn { box-shadow: inset 3px 0 0 var(--amber); }
-  .frow.is-info { box-shadow: inset 3px 0 0 rgba(68,224,230,0.5); }
-  .frow.is-pass, .frow.is-error { opacity:0.62; }
-  .frow.is-pass:hover, .frow.is-error:hover { opacity:1; }
-  .frow.is-pass:has(.is-open), .frow.is-error:has(.is-open) { opacity:1; }
+  .frow.is-pass, .frow.is-info { opacity:0.62; }
+  .frow.is-pass:hover, .frow.is-info:hover { opacity:1; }
+  .frow.is-pass:has(.is-open), .frow.is-info:has(.is-open) { opacity:1; }
   .frow.is-pass .fname b { font-weight:400; color:var(--text); }
 
   /* status pill — the primary at-a-glance signal (replaces the single glyph) */
@@ -439,8 +440,8 @@
     .cat-bar { position:static; background:#f2f2f2 !important; }
     .cat-name, .brand .name, .ti-name, .fname b, .meta-item .v b { color:#111 !important; }
     .fbody[hidden] { display:grid !important; }   /* show all details on paper */
-    .frow.is-fail, .frow.is-warn, .frow.is-info { box-shadow:none !important; }
-    .frow.is-pass, .frow.is-error { opacity:1 !important; }
+    .frow.is-fail, .frow.is-warn { box-shadow:none !important; }
+    .frow.is-pass, .frow.is-info { opacity:1 !important; }
     .glitch::before, .glitch::after { display:none !important; }   /* no chromatic ghosting */
     .code { background:#f6f6f6 !important; }
     .code-bar { background:#ececec !important; border-bottom-color:#ccc !important; }
@@ -572,8 +573,17 @@
             <div class="ti-name">{{ r.check_name }}</div>
             <div class="ti-fix"><b>Fix:</b> {{ r.remediation }}</div>
             {% if r.command %}
-            <button class="ti-cmd-toggle" type="button" data-on="false"><span class="chev">▶</span><span class="lbl">Show remediation command</span></button>
-            <div class="code" data-cmd="{{ r.command }}" hidden>
+            {% set command_id = 'top-issue-command-' ~ loop.index %}
+            <button class="ti-cmd-toggle"
+              type="button"
+              data-on="false"
+              aria-expanded="false"
+              aria-controls="{{ command_id }}"
+            >
+              <span class="chev" aria-hidden="true">▶</span>
+              <span class="lbl">Show remediation command</span>
+            </button>
+            <div id="{{ command_id }}" class="code" data-cmd="{{ r.command }}" hidden>
               <div class="code-bar">
                 <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                 <button class="copy" type="button">⧉ Copy</button>
@@ -590,7 +600,7 @@
       <div class="ti-note ti-note-clean">No critical or high-severity issues flagged.</div>
       {% endif %}
       {% if top_remainder > 0 %}
-      <div class="ti-note">+ {{ top_remainder }} more lower-severity {{ 'finding' if top_remainder == 1 else 'findings' }} not shown here — <button class="ti-note-link" type="button" onclick="apoScrollFindings()">see the full breakdown below ↓</button></div>
+      <div class="ti-note">+ {{ top_remainder }} additional open {{ 'finding' if top_remainder == 1 else 'findings' }} not shown here — <button class="ti-note-link" type="button" onclick="apoScrollFindings()">see the full breakdown below ↓</button></div>
       {% endif %}
     </div>
     {% endif %}
@@ -676,7 +686,7 @@
 
     <!-- ── Footer ──────────────────────────────────────────────────────── -->
     <div class="foot">
-      <span class="auth">For authorized security assessment use only · <strong style="color:var(--green);font-weight:600;text-shadow:0 0 9px rgba(43,255,136,0.45)">No data left this machine</strong> · CIS Benchmark {{ cis_version }}{% if cis_caveat %} · <span class="cis-caveat" style="color:#ffb23d">{{ cis_caveat }}</span>{% endif %}</span>
+      <span class="auth">For authorized security assessment use only · <strong style="color:var(--green);font-weight:600;text-shadow:0 0 9px rgba(43,255,136,0.45)">No data leaves this machine</strong> · CIS Benchmark {{ cis_version }}{% if cis_caveat %} · <span class="cis-caveat" style="color:#ffb23d">{{ cis_caveat }}</span>{% endif %}</span>
       <span>apotrope.sh · <a href="https://github.com/hexorcist404/apotrope">github.com/hexorcist404/apotrope</a> · MIT</span>
       <span class="share-warn">⚠ This report contains this machine's hostname, account names, services, and configuration. Review and redact before sharing it outside your organization.</span>
     </div>
@@ -736,6 +746,7 @@
       var code = btn.nextElementSibling;
       if (!code || !code.classList.contains('code')) return;
       var opening = code.hasAttribute('hidden');
+      btn.setAttribute('aria-expanded', String(opening));
       if (opening){ code.removeAttribute('hidden'); btn.dataset.on = 'true'; }
       else { code.setAttribute('hidden', ''); btn.dataset.on = 'false'; }
       var lbl = btn.querySelector('.lbl');

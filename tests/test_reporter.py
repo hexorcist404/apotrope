@@ -334,6 +334,61 @@ class TestGenerateHtmlReport:
             "outside your organization." in html
         )
 
+    def test_footer_uses_canonical_privacy_copy(self) -> None:
+        html = self._generate(_make_report())
+        assert "No data leaves this machine" in html
+        assert "No data left this machine" not in html
+
+    def test_pass_and_info_are_deemphasized_but_error_is_not(self) -> None:
+        html = self._generate(_make_report())
+        assert ".frow.is-pass, .frow.is-info { opacity:0.62; }" in html
+        assert ".frow.is-pass, .frow.is-error { opacity:0.62; }" not in html
+        # De-emphasized INFO rows must not also carry the cyan accent bar —
+        # a dimmed row with an emphasis marker is a contradiction. Only the
+        # actionable FAIL/WARN rows keep their accent.
+        assert ".frow.is-info { box-shadow" not in html
+        assert ".frow.is-fail { box-shadow: inset 3px 0 0 var(--red); }" in html
+        assert ".frow.is-warn { box-shadow: inset 3px 0 0 var(--amber); }" in html
+
+    def test_top_remainder_is_not_called_lower_severity(self) -> None:
+        extras = [
+            CheckResult(
+                "Firewall",
+                f"Critical {index}",
+                Status.FAIL,
+                Severity.CRITICAL,
+                "d",
+                "off",
+                "fix",
+            )
+            for index in range(9)
+        ]
+        html = self._generate(_make_report(extra_results=extras))
+        assert "additional open findings not shown here" in html
+        assert "more lower-severity" not in html
+
+    def test_top_issue_command_toggle_has_aria_contract(self) -> None:
+        command = CheckResult(
+            "Firewall",
+            "Command Finding",
+            Status.FAIL,
+            Severity.HIGH,
+            "d",
+            "off",
+            "fix",
+            "Set-NetFirewallProfile -Enabled True",
+        )
+        html = self._generate(_make_report(extra_results=[command]))
+
+        match = re.search(
+            r'<button class="ti-cmd-toggle"[^>]*aria-expanded="false"'
+            r'[^>]*aria-controls="([^"]+)"[^>]*>',
+            html,
+        )
+        assert match is not None
+        assert f'id="{match.group(1)}"' in html
+        assert "btn.setAttribute('aria-expanded', String(opening));" in html
+
     def test_exec_link_rendered_when_href_given(self):
         """Header links to a co-generated executive report via exec_href."""
         reporter = Reporter()
@@ -382,6 +437,38 @@ class TestGenerateExecutiveReport:
         assert html.startswith("<!DOCTYPE html>")
         assert "</html>" in html
         assert "Security Posture Assessment" in html
+
+    def test_error_only_report_renders_incomplete_not_all_clear(self) -> None:
+        results = [
+            CheckResult(
+                "Firewall", "FW", Status.PASS, Severity.HIGH, "d", "ok"
+            ),
+            CheckResult(
+                "Network", "Probe", Status.ERROR, Severity.INFO, "d", "failed"
+            ),
+        ]
+        html = self._generate(
+            AuditReport(
+                hostname="TEST-PC",
+                os_version="Windows 11",
+                scan_timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                scan_duration=1.0,
+                results=results,
+                score=100,
+                is_admin=True,
+            )
+        )
+
+        cover = html.split('id="summary"', 1)[0]
+        deck = cover.split('<p class="deck">', 1)[1].split("</p>", 1)[0]
+        summary = self._section(html, "summary", "glance")
+
+        assert "assessment is incomplete" in deck.lower()
+        assert "all evaluated controls passed" not in deck.lower()
+        assert 'class="note-box assessment-incomplete"' in summary
+        assert 'class="note-box all-clear"' not in summary
+        assert "Assessment incomplete" in html
+        assert "All clear" not in html
 
     def test_self_contained_and_script_free(self):
         """Offline and print-first: no network references and no JS at all."""
@@ -673,6 +760,21 @@ class TestExecNarrative:
         assert "routine maintenance" in str(
             r._build_exec_bottom_line(self._report(med_only, 85)))
 
+    def test_bottom_line_does_not_call_error_only_report_clean(self) -> None:
+        results = [
+            CheckResult(
+                "Firewall", "FW", Status.PASS, Severity.HIGH, "d", "ok"
+            ),
+            CheckResult(
+                "Network", "Probe", Status.ERROR, Severity.INFO, "d", "failed"
+            ),
+        ]
+
+        line = str(Reporter()._build_exec_bottom_line(self._report(results, 100)))
+
+        assert "could not be evaluated" in line
+        assert "No corrective action is required" not in line
+
     def test_paragraphs_scope_and_findings(self):
         results = [
             CheckResult("Firewall", "FW Check", Status.FAIL, Severity.HIGH,
@@ -690,6 +792,42 @@ class TestExecNarrative:
         assert "The primary area of concern is <b>Firewall</b>." in joined
         # Accounts has no open findings → named as a clean category.
         assert "Accounts" in joined
+
+    def test_error_category_is_not_claimed_as_fully_passed(self) -> None:
+        results = [
+            CheckResult(
+                "Firewall", "FW", Status.FAIL, Severity.HIGH, "d", "off", "fix"
+            ),
+            CheckResult(
+                "Network", "Known Good", Status.PASS, Severity.INFO, "d", "ok"
+            ),
+            CheckResult(
+                "Network", "Probe", Status.ERROR, Severity.INFO, "d", "failed"
+            ),
+        ]
+
+        paragraphs = Reporter()._build_exec_paragraphs(self._report(results, 90))
+        rendered = " ".join(str(paragraph) for paragraph in paragraphs)
+
+        assert "Network category passed all of its checks" not in rendered
+
+    def test_error_only_paragraphs_describe_incomplete_assessment(self) -> None:
+        results = [
+            CheckResult(
+                "Firewall", "FW", Status.PASS, Severity.HIGH, "d", "ok"
+            ),
+            CheckResult(
+                "Network", "Probe", Status.ERROR, Severity.INFO, "d", "failed"
+            ),
+        ]
+
+        paragraphs = Reporter()._build_exec_paragraphs(self._report(results, 100))
+        rendered = " ".join(str(paragraph) for paragraph in paragraphs)
+
+        assert "assessment is incomplete" in rendered
+        assert "could not be evaluated" in rendered
+        assert "Every evaluated control passed" not in rendered
+        assert "system's configuration is in line" not in rendered
 
     def test_paragraphs_non_admin_clause(self):
         results = [CheckResult("Firewall", "FW", Status.PASS, Severity.HIGH,

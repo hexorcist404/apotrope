@@ -1,9 +1,10 @@
 # Apotrope brand palette
 
-`tokens.json` is the **single source of truth** for Apotrope's brand colors. When a
-color needs to change, change it here — assets and code reference these values
-rather than hardcoding hexes, so the palette can't drift out of sync across the
-site, report, terminal, and app icon.
+`tokens.json` is the canonical palette definition. Runtime consumers keep local
+constants for zero-I/O startup and self-contained CSS; `tests/test_brand_assets.py`
+enforces that those constants, both SVG masters, and the committed ICO match the
+tokens. A token change therefore requires updating its validated consumers in the
+same commit.
 
 ## Two layers, both canonical, deliberately different
 
@@ -28,9 +29,12 @@ teal/ember is intentionally distinct from the product's neon green/cyan — see
 
 ## Who consumes this
 
+- `src/apotrope/reporter.py` — local terminal palette constants.
+- `src/apotrope/templates/report.html.j2` and `docs/pages.css` — self-contained
+  product CSS custom properties.
 - `assets/icon.svg` / `assets/icon-16.svg` — vector masters for the app icon (mark
   on `mark.ground`).
-- `build_exe.py` — reads `mark.ground` to color the `assets/icon.ico` tile.
-- `tests/test_brand_assets.py` — fails CI if the icon SVGs drift from these tokens.
+- `assets/icon.ico` — committed multi-frame Windows icon built from those masters.
+- `tests/test_brand_assets.py` — enforces token parity across every consumer above.
 
 Origin: distilled from `Apotrope-Design-System.md`.

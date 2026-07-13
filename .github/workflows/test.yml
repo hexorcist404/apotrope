@@ -52,11 +52,13 @@ jobs:
       - name: Install package, dev deps, and PyInstaller
         run: pip install -e ".[dev]" pyinstaller
 
+      - name: Validate committed brand assets
+        run: python -m pytest tests/test_brand_assets.py -q
+
       - name: Build apotrope.exe
-        # build_exe.py runs its own --dry-run probe and FAILS if the frozen exe
-        # bundles zero check modules, so this step is itself the smoke test for
-        # the most likely silent failure (collect-submodules finding nothing).
-        run: python build_exe.py --no-icon
+        # The preceding focused test validates the committed ICO in this job.
+        # build_exe.py also fails if its frozen-executable probe finds no checks.
+        run: python build_exe.py
 
       - name: Verify exe --version
         run: .\dist\apotrope.exe --version
