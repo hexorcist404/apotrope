@@ -160,6 +160,31 @@ passing ones included:**
 
 ---
 
+## Executive Report
+
+Alongside the technical `--html` report, `--exec-report FILE` produces the
+**Security Posture Assessment** — a plain-English, print-first HTML document aimed at
+non-technical decision makers (managers, owners, auditors) rather than the engineer
+running the scan. It opens with a graded cover and a generated verdict, then an
+executive-summary narrative, a posture-at-a-glance panel, a P1/P2/P3 remediation
+roadmap, detailed findings that pair each issue with its business impact, and
+passed-controls attestation and remediation-command appendices. Every sentence is
+generated strictly from your scan data; the business-impact notes are curated,
+category-level context — not claims about your specific machine. The file is fully
+self-contained and script-free, with letter-size print styling, so it can be handed
+off or printed to PDF.
+
+Generate it together with the technical report and the report's header gains an
+"Executive Report ↗" link to it:
+
+```powershell
+.\apotrope.exe --html report.html --exec-report assessment.html
+```
+
+The two must be different files.
+
+---
+
 ## Installation via pip
 
 Requires Python 3.12+ and Windows 10/11 or Server 2019/2022.
@@ -241,6 +266,10 @@ Exit codes:
   1  Score < 70 (failing)
   2  Fatal scan error
 ```
+
+> **Note:** `--html` and `--exec-report` must point to **different files**. If both
+> resolve to the same path, Apotrope exits with an argument error before scanning,
+> so the technical report can't silently overwrite the executive one.
 
 ### Examples
 
