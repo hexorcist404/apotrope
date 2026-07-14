@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Security Posture Assessment — WORKSTATION-07</title>
+<style>
+/* Apotrope — Security Posture Assessment (executive report).
+   Print-first, self-contained, script-free. Editorial visual direction:
+   serif display, warm ivory ink, deep evergreen accent. Offline font
+   stacks only — no web fonts, no network. */
+
+* { box-sizing: border-box; }
+
+:root {
+  /* semantic severity — tuned for legibility on white */
+  --crit:  #9e1b32;
+  --high:  #b4451f;
+  --med:   #8a6a00;
+  --ok:    #0d6b4f;
+  --info:  #3f6ea3;
+  --crit-bg: #f7e9ec; --high-bg: #f8ece5; --med-bg: #f6f0dd; --ok-bg: #e6f1ec; --info-bg: #eaf0f6;
+
+  /* editorial theme tokens */
+  --ink:    #1c1a16;
+  --body:   #35322b;
+  --muted:  #6f6a60;
+  --faint:  #9d988c;
+  --rule:   #e0dbd0;
+  --rule-2: #cfc9bb;
+  --accent: #0b5d4e;
+  --accent-2: #094a3e;
+  --accent-soft: #ecf2ef;
+  --card:   #ffffff;
+  --tint:   #faf8f3;
+  --f-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-body: "Libre Franklin", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+}
+
+html, body { margin: 0; padding: 0; }
+body { background: #d8d6d0; }
+
+/* On screen: a paper sheet. In print: hand the page over to @page margins. */
+.sheet {
+  max-width: 8.5in;
+  margin: 28px auto;
+  background: var(--card);
+  box-shadow: 0 2px 26px rgba(0,0,0,0.16);
+  padding: 0.8in;
+  color: var(--body);
+  font-family: var(--f-body);
+  font-size: 10.6pt;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 { color: var(--ink); font-family: var(--f-display); font-weight: 600; letter-spacing: -0.01em; }
+p { margin: 0 0 9pt; }
+a { color: var(--accent); }
+strong, b { color: var(--ink); font-weight: 600; }
+
+.mono { font-family: var(--f-mono); }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+
+/* ── Cover ─────────────────────────────────────────────────────────────── */
+.cover { padding: 6pt 0 0; }
+.cover-top { display: flex; align-items: center; justify-content: space-between; gap: 16pt; padding-bottom: 12pt; border-bottom: 1.5pt solid var(--ink); }
+.brandlock { display: flex; align-items: center; gap: 10pt; }
+.brandlock img { width: 34pt; height: 34pt; display: block; border-radius: 6pt; }
+.brandlock .glyph { width: 34pt; height: 34pt; display: flex; align-items: center; justify-content: center; font-size: 22pt; color: var(--accent); }
+.brandlock .wm { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.26em; font-size: 13pt; color: var(--ink); text-transform: uppercase; }
+.brandlock .sub { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
+.cover-class { font-family: var(--f-mono); font-size: 7.6pt; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule-2); padding: 4pt 8pt; border-radius: 3pt; white-space: nowrap; }
+
+.cover-title { margin-top: 30pt; }
+.cover-title .eyebrow { font-family: var(--f-mono); font-size: 8.5pt; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 8pt; }
+.cover-title h1 { font-size: 33pt; line-height: 1.04; margin: 0; letter-spacing: -0.015em; }
+.cover-title .deck { font-family: var(--f-body); font-size: 12pt; color: var(--muted); margin-top: 10pt; max-width: 34em; line-height: 1.45; }
+
+.cover-panel { margin-top: 26pt; display: grid; grid-template-columns: 1.35fr 1fr; gap: 22pt; align-items: stretch; break-inside: avoid; page-break-inside: avoid; }
+.cover-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12pt 20pt; align-content: start; }
+.cmeta { border-top: 1px solid var(--rule); padding-top: 6pt; }
+.cmeta .k { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.cmeta .v { font-size: 10.5pt; color: var(--ink); margin-top: 2pt; }
+
+/* grade badge */
+.gradebox { border: 1.5pt solid var(--ink); border-radius: 6pt; padding: 16pt 18pt; display: flex; flex-direction: column; justify-content: center; background: var(--tint); break-inside: avoid; page-break-inside: avoid; }
+.gradebox .gline { display: flex; align-items: baseline; gap: 12pt; }
+.gradebox .letter { font-family: var(--f-display); font-size: 52pt; line-height: 0.8; font-weight: 700; color: var(--ink); }
+.gradebox .scorewrap { display: flex; flex-direction: column; }
+.gradebox .score { font-family: var(--f-mono); font-size: 20pt; font-weight: 600; color: var(--ink); line-height: 1; }
+.gradebox .score span { color: var(--faint); font-size: 12pt; }
+.gradebox .band { font-family: var(--f-mono); font-size: 8pt; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-top: 3pt; }
+.gradebox .verdict { margin-top: 12pt; padding-top: 11pt; border-top: 1px solid var(--rule-2); font-size: 10pt; color: var(--body); line-height: 1.45; }
+.gradebox .verdict b { color: var(--ink); }
+
+/* ── Sections ──────────────────────────────────────────────────────────── */
+.doc-section { margin-top: 26pt; }
+.sec-h { display: flex; align-items: baseline; gap: 10pt; padding-bottom: 6pt; border-bottom: 1px solid var(--rule-2); margin-bottom: 12pt; break-after: avoid; page-break-after: avoid; }
+.sec-h .n { font-family: var(--f-display); font-size: 12pt; font-weight: 700; color: var(--accent); min-width: 1.6em; }
+.sec-h h2 { font-size: 15.5pt; margin: 0; flex: 1; }
+.sec-h .tag { font-family: var(--f-mono); font-size: 7.6pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+
+.lede { font-size: 12.5pt; line-height: 1.5; color: var(--ink); font-family: var(--f-display); font-weight: 400; margin-bottom: 12pt; }
+
+/* stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10pt; margin: 14pt 0; }
+.tile { border: 1px solid var(--rule); border-radius: 4pt; padding: 11pt 12pt; break-inside: avoid; page-break-inside: avoid; }
+.tile .k { font-family: var(--f-mono); font-size: 7.2pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.tile .v { font-family: var(--f-mono); font-size: 21pt; font-weight: 600; color: var(--ink); line-height: 1.1; margin-top: 4pt; }
+.tile .v small { font-size: 11pt; color: var(--faint); }
+.tile .note { font-size: 8.4pt; color: var(--muted); margin-top: 2pt; }
+.tile.accent { border-color: var(--accent); background: var(--accent-soft); }
+.tile.accent .v { color: var(--accent-2); }
+
+/* distribution bar — segment widths are proportional via flex-grow */
+.distrib { display: flex; height: 12pt; border-radius: 3pt; overflow: hidden; margin: 4pt 0 6pt; border: 1px solid var(--rule); }
+.distrib > span { display: block; height: 100%; }
+.seg-pass { background: var(--ok); }
+.seg-fail { background: var(--high); }
+.seg-warn { background: var(--med); }
+.seg-info { background: var(--info); }
+.seg-err  { background: var(--faint); }
+.distrib-legend { display: flex; flex-wrap: wrap; gap: 4pt 16pt; font-family: var(--f-mono); font-size: 8.4pt; color: var(--muted); }
+.distrib-legend .li { display: inline-flex; align-items: center; gap: 6pt; }
+.distrib-legend .sw { width: 8pt; height: 8pt; border-radius: 2pt; display: inline-block; }
+.distrib-legend b { color: var(--ink); }
+
+/* ── Roadmap ───────────────────────────────────────────────────────────── */
+.tier { margin-bottom: 14pt; break-inside: avoid; page-break-inside: avoid; }
+.tier-h { display: flex; align-items: center; gap: 9pt; margin-bottom: 7pt; }
+.tier-badge { font-family: var(--f-mono); font-size: 8pt; font-weight: 700; letter-spacing: 0.08em; color: #fff; padding: 3pt 8pt; border-radius: 3pt; }
+.tier-badge.p1 { background: var(--crit); }
+.tier-badge.p2 { background: var(--high); }
+.tier-badge.p3 { background: var(--med); }
+.tier-h .lbl { font-family: var(--f-display); font-size: 11.5pt; font-weight: 600; color: var(--ink); }
+.tier-h .when { font-family: var(--f-mono); font-size: 8pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-left: auto; }
+.tier-empty { font-size: 9.4pt; color: var(--faint); padding: 4pt 0 2pt; border-top: 1px solid var(--rule); }
+
+.rm-item { display: grid; grid-template-columns: 1.5fr 1fr auto; gap: 6pt 16pt; padding: 8pt 0; border-top: 1px solid var(--rule); break-inside: avoid; page-break-inside: avoid; }
+.rm-item:first-of-type { border-top: 1px solid var(--rule-2); }
+.rm-title { font-weight: 600; color: var(--ink); font-size: 10.4pt; }
+.rm-title .cat { font-family: var(--f-mono); font-size: 7.6pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 1pt; }
+.rm-action { color: var(--body); font-size: 9.6pt; }
+.rm-meta { text-align: right; white-space: nowrap; }
+.rm-meta .cis-ref { display: block; font-family: var(--f-mono); font-size: 8pt; letter-spacing: 0.06em; color: var(--muted); margin-top: 4pt; }
+
+/* ── Findings ──────────────────────────────────────────────────────────── */
+.finding { border: 1px solid var(--rule); border-radius: 5pt; padding: 13pt 15pt; margin-bottom: 11pt; break-inside: avoid; page-break-inside: avoid; background: var(--card); }
+.finding-h { display: flex; align-items: center; gap: 9pt; margin-bottom: 9pt; flex-wrap: wrap; }
+.chip { font-family: var(--f-mono); font-size: 7.4pt; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 3pt 7pt; border-radius: 3pt; border: 1px solid transparent; white-space: nowrap; }
+.chip.status { color: #fff; }
+.chip.st-fail { background: var(--high); }
+.chip.st-warn { background: var(--med); }
+.sev { font-family: var(--f-mono); font-size: 7.4pt; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 2.5pt 7pt; border-radius: 3pt; }
+.sev.crit { color: var(--crit); background: var(--crit-bg); border: 1px solid var(--crit); }
+.sev.high { color: var(--high); background: var(--high-bg); border: 1px solid var(--high); }
+.sev.med { color: var(--med); background: var(--med-bg); border: 1px solid var(--med); }
+.sev.low { color: var(--info); background: var(--info-bg); border: 1px solid var(--info); }
+.sev.info { color: var(--muted); background: var(--tint); border: 1px solid var(--rule-2); }
+.finding-h .fcat { font-family: var(--f-mono); font-size: 8pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.finding-h .fcis { font-family: var(--f-mono); font-size: 8pt; color: var(--faint); margin-left: auto; }
+.finding-h .fname { flex-basis: 100%; font-family: var(--f-display); font-size: 12.5pt; font-weight: 600; color: var(--ink); margin-top: 1pt; letter-spacing: -0.005em; }
+
+.finding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt 20pt; }
+.fblock .fk { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 3pt; }
+.fblock p { margin: 0; font-size: 9.8pt; line-height: 1.46; }
+.fblock p.fdetails { white-space: pre-line; }
+.fblock.full { grid-column: 1 / -1; }
+.finding .action { border-left: 2.5pt solid var(--accent); padding: 6pt 11pt; margin-top: 9pt; background: var(--accent-soft); border-radius: 0 3pt 3pt 0; }
+.finding .action .fk { color: var(--accent-2); }
+.finding .action p { color: var(--ink); }
+
+/* ── Attestation table (Appendix A) ────────────────────────────────────── */
+.attest { width: 100%; border-collapse: collapse; font-size: 9.4pt; }
+.attest thead th { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 6pt 8pt; border-bottom: 1.5pt solid var(--ink); font-weight: 500; }
+.attest td { padding: 5pt 8pt; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.attest tr { break-inside: avoid; page-break-inside: avoid; }
+.attest .cat-row td { font-family: var(--f-mono); font-size: 7.8pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-2); font-weight: 600; padding-top: 10pt; border-bottom: 1px solid var(--rule-2); background: var(--tint); }
+.attest .ck { color: var(--ink); font-weight: 500; }
+.attest .st { font-family: var(--f-mono); font-size: 7.6pt; font-weight: 600; letter-spacing: 0.06em; color: var(--ok); }
+.attest .cis { font-family: var(--f-mono); font-size: 8pt; color: var(--faint); white-space: nowrap; }
+.attest .dt { color: var(--muted); font-size: 9pt; white-space: pre-line; }
+
+/* ── Command blocks (Appendix B) ───────────────────────────────────────── */
+.cmd { margin-bottom: 12pt; break-inside: avoid; page-break-inside: avoid; }
+.cmd-h { display: flex; align-items: baseline; gap: 9pt; margin-bottom: 5pt; }
+.cmd-h .num { font-family: var(--f-mono); font-size: 8.5pt; font-weight: 700; color: var(--accent); }
+.cmd-h .t { font-weight: 600; color: var(--ink); font-size: 10.2pt; }
+.cmd-h .c { font-family: var(--f-mono); font-size: 8pt; color: var(--muted); margin-left: auto; }
+.cmd pre { font-family: var(--f-mono); font-size: 8.6pt; line-height: 1.55; background: #0f1412; color: #d7e6df; border-radius: 4pt; padding: 10pt 12pt; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #1c2723; }
+.cmd pre .cmt { color: #6f8a80; }
+
+/* ── Callout / note ────────────────────────────────────────────────────── */
+.note-box { border: 1px solid var(--rule-2); border-radius: 4pt; padding: 10pt 13pt; background: var(--tint); font-size: 9.6pt; color: var(--body); break-inside: avoid; page-break-inside: avoid; }
+.note-box .fk { font-family: var(--f-mono); font-size: 7.4pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); margin-bottom: 3pt; }
+.all-clear { border-color: var(--ok); background: var(--ok-bg); }
+.all-clear .fk { color: var(--ok); }
+.assessment-incomplete { border-color: var(--rule-2); background: var(--tint); }
+.assessment-incomplete .fk { color: var(--muted); }
+
+/* running footer (static, end of document) */
+.doc-foot { display: flex; justify-content: space-between; align-items: center; gap: 14pt; flex-wrap: wrap; margin-top: 26pt; padding-top: 10pt; border-top: 1px solid var(--rule); font-family: var(--f-mono); font-size: 7.6pt; letter-spacing: 0.08em; color: var(--faint); text-transform: uppercase; }
+.doc-foot .b { color: var(--muted); }
+
+hr.rule { border: none; border-top: 1px solid var(--rule); margin: 14pt 0; }
+
+/* ── Print ─────────────────────────────────────────────────────────────── */
+@page { size: letter; margin: 0.8in; }
+/* Margin boxes: static tool copy only (never scan data — CSS string context).
+   Supported by Chromium 131+; older engines ignore them harmlessly. */
+@page {
+  @bottom-center { content: "Apotrope · Security Posture Assessment · Confidential"; font-family: monospace; font-size: 7pt; color: #9d988c; }
+  @bottom-right { content: counter(page); font-family: monospace; font-size: 7pt; color: #9d988c; }
+}
+.page-break { break-before: page; page-break-before: always; }
+
+@media print {
+  body { background: #fff; }
+  .sheet { max-width: none; margin: 0; padding: 0; box-shadow: none; }
+  a { color: inherit; text-decoration: none; }
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <!-- ═══ COVER ═══ -->
+  <section class="cover">
+    <div class="cover-top">
+      <div class="brandlock">
+        <img src="data:image/png;base64,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" alt="Apotrope" />
+        <div>
+          <div class="wm">Apotrope</div>
+          <div class="sub">Windows Security Tooling</div>
+        </div>
+      </div>
+      <div class="cover-class">Confidential</div>
+    </div>
+
+    <div class="cover-title">
+      <div class="eyebrow">Endpoint Security Assessment</div>
+      <h1>Security Posture Assessment</h1>
+      <p class="deck">An independent, read-only evaluation of endpoint <b>WORKSTATION-07</b> against 53 security controls aligned to the CIS Microsoft Windows Benchmarks, with a prioritized plan for remediation.</p>
+    </div>
+
+    <div class="cover-panel">
+      <div class="cover-meta">
+        <div class="cmeta"><div class="k">Host</div><div class="v">WORKSTATION-07</div></div>
+        <div class="cmeta"><div class="k">Operating system</div><div class="v">10.0.26200</div></div>
+        <div class="cmeta"><div class="k">Assessment date</div><div class="v">13 July 2026</div></div>
+        <div class="cmeta"><div class="k">Controls evaluated</div><div class="v">53 across 14 areas</div></div>
+        <div class="cmeta"><div class="k">Assessment mode</div><div class="v">Read-only · non-invasive</div></div>
+        <div class="cmeta"><div class="k">Privileges</div><div class="v">Administrator</div></div>
+        <div class="cmeta"><div class="k">Tool</div><div class="v">Apotrope v0.1.12</div></div>
+        <div class="cmeta"><div class="k">Scan duration</div><div class="v">21.7 seconds</div></div>
+      </div>
+
+      <div class="gradebox">
+        <div class="gline">
+          <div class="letter">C</div>
+          <div class="scorewrap">
+            <div class="score">75<span>/100</span></div>
+            <div class="band">Fair</div>
+          </div>
+        </div>
+        <div class="verdict">1 high-priority finding should be addressed this week; 5 further items can be scheduled into routine maintenance.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 1. EXECUTIVE SUMMARY ═══ -->
+  <section class="doc-section" id="summary">
+    <div class="sec-h"><span class="n">1</span><h2>Executive summary</h2><span class="tag">Plain language</span></div>
+
+    <p class="lede"><b>WORKSTATION-07</b> scored <b>75 out of 100</b> — “Fair” (C) on Apotrope's A–F scale. 6 findings are open for remediation across 4 areas.</p>
+
+    
+    <p>On 13 July 2026, Apotrope attempted 53 security controls on <b>WORKSTATION-07</b> (10.0.26200) against thresholds aligned to the CIS Microsoft Windows Benchmark v5.0.0. The assessment ran in read-only mode with administrator privileges and made no changes to the system. The device scored <b>75/100 (C — Fair)</b>.</p>
+    
+    <p>Of the checks performed, 3 checks failed and 3 checks issued warnings. Of these, 1 is high priority: <b>Password Policy — Minimum Length</b>. The primary areas of concern are <b>Accounts</b>, <b>Hardening</b> and <b>Encryption</b>.</p>
+    
+    <p>34 of 53 controls passed. Categories including Firewall, Patching, Remote Access passed all of their checks.</p>
+    
+    <p>13 informational items were recorded for context; they do not affect the score.</p>
+    
+
+    <div class="note-box">
+      <div class="fk">Bottom line</div>
+      Address the 1 Priority 1 item within the week; schedule the remaining 5 items into the next maintenance cycle.
+    </div>
+  </section>
+
+  <!-- ═══ 2. POSTURE AT A GLANCE ═══ -->
+  <section class="doc-section" id="glance">
+    <div class="sec-h"><span class="n">2</span><h2>Posture at a glance</h2></div>
+
+    
+    <div class="tiles">
+      <div class="tile accent"><div class="k">Overall score</div><div class="v tnum">75<small>/100</small></div><div class="note">Grade C — Fair</div></div>
+      <div class="tile"><div class="k">Controls passed</div><div class="v tnum">34<small>/53</small></div><div class="note">64% compliant</div></div>
+      <div class="tile"><div class="k">Open findings</div><div class="v tnum">6</div><div class="note">3 failed · 3 warnings</div></div>
+      <div class="tile"><div class="k">High-severity</div><div class="v tnum">1</div><div class="note">Priority-1 item</div></div>
+    </div>
+
+    
+    <div class="distrib">
+      <span class="seg-pass" style="flex-grow:34"></span><span class="seg-fail" style="flex-grow:3"></span><span class="seg-warn" style="flex-grow:3"></span><span class="seg-info" style="flex-grow:13"></span>
+    </div>
+    <div class="distrib-legend">
+      
+      <span class="li"><span class="sw seg-pass"></span>Passed <b>34</b> (64%)</span>
+      
+      <span class="li"><span class="sw seg-fail"></span>Failed <b>3</b> (6%)</span>
+      
+      <span class="li"><span class="sw seg-warn"></span>Warnings <b>3</b> (6%)</span>
+      
+      <span class="li"><span class="sw seg-info"></span>Informational <b>13</b> (25%)</span>
+      
+    </div>
+    
+    <p class="muted" style="font-size:9.4pt;margin-top:8pt;">13 informational items (system inventory and context) are recorded for reference and do not affect the score.</p>
+    
+    
+  </section>
+
+  <!-- ═══ 3. REMEDIATION ROADMAP ═══ -->
+  <section class="doc-section" id="roadmap">
+    <div class="sec-h"><span class="n">3</span><h2>Prioritized remediation roadmap</h2><span class="tag">6 actions</span></div>
+
+    
+    
+    <div class="tier">
+      <div class="tier-h"><span class="tier-badge p1">P1</span><span class="lbl">Immediate</span><span class="when">This week</span></div>
+      
+      <div class="rm-item">
+        <div class="rm-title"><span class="cat">Accounts</span>Password Policy — Minimum Length</div>
+        <div class="rm-action">Require a minimum password length of 14 characters.</div>
+        <div class="rm-meta"><span class="sev high">HIGH</span><span class="cis-ref">CIS 1.1.4</span></div>
+      </div>
+      
+    </div>
+    
+    <div class="tier">
+      <div class="tier-h"><span class="tier-badge p2">P2</span><span class="lbl">Near-term</span><span class="when">This maintenance cycle</span></div>
+      
+      <div class="rm-item">
+        <div class="rm-title"><span class="cat">Accounts</span>Password Policy — Complexity</div>
+        <div class="rm-action">Enable the password complexity requirement so passwords must mix character types.</div>
+        <div class="rm-meta"><span class="sev med">MEDIUM</span><span class="cis-ref">CIS 1.1.5</span></div>
+      </div>
+      
+      <div class="rm-item">
+        <div class="rm-title"><span class="cat">Encryption</span>BitLocker — G:</div>
+        <div class="rm-action">Encrypt drive G: with BitLocker using the TPM protector.</div>
+        <div class="rm-meta"><span class="sev med">MEDIUM</span><span class="cis-ref">CIS 18.10.10</span></div>
+      </div>
+      
+      <div class="rm-item">
+        <div class="rm-title"><span class="cat">Hardening</span>Audit Policy</div>
+        <div class="rm-action">Enable audit logging for the key subcategories that currently have auditing disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</div>
+        <div class="rm-meta"><span class="sev med">MEDIUM</span><span class="cis-ref">CIS 17.1.1</span></div>
+      </div>
+      
+      <div class="rm-item">
+        <div class="rm-title"><span class="cat">Hardening</span>AutoPlay Disabled</div>
+        <div class="rm-action">Disable AutoPlay for all drive types so the remaining drive types can no longer auto-execute content.</div>
+        <div class="rm-meta"><span class="sev med">MEDIUM</span><span class="cis-ref">CIS 18.10.8.3</span></div>
+      </div>
+      
+    </div>
+    
+    <div class="tier">
+      <div class="tier-h"><span class="tier-badge p3">P3</span><span class="lbl">Review &amp; hygiene</span><span class="when">Next review</span></div>
+      
+      <div class="rm-item">
+        <div class="rm-title"><span class="cat">Network</span>NetBIOS over TCP/IP</div>
+        <div class="rm-action">Explicitly disable NetBIOS on all adapters rather than relying on DHCP.</div>
+        <div class="rm-meta"><span class="sev low">LOW</span></div>
+      </div>
+      
+    </div>
+    
+    
+  </section>
+
+  <!-- ═══ 4. DETAILED FINDINGS ═══ -->
+  <section class="doc-section" id="findings">
+    <div class="sec-h"><span class="n">4</span><h2>Detailed findings</h2><span class="tag">Open items only</span></div>
+
+    
+    <div class="finding">
+      <div class="finding-h">
+        <span class="chip status st-fail">Failed</span>
+        <span class="sev high">HIGH</span>
+        <span class="fcat">Accounts</span>
+        <span class="fcis">CIS 1.1.4</span>
+        <span class="fname">Password Policy — Minimum Length</span>
+      </div>
+      <div class="finding-grid">
+        <div class="fblock"><div class="fk">Finding</div><p class="fdetails">Minimum password length: 0 characters.</p></div>
+        <div class="fblock"><div class="fk">Business impact</div><p>Weak account and password settings make it easier for an attacker to guess or reuse credentials and take control of this machine.</p></div>
+      </div>
+      
+      <div class="fblock full action"><div class="fk">Recommended action</div><p>Require a minimum password length of 14 characters.</p></div>
+      
+    </div>
+    
+    <div class="finding">
+      <div class="finding-h">
+        <span class="chip status st-fail">Failed</span>
+        <span class="sev med">MEDIUM</span>
+        <span class="fcat">Accounts</span>
+        <span class="fcis">CIS 1.1.5</span>
+        <span class="fname">Password Policy — Complexity</span>
+      </div>
+      <div class="finding-grid">
+        <div class="fblock"><div class="fk">Finding</div><p class="fdetails">Password complexity requirement: disabled.</p></div>
+        <div class="fblock"><div class="fk">Business impact</div><p>Weak account and password settings make it easier for an attacker to guess or reuse credentials and take control of this machine.</p></div>
+      </div>
+      
+      <div class="fblock full action"><div class="fk">Recommended action</div><p>Enable the password complexity requirement so passwords must mix character types.</p></div>
+      
+    </div>
+    
+    <div class="finding">
+      <div class="finding-h">
+        <span class="chip status st-fail">Failed</span>
+        <span class="sev med">MEDIUM</span>
+        <span class="fcat">Encryption</span>
+        <span class="fcis">CIS 18.10.10</span>
+        <span class="fname">BitLocker — G:</span>
+      </div>
+      <div class="finding-grid">
+        <div class="fblock"><div class="fk">Finding</div><p class="fdetails">Drive: G: | Type: 1 | Status: Unknown | Encrypted: 0% | Protection: Off</p></div>
+        <div class="fblock"><div class="fk">Business impact</div><p>If this device is lost or stolen, data on an unencrypted or unprotected drive can be read by anyone with physical access.</p></div>
+      </div>
+      
+      <div class="fblock full action"><div class="fk">Recommended action</div><p>Encrypt drive G: with BitLocker using the TPM protector.</p></div>
+      
+    </div>
+    
+    <div class="finding">
+      <div class="finding-h">
+        <span class="chip status st-warn">Warning</span>
+        <span class="sev med">MEDIUM</span>
+        <span class="fcat">Hardening</span>
+        <span class="fcis">CIS 17.1.1</span>
+        <span class="fname">Audit Policy</span>
+      </div>
+      <div class="finding-grid">
+        <div class="fblock"><div class="fk">Finding</div><p class="fdetails">The following subcategories have auditing disabled: Sensitive Privilege Use. Security-relevant events may not be recorded.</p></div>
+        <div class="fblock"><div class="fk">Business impact</div><p>Convenience features left enabled give attackers well-known shortcuts to run code or gather information on this machine.</p></div>
+      </div>
+      
+      <div class="fblock full action"><div class="fk">Recommended action</div><p>Enable audit logging for the key subcategories that currently have auditing disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</p></div>
+      
+    </div>
+    
+    <div class="finding">
+      <div class="finding-h">
+        <span class="chip status st-warn">Warning</span>
+        <span class="sev med">MEDIUM</span>
+        <span class="fcat">Hardening</span>
+        <span class="fcis">CIS 18.10.8.3</span>
+        <span class="fname">AutoPlay Disabled</span>
+      </div>
+      <div class="finding-grid">
+        <div class="fblock"><div class="fk">Finding</div><p class="fdetails">AutoPlay is partially disabled (NoDriveTypeAutoRun = 158). Some drive types may still trigger AutoPlay.</p></div>
+        <div class="fblock"><div class="fk">Business impact</div><p>Convenience features left enabled give attackers well-known shortcuts to run code or gather information on this machine.</p></div>
+      </div>
+      
+      <div class="fblock full action"><div class="fk">Recommended action</div><p>Disable AutoPlay for all drive types so the remaining drive types can no longer auto-execute content.</p></div>
+      
+    </div>
+    
+    <div class="finding">
+      <div class="finding-h">
+        <span class="chip status st-warn">Warning</span>
+        <span class="sev low">LOW</span>
+        <span class="fcat">Network</span>
+        
+        <span class="fname">NetBIOS over TCP/IP</span>
+      </div>
+      <div class="finding-grid">
+        <div class="fblock"><div class="fk">Finding</div><p class="fdetails">2 adapter(s) inherit NetBIOS setting from DHCP. If the DHCP server does not explicitly disable NetBIOS, it may be active.</p></div>
+        <div class="fblock"><div class="fk">Business impact</div><p>Insecure network protocols allow attackers on the local network to intercept traffic or impersonate services this machine trusts.</p></div>
+      </div>
+      
+      <div class="fblock full action"><div class="fk">Recommended action</div><p>Explicitly disable NetBIOS on all adapters rather than relying on DHCP.</p></div>
+      
+    </div>
+    
+  </section>
+
+  <!-- ═══ APPENDIX A — ATTESTATION ═══ -->
+  <section class="doc-section page-break" id="appendix-a">
+    <div class="sec-h"><span class="n">A</span><h2>Attestation — controls passed</h2><span class="tag">34 controls</span></div>
+
+    
+    <p class="muted" style="font-size:9.6pt;margin-bottom:10pt;">The following controls were evaluated and passed. This record can serve as evidence of the endpoint's compliant configuration at the time of assessment.</p>
+
+    <table class="attest">
+      <thead>
+        <tr><th style="width:32%;">Control</th><th style="width:10%;">Result</th><th style="width:42%;">Detail</th><th style="width:16%;">Benchmark</th></tr>
+      </thead>
+      <tbody>
+        
+        <tr class="cat-row"><td colspan="4">Access Control</td></tr>
+        
+        <tr><td class="ck">UAC Admin Consent Behavior</td><td class="st">Pass</td><td class="dt">ConsentPromptBehaviorAdmin = 5: Prompt for consent for non-Windows binaries (Windows default).</td><td class="cis">CIS 2.3.17.2</td></tr>
+        
+        <tr><td class="ck">UAC Enabled</td><td class="st">Pass</td><td class="dt">UAC (EnableLUA) is enabled.</td><td class="cis">CIS 2.3.17.6</td></tr>
+        
+        <tr><td class="ck">UAC Secure Desktop</td><td class="st">Pass</td><td class="dt">UAC prompts are displayed on the secure desktop (isolated from user input).</td><td class="cis">CIS 2.3.17.7</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">Accounts</td></tr>
+        
+        <tr><td class="ck">Built-in Administrator Account</td><td class="st">Pass</td><td class="dt">Built-in Administrator account is disabled.</td><td class="cis">CIS 2.3.1.3</td></tr>
+        
+        <tr><td class="ck">Guest Account</td><td class="st">Pass</td><td class="dt">Built-in Guest account is disabled.</td><td class="cis">CIS 2.3.1.1</td></tr>
+        
+        <tr><td class="ck">Local Administrators</td><td class="st">Pass</td><td class="dt">2 administrator(s): Administrator, jsmith</td><td class="cis">—</td></tr>
+        
+        <tr><td class="ck">Password Policy — Account Lockout</td><td class="st">Pass</td><td class="dt">Lockout threshold: 10 attempt(s) | Duration: 30 minute(s).</td><td class="cis">CIS 1.2.1</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">Antivirus</td></tr>
+        
+        <tr><td class="ck">Defender Real-Time Protection</td><td class="st">Pass</td><td class="dt">RealTimeProtectionEnabled: True | AMServiceEnabled: True | AntivirusEnabled: True</td><td class="cis">CIS 18.10.42.10.3</td></tr>
+        
+        <tr><td class="ck">Defender Signature Age</td><td class="st">Pass</td><td class="dt">Antivirus signature age: 0 day(s).</td><td class="cis">CIS 18.10.42.14</td></tr>
+        
+        <tr><td class="ck">Defender Tamper Protection</td><td class="st">Pass</td><td class="dt">IsTamperProtected: True</td><td class="cis">—</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">Encryption</td></tr>
+        
+        <tr><td class="ck">BitLocker — C:</td><td class="st">Pass</td><td class="dt">Drive: C: | Type: Unknown | Status: 1 | Method: 6 | Encrypted: 100% | Protection: On</td><td class="cis">CIS 18.10.10</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">File Sharing</td></tr>
+        
+        <tr><td class="ck">SMB Signing Required</td><td class="st">Pass</td><td class="dt">SMB signing is required on this server.</td><td class="cis">CIS 2.3.9.2</td></tr>
+        
+        <tr><td class="ck">SMBv1 Disabled</td><td class="st">Pass</td><td class="dt">SMBv1 protocol is disabled.</td><td class="cis">CIS 18.4.2</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">Firewall</td></tr>
+        
+        <tr><td class="ck">Firewall — Domain Default Inbound Action</td><td class="st">Pass</td><td class="dt">Profile: Domain | DefaultInboundAction: NotConfigured | DefaultOutboundAction: NotConfigured</td><td class="cis">CIS 9.1.2</td></tr>
+        
+        <tr><td class="ck">Firewall — Domain Profile Enabled</td><td class="st">Pass</td><td class="dt">Profile: Domain | Enabled: True</td><td class="cis">CIS 9.1.1</td></tr>
+        
+        <tr><td class="ck">Firewall — Private Default Inbound Action</td><td class="st">Pass</td><td class="dt">Profile: Private | DefaultInboundAction: NotConfigured | DefaultOutboundAction: NotConfigured</td><td class="cis">CIS 9.2.2</td></tr>
+        
+        <tr><td class="ck">Firewall — Private Profile Enabled</td><td class="st">Pass</td><td class="dt">Profile: Private | Enabled: True</td><td class="cis">CIS 9.2.1</td></tr>
+        
+        <tr><td class="ck">Firewall — Public Default Inbound Action</td><td class="st">Pass</td><td class="dt">Profile: Public | DefaultInboundAction: NotConfigured | DefaultOutboundAction: NotConfigured</td><td class="cis">CIS 9.3.2</td></tr>
+        
+        <tr><td class="ck">Firewall — Public Profile Enabled</td><td class="st">Pass</td><td class="dt">Profile: Public | Enabled: True</td><td class="cis">CIS 9.3.1</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">Hardening</td></tr>
+        
+        <tr><td class="ck">Screen Lock Timeout</td><td class="st">Pass</td><td class="dt">Screen lock timeout: 10 minute(s).</td><td class="cis">—</td></tr>
+        
+        <tr><td class="ck">WinRM Status</td><td class="st">Pass</td><td class="dt">WinRM service is not running.</td><td class="cis">CIS 18.10.90.2.2</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">Network</td></tr>
+        
+        <tr><td class="ck">LLMNR Disabled</td><td class="st">Pass</td><td class="dt">LLMNR is disabled via Group Policy.</td><td class="cis">CIS 18.6.4.4</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">Patching</td></tr>
+        
+        <tr><td class="ck">Last Windows Update</td><td class="st">Pass</td><td class="dt">Last update installed 18 day(s) ago (2026-06-26).</td><td class="cis">CIS 18.10.94.2.1</td></tr>
+        
+        <tr><td class="ck">Pending Windows Updates</td><td class="st">Pass</td><td class="dt">No pending Windows Updates were found; the system is up to date.</td><td class="cis">CIS 18.10.94.2.1</td></tr>
+        
+        <tr><td class="ck">Windows Update Service</td><td class="st">Pass</td><td class="dt">Windows Update service start type is Automatic (current state: Stopped); it starts on demand when updates are needed.</td><td class="cis">CIS 18.10.94.2.1</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">PowerShell</td></tr>
+        
+        <tr><td class="ck">PowerShell Module Logging</td><td class="st">Pass</td><td class="dt">Module Logging is enabled — module pipeline execution events are logged.</td><td class="cis">—</td></tr>
+        
+        <tr><td class="ck">PowerShell Script Block Logging</td><td class="st">Pass</td><td class="dt">Script Block Logging is enabled — PowerShell commands are logged to the event log.</td><td class="cis">CIS 18.10.88.1</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">Remote Access</td></tr>
+        
+        <tr><td class="ck">RDP Enabled</td><td class="st">Pass</td><td class="dt">Remote Desktop is disabled (fDenyTSConnections = 1).</td><td class="cis">CIS 18.10.57.3.2.1</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">Services</td></tr>
+        
+        <tr><td class="ck">Risky Services</td><td class="st">Pass</td><td class="dt">No known-risky services are running.</td><td class="cis">—</td></tr>
+        
+        <tr><td class="ck">Unquoted Service Paths</td><td class="st">Pass</td><td class="dt">No services with unquoted paths containing spaces found.</td><td class="cis">—</td></tr>
+        
+        
+        <tr class="cat-row"><td colspan="4">System</td></tr>
+        
+        <tr><td class="ck">OS End-of-Support Status</td><td class="st">Pass</td><td class="dt">Windows 11 25H2 is supported until 2027-10-12 (454 days remaining).</td><td class="cis">—</td></tr>
+        
+        <tr><td class="ck">Secure Boot</td><td class="st">Pass</td><td class="dt">Secure Boot is enabled.</td><td class="cis">CIS 18.10.10.2.2</td></tr>
+        
+        <tr><td class="ck">System Uptime</td><td class="st">Pass</td><td class="dt">System uptime is 5 day(s).</td><td class="cis">—</td></tr>
+        
+        <tr><td class="ck">TPM Status</td><td class="st">Pass</td><td class="dt">TPM present. Ready: True. Firmware version: 7.2.2.0.</td><td class="cis">—</td></tr>
+        
+        
+      </tbody>
+    </table>
+    
+  </section>
+
+  <!-- ═══ APPENDIX B — REMEDIATION COMMANDS ═══ -->
+  <section class="doc-section page-break" id="appendix-b">
+    <div class="sec-h"><span class="n">B</span><h2>Remediation commands</h2><span class="tag">For IT</span></div>
+
+    
+    <div class="note-box" style="margin-bottom:13pt;">
+      <div class="fk">Before you run these</div>
+      Run in an <b>elevated</b> PowerShell prompt. Commands mirror the findings above; review each against your environment and change-management process before applying to a production device.
+    </div>
+
+    
+    <div class="cmd">
+      <div class="cmd-h"><span class="num">01</span><span class="t">Password Policy — Minimum Length</span><span class="c">Accounts · P1</span></div>
+      <pre><div>net accounts /minpwlen:14</div></pre>
+    </div>
+    
+    <div class="cmd">
+      <div class="cmd-h"><span class="num">02</span><span class="t">Password Policy — Complexity</span><span class="c">Accounts · P2</span></div>
+      <pre><div class="cmt"># Set via Local Security Policy: secpol.msc -&gt; Account Policies -&gt;</div><div class="cmt"># Password Policy -&gt; Password must meet complexity requirements -&gt; Enabled.</div><div class="cmt"># Verify the current setting:</div><div>secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -Path &#34;$env:TEMP\secpol.cfg&#34; -Pattern &#39;PasswordComplexity&#39;</div></pre>
+    </div>
+    
+    <div class="cmd">
+      <div class="cmd-h"><span class="num">03</span><span class="t">BitLocker — G:</span><span class="c">Encryption · P2</span></div>
+      <pre><div>Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector</div></pre>
+    </div>
+    
+    <div class="cmd">
+      <div class="cmd-h"><span class="num">04</span><span class="t">Audit Policy</span><span class="c">Hardening · P2</span></div>
+      <pre><div>auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable</div></pre>
+    </div>
+    
+    <div class="cmd">
+      <div class="cmd-h"><span class="num">05</span><span class="t">AutoPlay Disabled</span><span class="c">Hardening · P2</span></div>
+      <pre><div>Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force</div></pre>
+    </div>
+    
+    <div class="cmd">
+      <div class="cmd-h"><span class="num">06</span><span class="t">NetBIOS over TCP/IP</span><span class="c">Network · P3</span></div>
+      <pre><div>(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39;).SetTcpipNetbios(2)</div></pre>
+    </div>
+    
+    
+
+    <hr class="rule" />
+    <p class="muted" style="font-size:9pt;">About this assessment — Apotrope performs a read-only, non-invasive scan of Windows security configuration, scoring against thresholds aligned to the CIS Microsoft Windows Benchmark v5.0.0. No changes are made to the system during assessment. Scores start at 100 and deduct weighted points per finding: failed controls deduct 15, 10, 5, or 2 points for critical, high, medium, or low severity respectively; warnings deduct 7, 5, 2, or 1. Informational items and checks that could not be evaluated do not affect the score. The scan completed in 21.7 seconds. When printing, disable the browser's own header and footer — this document supplies its own.</p>
+  </section>
+
+  <div class="doc-foot">
+    <span class="b">Apotrope v0.1.12 · Security Posture Assessment</span>
+    <span>WORKSTATION-07</span>
+    <span>Confidential</span>
+  </div>
+
+</div>
+</body>
+</html>

@@ -42,7 +42,7 @@
     --pad: 22px;
     --maxw: 1180px;
 
-    --glitch: 1;       /* 0..1 scanline/glow intensity */
+    --glitch: 0;       /* 0..1 scanline/glow intensity — 0 = calm (wordmark glitch stays on) */
     --row-pad: 13px;   /* density */
     --fs: 15px;
   }
@@ -160,6 +160,25 @@
             vertical-align: -2px; margin-left: 3px; animation: blink 1.05s steps(2) infinite; }
   @keyframes blink { 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
 
+  /* glitch text — opacity is intentionally NOT tied to --glitch so the wordmark
+     keeps its chromatic split even when the CRT atmosphere is dialed to 0. */
+  .glitch { position: relative; }
+  .glitch[data-txt]::before, .glitch[data-txt]::after {
+    content: attr(data-txt);
+    position: absolute; left: 0; top: 0; width: 100%;
+    opacity: 0.85;
+    pointer-events: none;
+  }
+  .glitch[data-txt]::before { color: var(--cyan); transform: translate(-1.5px, 0); clip-path: inset(0 0 55% 0); mix-blend-mode: screen; animation: gx 4.2s infinite steps(40); }
+  .glitch[data-txt]::after  { color: var(--red);  transform: translate(1.5px, 0);  clip-path: inset(55% 0 0 0); mix-blend-mode: screen; animation: gx 3.1s infinite reverse steps(40); }
+  @keyframes gx {
+    0%,92%,100% { transform: translate(0,0); }
+    93% { transform: translate(-2px, 1px); }
+    95% { transform: translate(2px, -1px); }
+    97% { transform: translate(-1px, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .glitch::before, .glitch::after { animation: none; } }
+
   /* focus rings */
   button, input, select { font-family: inherit; color: inherit; }
   button { cursor: pointer; background: none; border: none; }
@@ -181,6 +200,11 @@
             text-transform:uppercase; color:var(--cyan); border:1px solid rgba(68,224,230,0.3);
             background:rgba(68,224,230,0.06); padding:5px 10px; border-radius:2px; white-space:nowrap; }
   .ro-tag .dot { width:6px; height:6px; border-radius:50%; background:var(--cyan); box-shadow:0 0 7px var(--cyan); }
+  .exec-link { display:inline-flex; align-items:center; gap:7px; font-size:10px; letter-spacing:0.16em;
+               text-transform:uppercase; color:var(--accent); border:1px solid var(--accent);
+               background:var(--accent-dim); padding:5px 11px; border-radius:2px; white-space:nowrap;
+               transition:background .15s, color .15s, box-shadow .15s; }
+  .exec-link:hover { background:var(--accent); color:var(--void); box-shadow:0 0 12px var(--accent-dim); }
 
   /* hero grid */
   .hero { display:grid; grid-template-columns: 320px 1fr; gap:var(--gap); margin-top:var(--gap); align-items:start; }
@@ -230,19 +254,20 @@
   .leg .lk { color:var(--muted); flex:1; letter-spacing:0.08em; }
   .leg .lv { color:var(--bright); font-weight:600; font-variant-numeric:tabular-nums; }
 
-  /* category bars */
-  .cbar { display:grid; grid-template-columns: 116px 1fr 42px; align-items:center; gap:11px;
-          padding:6px 0; cursor:pointer; border:none; width:100%; text-align:left; }
-  .cbar:hover .cbar-name { color:var(--bright); }
-  .cbar:hover .cbar-track { box-shadow: inset 0 0 0 1px var(--line); }
-  .cbar-name { font-size:11.5px; color:var(--text); letter-spacing:0.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .cbar-track { height:13px; background:#0a130d; border:1px solid rgba(43,255,136,0.12); border-radius:2px; overflow:hidden; position:relative; }
-  .cbar-fill { display:block; height:100%; width:0; border-radius:0; transition:width .6s cubic-bezier(.2,.7,.2,1); }
-  /* HP-bar segmentation: 20 cells, score maps to filled cells */
-  .cbar-track::after { content:""; position:absolute; inset:0; pointer-events:none; z-index:2;
-     background: repeating-linear-gradient(90deg, transparent 0 calc(5% - 2px), var(--panel) calc(5% - 2px) 5%); }
-  .cbar-val { font-size:11.5px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
-  .cbar.flagged .cbar-name::before { content:"› "; color:var(--accent); }
+  /* category scores — plain numeric "90 / 100" list (calm; no bars).
+     Passing categories stay neutral so only warn/fail draw the eye. */
+  .cscore-list { display:flex; flex-direction:column; }
+  .cscore-row { display:flex; align-items:center; justify-content:space-between; gap:12px;
+                padding:6px 0; border:none; width:100%; text-align:left; cursor:pointer;
+                background:none; border-bottom:1px solid var(--line-soft); }
+  .cscore-row:last-child { border-bottom:none; }
+  .cscore-name { font-size:12px; color:var(--text); letter-spacing:0.04em; white-space:nowrap;
+                 overflow:hidden; text-overflow:ellipsis; }
+  .cscore-row:hover .cscore-name { color:var(--bright); }
+  .cscore-val { font-variant-numeric:tabular-nums; white-space:nowrap; font-size:12.5px; }
+  .cscore-val b { font-weight:700; }
+  .cscore-of { color:var(--faint); font-weight:400; }
+  .cscore-row.flagged .cscore-name::before { content:"› "; color:var(--accent); }
 
   /* toolbar */
   .toolbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:var(--gap) 0 14px;
@@ -284,6 +309,20 @@
   .ti-tags { display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
   .ti-fix { font-size:12px; color:var(--muted); line-height:1.6; }
   .ti-fix b { color:var(--text); font-weight:500; }
+  .ti-item .code { margin-top:11px; }
+  .ti-cmd-toggle { display:inline-flex; align-items:center; gap:8px; margin-top:11px;
+                   font-size:10.5px; letter-spacing:0.09em; text-transform:uppercase; font-weight:600;
+                   color:var(--cyan); border:1px solid rgba(68,224,230,0.28); cursor:pointer;
+                   background:rgba(68,224,230,0.05); padding:6px 12px; border-radius:2px; transition:all .12s; }
+  .ti-cmd-toggle:hover { border-color:var(--cyan); background:rgba(68,224,230,0.1); }
+  .ti-cmd-toggle .chev { color:var(--cyan); font-size:9px; transition:transform .18s; }
+  .ti-cmd-toggle[data-on="true"] .chev { transform:rotate(90deg); }
+  .ti-note { margin-top:15px; padding-top:13px; border-top:1px solid rgba(255,81,71,0.16);
+             font-size:11.5px; letter-spacing:0.04em; color:var(--muted); }
+  .ti-note-clean { color:var(--green); border-top:none; padding-top:0; margin-top:2px; }
+  .ti-note-link { font:inherit; color:var(--accent); letter-spacing:0.04em; cursor:pointer;
+                  border:none; background:none; border-bottom:1px dashed rgba(43,255,136,0.45); padding-bottom:1px; transition:all .12s; }
+  .ti-note-link:hover { color:var(--bright); border-bottom-color:var(--accent); }
 
   /* category section */
   .cat-section { margin-top:var(--gap); }
@@ -301,16 +340,37 @@
               border-bottom-left-radius:var(--r); border-bottom-right-radius:var(--r); overflow:hidden; }
   .frow { border-top:1px solid var(--line-soft); }
   .frow:first-child { border-top:none; }
-  .fhead { display:grid; grid-template-columns: 30px 86px 1fr auto; align-items:center; gap:13px;
-           padding:var(--row-pad) 16px; width:100%; text-align:left; transition:background .12s; }
-  .fhead:hover { background:rgba(43,255,136,0.025); }
-  .fhead.is-open { background:rgba(43,255,136,0.03); }
-  .ficon { font-size:14px; text-align:center; font-weight:700; }
+  .fhead { display:grid; grid-template-columns: 62px 74px 1fr auto; align-items:center; gap:14px;
+           padding:var(--row-pad) 16px var(--row-pad) 15px; width:100%; text-align:left; transition:background .12s; }
+  .fhead:hover { background:rgba(255,255,255,0.022); }
+  .fhead.is-open { background:rgba(255,255,255,0.03); }
+
+  /* Row emphasis: FAIL/WARN carry a status-colored accent bar; PASS/INFO are
+     quiet (dimmed, no bar); ERROR stays full-strength — a check that could
+     not run deserves attention, not de-emphasis. */
+  .frow.is-fail { box-shadow: inset 3px 0 0 var(--red); }
+  .frow.is-warn { box-shadow: inset 3px 0 0 var(--amber); }
+  .frow.is-pass, .frow.is-info { opacity:0.62; }
+  .frow.is-pass:hover, .frow.is-info:hover { opacity:1; }
+  .frow.is-pass:has(.is-open), .frow.is-info:has(.is-open) { opacity:1; }
+  .frow.is-pass .fname b { font-weight:400; color:var(--text); }
+
+  /* status pill — the primary at-a-glance signal (replaces the single glyph) */
+  .spill { font-size:10px; font-weight:700; letter-spacing:0.13em; text-transform:uppercase;
+           padding:4px 0; border-radius:2px; text-align:center; white-space:nowrap; }
+  .spill-fail { color:#1a0405; background:var(--red); }
+  .spill-warn { color:#1a1102; background:var(--amber); }
+  .spill-info { color:var(--cyan); background:rgba(68,224,230,0.10); border:1px solid rgba(68,224,230,0.32); padding:3px 0; }
+  .spill-pass { color:var(--green); background:rgba(43,255,136,0.08); border:1px solid rgba(43,255,136,0.26); padding:3px 0; }
+  .spill-error{ color:var(--muted); background:rgba(120,200,170,0.07); border:1px solid var(--line); padding:3px 0; }
+
+  .fsevcell { display:flex; }
   .fsev { font-size:10px; letter-spacing:0.1em; font-weight:600; text-transform:uppercase;
           padding:3px 7px; border-radius:2px; text-align:center; white-space:nowrap; }
   .fname { font-size:13.5px; color:var(--text); }
   .fname .fcat { color:var(--faint); font-size:11px; margin-right:8px; letter-spacing:0.06em; }
   .fname .fsnip { color:var(--muted); font-size:12px; margin-top:2px; }
+  .fhead.is-open .fsnip { display:none; }   /* snippet only when collapsed */
   .fname b { color:var(--bright); font-weight:500; }
   .fright { display:flex; align-items:center; gap:12px; }
   .chev { color:var(--muted); font-size:11px; transition:transform .2s; }
@@ -327,19 +387,28 @@
   .rem { display:grid; gap:11px; }
   .rem-note { font-size:13px; color:var(--text); line-height:1.65; }
   .code { font-size:12.5px; background:#02060a; border:1px solid var(--line);
-          border-left:2px solid var(--accent); border-radius:2px; overflow:hidden; }
+          border-radius:3px; overflow:hidden; }
   .code-bar { display:flex; align-items:center; justify-content:space-between; gap:12px;
-              padding:6px 8px 6px 11px; background:rgba(43,255,136,0.05);
-              border-bottom:1px solid var(--line); }
-  .code-tag { font-size:9.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); }
-  .code .copy { font-size:9.5px; letter-spacing:0.1em; text-transform:uppercase; flex-shrink:0;
-                color:var(--muted); border:1px solid var(--line); padding:3px 9px; border-radius:2px;
-                background:var(--void); cursor:pointer; }
-  .code .copy:hover { color:var(--accent); border-color:var(--accent); }
-  .code-cmd { font-family:"IBM Plex Mono","Cascadia Code","Consolas",monospace; font-size:12.5px;
-              color:var(--green); white-space:pre-wrap; word-break:break-word; padding:11px 13px; margin:0; }
-  .code-warn { font-size:10.5px; line-height:1.5; color:#ffb23d; padding:6px 13px; margin:0;
-               background:rgba(255,178,61,0.06); border-top:1px solid rgba(255,178,61,0.18); }
+              padding:8px 8px 8px 12px; background:rgba(68,224,230,0.06);
+              border-bottom:1px solid rgba(68,224,230,0.18); }
+  .code-tag { display:flex; align-items:center; gap:8px; font-size:10px; letter-spacing:0.1em;
+              text-transform:uppercase; color:var(--cyan); font-weight:600; }
+  .code-tag .shield { font-size:12px; }
+  .code .copy { display:inline-flex; align-items:center; gap:6px; font-size:10.5px; letter-spacing:0.08em;
+                text-transform:uppercase; font-weight:600; flex-shrink:0;
+                color:var(--cyan); border:1px solid rgba(68,224,230,0.35); padding:5px 13px;
+                border-radius:2px; background:rgba(68,224,230,0.06); cursor:pointer; transition:all .12s; }
+  .code .copy:hover { color:var(--void); background:var(--cyan); border-color:var(--cyan); }
+  .code .copy.done { color:var(--void); background:var(--green); border-color:var(--green); }
+  .code-cmd { font-family:var(--mono); font-size:12.5px; line-height:1.7;
+              white-space:pre-wrap; word-break:break-word; padding:12px 14px; margin:0; }
+  .code-cmd .cl-c { color:var(--muted); }                 /* # comment lines       */
+  .code-cmd .cl-x { color:var(--bright); }                /* actual command lines  */
+  .code-cmd .cl-x .ps { color:var(--cyan); user-select:none; margin-right:8px; opacity:0.65; }
+  .code-cmd .cl-b { min-height:1em; }                     /* blank-line spacer     */
+  /* elevated-command caution — kept, but dialed down so it reads as a note */
+  .code-warn { font-size:10px; line-height:1.5; color:rgba(255,178,61,0.68); padding:6px 13px; margin:0;
+               background:rgba(255,178,61,0.035); border-top:1px solid rgba(255,178,61,0.12); }
   .cis { display:inline-flex; align-items:center; gap:6px; font-size:11px; letter-spacing:0.06em;
          color:var(--cyan); border:1px solid rgba(68,224,230,0.28); background:rgba(68,224,230,0.05);
          padding:3px 9px; border-radius:2px; }
@@ -367,14 +436,18 @@
     .wrap { padding-bottom:0; }
     .panel { background:#fff !important; border-color:#bbb !important; }
     .panel::before, .panel::after { display:none; }
-    .toolbar, .tool-right, .search, .filters { display:none !important; }
+    .toolbar, .tool-right, .search, .filters, .exec-link { display:none !important; }
     .cat-bar { position:static; background:#f2f2f2 !important; }
     .cat-name, .brand .name, .ti-name, .fname b, .meta-item .v b { color:#111 !important; }
     .fbody[hidden] { display:grid !important; }   /* show all details on paper */
+    .frow.is-fail, .frow.is-warn { box-shadow:none !important; }
+    .frow.is-pass, .frow.is-info { opacity:1 !important; }
+    .glitch::before, .glitch::after { display:none !important; }   /* no chromatic ghosting */
     .code { background:#f6f6f6 !important; }
     .code-bar { background:#ececec !important; border-bottom-color:#ccc !important; }
     .code-tag { color:#444 !important; }
-    .code-cmd { color:#111 !important; }
+    .code-cmd, .code-cmd .cl-c, .code-cmd .cl-x { color:#111 !important; }
+    .code-cmd .cl-x .ps { color:#777 !important; }
   }
 </style>
 </head>
@@ -388,14 +461,15 @@
     <div class="topbar">
       <div class="brand">
         <img class="diamond" src="data:image/png;base64,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" width="26" height="26" alt="Apotrope">
-        <span class="name">APOTROPE</span>
-        <span class="ver">v0.1.10</span>
+        <span class="name glitch" data-txt="APOTROPE">APOTROPE</span>
+        <span class="ver">v0.1.12</span>
       </div>
       <div class="topbar-meta">
         <div class="meta-item"><span class="label">Host</span><span class="v"><b>WORKSTATION-07</b></span></div>
         <div class="meta-item"><span class="label">System</span><span class="v">10.0.26200</span></div>
-        <div class="meta-item"><span class="label">Scan</span><span class="v">2026-07-05 03:04 UTC <span style="color:var(--faint)">· 27.3s</span></span></div>
+        <div class="meta-item"><span class="label">Scan</span><span class="v">2026-07-13 15:30 UTC <span style="color:var(--faint)">· 21.7s</span></span></div>
         <span class="ro-tag"><span class="dot"></span>Read-only audit</span>
+        <a class="exec-link" href="exec-report.html" title="Plain-English summary for decision makers">Executive Report ↗</a>
       </div>
     </div>
 
@@ -429,6 +503,7 @@
         <div class="summary-panel panel rise">
           <div class="summary-head">
             <span class="kicker">Executive Summary</span>
+            
             <div class="pills">
               <button class="pill pill-pass" data-k="PASS" title="Show the passed checks"><span class="n">34</span> passed</button>
               <button class="pill pill-fail" data-k="FAIL" title="Show the failed checks"><span class="n">3</span> failed</button>
@@ -468,103 +543,106 @@
 
           <div class="bars-panel panel rise">
             <div class="panel-h"><span class="label">Category Scores</span><span class="label">14 areas</span></div>
-            
-            <button class="cbar" onclick="apoJump('Accounts')">
-              <span class="cbar-name">Accounts</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:85%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">85</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Encryption')">
-              <span class="cbar-name">Encryption</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:95%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">95</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Hardening')">
-              <span class="cbar-name">Hardening</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:96%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">96</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Network')">
-              <span class="cbar-name">Network</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:99%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">99</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Access-Control')">
-              <span class="cbar-name">Access Control</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Antivirus')">
-              <span class="cbar-name">Antivirus</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('File-Sharing')">
-              <span class="cbar-name">File Sharing</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Firewall')">
-              <span class="cbar-name">Firewall</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Patching')">
-              <span class="cbar-name">Patching</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Persistence')">
-              <span class="cbar-name">Persistence</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('PowerShell')">
-              <span class="cbar-name">PowerShell</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Remote-Access')">
-              <span class="cbar-name">Remote Access</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('Services')">
-              <span class="cbar-name">Services</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
-            <button class="cbar" onclick="apoJump('System')">
-              <span class="cbar-name">System</span>
-              <span class="cbar-track"><span class="cbar-fill" style="width:100%;background:#2bff88;box-shadow:0 0 8px #2bff88"></span></span>
-              <span class="cbar-val" style="color:#2bff88">100</span>
-            </button>
-            
+            <div class="cscore-list">
+              
+              
+              <button class="cscore-row" onclick="apoJump('Accounts')" title="Jump to Accounts">
+                <span class="cscore-name">Accounts</span>
+                <span class="cscore-val"><b style="color:var(--bright)">85</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Encryption')" title="Jump to Encryption">
+                <span class="cscore-name">Encryption</span>
+                <span class="cscore-val"><b style="color:var(--bright)">95</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Hardening')" title="Jump to Hardening">
+                <span class="cscore-name">Hardening</span>
+                <span class="cscore-val"><b style="color:var(--bright)">96</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Network')" title="Jump to Network">
+                <span class="cscore-name">Network</span>
+                <span class="cscore-val"><b style="color:var(--bright)">99</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Access-Control')" title="Jump to Access Control">
+                <span class="cscore-name">Access Control</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Antivirus')" title="Jump to Antivirus">
+                <span class="cscore-name">Antivirus</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('File-Sharing')" title="Jump to File Sharing">
+                <span class="cscore-name">File Sharing</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Firewall')" title="Jump to Firewall">
+                <span class="cscore-name">Firewall</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Patching')" title="Jump to Patching">
+                <span class="cscore-name">Patching</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Persistence')" title="Jump to Persistence">
+                <span class="cscore-name">Persistence</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('PowerShell')" title="Jump to PowerShell">
+                <span class="cscore-name">PowerShell</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Remote-Access')" title="Jump to Remote Access">
+                <span class="cscore-name">Remote Access</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('Services')" title="Jump to Services">
+                <span class="cscore-name">Services</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+              
+              <button class="cscore-row" onclick="apoJump('System')" title="Jump to System">
+                <span class="cscore-name">System</span>
+                <span class="cscore-val"><b style="color:var(--bright)">100</b><span class="cscore-of"> / 100</span></span>
+              </button>
+              
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     
-    <!-- ── Top issues ──────────────────────────────────────────────────── -->
-    <div class="top-issues panel">
+    <!-- ── Top issues (critical & high severity) ───────────────────────── -->
+    <div class="top-issues panel rise">
       <div class="ti-head">
         <span class="ti-flag">⚑ Top Issues</span>
-        <span class="label">Prioritized remediation · 3</span>
+        <span class="label">Critical &amp; high severity · 1 of 6 open findings</span>
       </div>
+      
       <div class="ti-list">
         
         <div class="ti-item">
@@ -577,41 +655,39 @@
             </div>
             <div class="ti-name">Password Policy — Minimum Length</div>
             <div class="ti-fix"><b>Fix:</b> Require a minimum password length of 14 characters.</div>
-          </div>
-        </div>
-        
-        <div class="ti-item">
-          <span class="ti-num">02</span>
-          <div>
-            <div class="ti-tags">
-              <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
-              <span style="font-size:11px;color:#ff5147;letter-spacing:0.1em">FAIL</span>
-              <button class="linkbtn" onclick="apoJump('Accounts')">Accounts ↗</button>
+            
+            
+            <button class="ti-cmd-toggle"
+              type="button"
+              data-on="false"
+              aria-expanded="false"
+              aria-controls="top-issue-command-1"
+            >
+              <span class="chev" aria-hidden="true">▶</span>
+              <span class="lbl">Show remediation command</span>
+            </button>
+            <div id="top-issue-command-1" class="code" data-cmd="net accounts /minpwlen:14" hidden>
+              <div class="code-bar">
+                <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
+                <button class="copy" type="button">⧉ Copy</button>
+              </div>
+              <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>net accounts /minpwlen:14</div></pre>
+              <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings.</div>
             </div>
-            <div class="ti-name">Password Policy — Complexity</div>
-            <div class="ti-fix"><b>Fix:</b> Enable the password complexity requirement so passwords must mix character types.</div>
-          </div>
-        </div>
-        
-        <div class="ti-item">
-          <span class="ti-num">03</span>
-          <div>
-            <div class="ti-tags">
-              <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
-              <span style="font-size:11px;color:#ff5147;letter-spacing:0.1em">FAIL</span>
-              <button class="linkbtn" onclick="apoJump('Encryption')">Encryption ↗</button>
-            </div>
-            <div class="ti-name">BitLocker — G:</div>
-            <div class="ti-fix"><b>Fix:</b> Encrypt drive G: with BitLocker using the TPM protector.</div>
+            
           </div>
         </div>
         
       </div>
+      
+      
+      <div class="ti-note">+ 5 additional open findings not shown here — <button class="ti-note-link" type="button" onclick="apoScrollFindings()">see the full breakdown below ↓</button></div>
+      
     </div>
     
 
     <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
-    <div class="toolbar panel">
+    <div class="toolbar panel" id="all-findings">
       <div class="filters">
         <button class="fchip f-all"  data-on="true"  data-k="ALL">ALL <span class="fn">53</span></button>
         <button class="fchip f-fail" data-on="false" data-k="FAIL">FAIL <span class="fn">3</span></button>
@@ -644,10 +720,12 @@
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="uac enabled access control uac (enablelua) is enabled. cis 2.3.17.6 ">
+        
+        
+        <div class="frow is-pass" data-status="PASS" data-text="uac enabled access control uac (enablelua) is enabled. cis 2.3.17.6 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff2d6b;border:1px solid #ff2d6b;background:transparent">CRITICAL</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>UAC Enabled</b>
               
@@ -665,10 +743,11 @@
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="uac admin consent behavior access control consentpromptbehavioradmin = 5: prompt for consent for non-windows binaries (windows default). cis 2.3.17.2 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="uac admin consent behavior access control consentpromptbehavioradmin = 5: prompt for consent for non-windows binaries (windows default). cis 2.3.17.2 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>UAC Admin Consent Behavior</b>
               
@@ -686,10 +765,11 @@
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="uac secure desktop access control uac prompts are displayed on the secure desktop (isolated from user input). cis 2.3.17.7 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="uac secure desktop access control uac prompts are displayed on the secure desktop (isolated from user input). cis 2.3.17.7 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>UAC Secure Desktop</b>
               
@@ -707,10 +787,11 @@
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="uac standard user behavior access control consentpromptbehavioruser = 3: prompt for credentials (default). cis 2.3.17.3 ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="uac standard user behavior access control consentpromptbehavioruser = 3: prompt for credentials (default). cis 2.3.17.3 ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>UAC Standard User Behavior</b>
               
@@ -746,10 +827,12 @@
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="FAIL" data-text="password policy — minimum length accounts minimum password length: 0 characters. cis 1.1.4 net accounts /minpwlen:14">
+        
+        
+        <div class="frow is-fail" data-status="FAIL" data-text="password policy — minimum length accounts minimum password length: 0 characters. cis 1.1.4 net accounts /minpwlen:14">
           <button class="fhead is-open">
-            <span class="ficon" style="color:#ff5147">✗</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-fail">FAIL</span>
+            <span class="fsevcell"><span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span></span>
             <span class="fname">
               <b>Password Policy — Minimum Length</b>
               <div class="fsnip">Minimum password length: 0 characters.</div>
@@ -767,12 +850,12 @@
               <div class="rem">
                 <div class="rem-note">Require a minimum password length of 14 characters.</div>
                 
-                <div class="code">
+                <div class="code" data-cmd="net accounts /minpwlen:14">
                   <div class="code-bar">
-                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
-                    <button class="copy" type="button">copy</button>
+                    <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd">net accounts /minpwlen:14</pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>net accounts /minpwlen:14</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -782,13 +865,14 @@
           </div>
         </div>
         
-        <div class="frow" data-status="FAIL" data-text="password policy — complexity accounts password complexity requirement: disabled. cis 1.1.5 # set via local security policy: secpol.msc -&gt; account policies -&gt;
+        
+        <div class="frow is-fail" data-status="FAIL" data-text="password policy — complexity accounts password complexity requirement: disabled. cis 1.1.5 # set via local security policy: secpol.msc -&gt; account policies -&gt;
 # password policy -&gt; password must meet complexity requirements -&gt; enabled.
 # verify the current setting:
 secedit /export /cfg &#34;$env:temp\secpol.cfg&#34; | out-null; select-string -path &#34;$env:temp\secpol.cfg&#34; -pattern &#39;passwordcomplexity&#39;">
           <button class="fhead is-open">
-            <span class="ficon" style="color:#ff5147">✗</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-fail">FAIL</span>
+            <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
             <span class="fname">
               <b>Password Policy — Complexity</b>
               <div class="fsnip">Password complexity requirement: disabled.</div>
@@ -806,15 +890,15 @@ secedit /export /cfg &#34;$env:temp\secpol.cfg&#34; | out-null; select-string -p
               <div class="rem">
                 <div class="rem-note">Enable the password complexity requirement so passwords must mix character types.</div>
                 
-                <div class="code">
-                  <div class="code-bar">
-                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
-                    <button class="copy" type="button">copy</button>
-                  </div>
-                  <pre class="code-cmd"># Set via Local Security Policy: secpol.msc -&gt; Account Policies -&gt;
+                <div class="code" data-cmd="# Set via Local Security Policy: secpol.msc -&gt; Account Policies -&gt;
 # Password Policy -&gt; Password must meet complexity requirements -&gt; Enabled.
 # Verify the current setting:
-secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -Path &#34;$env:TEMP\secpol.cfg&#34; -Pattern &#39;PasswordComplexity&#39;</pre>
+secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -Path &#34;$env:TEMP\secpol.cfg&#34; -Pattern &#39;PasswordComplexity&#39;">
+                  <div class="code-bar">
+                    <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">⧉ Copy</button>
+                  </div>
+                  <pre class="code-cmd"><div class="cl-c"># Set via Local Security Policy: secpol.msc -&gt; Account Policies -&gt;</div><div class="cl-c"># Password Policy -&gt; Password must meet complexity requirements -&gt; Enabled.</div><div class="cl-c"># Verify the current setting:</div><div class="cl-x"><span class="ps">PS&gt;</span>secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -Path &#34;$env:TEMP\secpol.cfg&#34; -Pattern &#39;PasswordComplexity&#39;</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -824,10 +908,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="guest account accounts built-in guest account is disabled. cis 2.3.1.1 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="guest account accounts built-in guest account is disabled. cis 2.3.1.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Guest Account</b>
               
@@ -845,10 +930,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="built-in administrator account accounts built-in administrator account is disabled. cis 2.3.1.3 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="built-in administrator account accounts built-in administrator account is disabled. cis 2.3.1.3 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Built-in Administrator Account</b>
               
@@ -866,10 +952,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="local administrators accounts 2 administrator(s): administrator, wsadmin  ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="local administrators accounts 2 administrator(s): administrator, jsmith  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Local Administrators</b>
               
@@ -881,16 +968,17 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Counts members of the local Administrators group (WARN if &gt;2).</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">2 administrator(s): Administrator, wsadmin</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">2 administrator(s): Administrator, jsmith</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="password policy — account lockout accounts lockout threshold: 10 attempt(s) | duration: 30 minute(s). cis 1.2.1 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="password policy — account lockout accounts lockout threshold: 10 attempt(s) | duration: 30 minute(s). cis 1.2.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Password Policy — Account Lockout</b>
               
@@ -926,10 +1014,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="defender real-time protection antivirus realtimeprotectionenabled: true | amserviceenabled: true | antivirusenabled: true cis 18.10.42.10.3 ">
+        
+        
+        <div class="frow is-pass" data-status="PASS" data-text="defender real-time protection antivirus realtimeprotectionenabled: true | amserviceenabled: true | antivirusenabled: true cis 18.10.42.10.3 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff2d6b;border:1px solid #ff2d6b;background:transparent">CRITICAL</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Defender Real-Time Protection</b>
               
@@ -947,10 +1037,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="defender signature age antivirus antivirus signature age: 0 day(s). cis 18.10.42.14 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="defender signature age antivirus antivirus signature age: 0 day(s). cis 18.10.42.14 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Defender Signature Age</b>
               
@@ -968,10 +1059,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="defender tamper protection antivirus istamperprotected: true  ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="defender tamper protection antivirus istamperprotected: true  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Defender Tamper Protection</b>
               
@@ -989,10 +1081,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="registered av products antivirus registered av product(s): windows defender  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="registered av products antivirus registered av product(s): windows defender  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Registered AV Products</b>
               
@@ -1028,10 +1121,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="FAIL" data-text="bitlocker — g: encryption drive: g: | type: 1 | status: unknown | encrypted: 0% | protection: off cis 18.10.10 enable-bitlocker -mountpoint &#39;g:&#39; -encryptionmethod xtsaes256 -usedspaceonly -tpmprotector">
+        
+        
+        <div class="frow is-fail" data-status="FAIL" data-text="bitlocker — g: encryption drive: g: | type: 1 | status: unknown | encrypted: 0% | protection: off cis 18.10.10 enable-bitlocker -mountpoint &#39;g:&#39; -encryptionmethod xtsaes256 -usedspaceonly -tpmprotector">
           <button class="fhead is-open">
-            <span class="ficon" style="color:#ff5147">✗</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-fail">FAIL</span>
+            <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
             <span class="fname">
               <b>BitLocker — G:</b>
               <div class="fsnip">Drive: G: | Type: 1 | Status: Unknown | Encrypted: 0% | Protection: Off</div>
@@ -1049,12 +1144,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <div class="rem">
                 <div class="rem-note">Encrypt drive G: with BitLocker using the TPM protector.</div>
                 
-                <div class="code">
+                <div class="code" data-cmd="Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector">
                   <div class="code-bar">
-                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
-                    <button class="copy" type="button">copy</button>
+                    <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd">Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector</pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1064,10 +1159,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="bitlocker — c: encryption drive: c: | type: unknown | status: 1 | method: 6 | encrypted: 100% | protection: on cis 18.10.10 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="bitlocker — c: encryption drive: c: | type: unknown | status: 1 | method: 6 | encrypted: 100% | protection: on cis 18.10.10 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>BitLocker — C:</b>
               
@@ -1103,10 +1199,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="smbv1 disabled file sharing smbv1 protocol is disabled. cis 18.4.2 ">
+        
+        
+        <div class="frow is-pass" data-status="PASS" data-text="smbv1 disabled file sharing smbv1 protocol is disabled. cis 18.4.2 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff2d6b;border:1px solid #ff2d6b;background:transparent">CRITICAL</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>SMBv1 Disabled</b>
               
@@ -1124,10 +1222,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="smb signing required file sharing smb signing is required on this server. cis 2.3.9.2 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="smb signing required file sharing smb signing is required on this server. cis 2.3.9.2 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>SMB Signing Required</b>
               
@@ -1145,10 +1244,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="smb encryption file sharing smb encryption (encryptdata) is disabled. cis 18.6.8.7 ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="smb encryption file sharing smb encryption (encryptdata) is disabled. cis 18.6.8.7 ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>SMB Encryption</b>
               
@@ -1190,10 +1290,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="firewall — domain profile enabled firewall profile: domain | enabled: true cis 9.1.1 ">
+        
+        
+        <div class="frow is-pass" data-status="PASS" data-text="firewall — domain profile enabled firewall profile: domain | enabled: true cis 9.1.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Firewall — Domain Profile Enabled</b>
               
@@ -1211,10 +1313,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="firewall — private profile enabled firewall profile: private | enabled: true cis 9.2.1 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="firewall — private profile enabled firewall profile: private | enabled: true cis 9.2.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Firewall — Private Profile Enabled</b>
               
@@ -1232,10 +1335,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="firewall — public profile enabled firewall profile: public | enabled: true cis 9.3.1 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="firewall — public profile enabled firewall profile: public | enabled: true cis 9.3.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Firewall — Public Profile Enabled</b>
               
@@ -1253,10 +1357,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="firewall — domain default inbound action firewall profile: domain | defaultinboundaction: notconfigured | defaultoutboundaction: notconfigured cis 9.1.2 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="firewall — domain default inbound action firewall profile: domain | defaultinboundaction: notconfigured | defaultoutboundaction: notconfigured cis 9.1.2 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Firewall — Domain Default Inbound Action</b>
               
@@ -1274,10 +1379,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="firewall — private default inbound action firewall profile: private | defaultinboundaction: notconfigured | defaultoutboundaction: notconfigured cis 9.2.2 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="firewall — private default inbound action firewall profile: private | defaultinboundaction: notconfigured | defaultoutboundaction: notconfigured cis 9.2.2 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Firewall — Private Default Inbound Action</b>
               
@@ -1295,10 +1401,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="firewall — public default inbound action firewall profile: public | defaultinboundaction: notconfigured | defaultoutboundaction: notconfigured cis 9.3.2 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="firewall — public default inbound action firewall profile: public | defaultinboundaction: notconfigured | defaultoutboundaction: notconfigured cis 9.3.2 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Firewall — Public Default Inbound Action</b>
               
@@ -1334,10 +1441,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="WARN" data-text="autoplay disabled hardening autoplay is partially disabled (nodrivetypeautorun = 158). some drive types may still trigger autoplay. cis 18.10.8.3 set-itemproperty -path &#39;hklm:\software\microsoft\windows\currentversion\policies\explorer&#39; -name nodrivetypeautorun -value 255 -type dword -force">
+        
+        
+        <div class="frow is-warn" data-status="WARN" data-text="autoplay disabled hardening autoplay is partially disabled (nodrivetypeautorun = 158). some drive types may still trigger autoplay. cis 18.10.8.3 set-itemproperty -path &#39;hklm:\software\microsoft\windows\currentversion\policies\explorer&#39; -name nodrivetypeautorun -value 255 -type dword -force">
           <button class="fhead is-open">
-            <span class="ficon" style="color:#ffb23d">!</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-warn">WARN</span>
+            <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
             <span class="fname">
               <b>AutoPlay Disabled</b>
               <div class="fsnip">AutoPlay is partially disabled (NoDriveTypeAutoRun = 158)</div>
@@ -1355,12 +1464,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <div class="rem">
                 <div class="rem-note">Disable AutoPlay for all drive types so the remaining drive types can no longer auto-execute content.</div>
                 
-                <div class="code">
+                <div class="code" data-cmd="Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force">
                   <div class="code-bar">
-                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
-                    <button class="copy" type="button">copy</button>
+                    <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd">Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force</pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1370,10 +1479,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="WARN" data-text="audit policy hardening the following subcategories have auditing disabled: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;logon&#39; /success:enable /failure:enable">
+        
+        <div class="frow is-warn" data-status="WARN" data-text="audit policy hardening the following subcategories have auditing disabled: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;logon&#39; /success:enable /failure:enable">
           <button class="fhead is-open">
-            <span class="ficon" style="color:#ffb23d">!</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-warn">WARN</span>
+            <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
             <span class="fname">
               <b>Audit Policy</b>
               <div class="fsnip">The following subcategories have auditing disabled: Sensitive Privilege Use</div>
@@ -1391,12 +1501,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <div class="rem">
                 <div class="rem-note">Enable audit logging for the key subcategories that currently have auditing disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</div>
                 
-                <div class="code">
+                <div class="code" data-cmd="auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable">
                   <div class="code-bar">
-                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
-                    <button class="copy" type="button">copy</button>
+                    <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd">auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable</pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1406,10 +1516,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="winrm status hardening winrm service is not running. cis 18.10.90.2.2 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="winrm status hardening winrm service is not running. cis 18.10.90.2.2 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>WinRM Status</b>
               
@@ -1427,10 +1538,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="screen lock timeout hardening screen lock timeout: 10 minute(s).  ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="screen lock timeout hardening screen lock timeout: 10 minute(s).  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Screen Lock Timeout</b>
               
@@ -1448,10 +1560,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="speculative execution mitigations hardening no featuresettingsoverride registry key found — windows default mitigations apply (recommended).  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="speculative execution mitigations hardening no featuresettingsoverride registry key found — windows default mitigations apply (recommended).  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Speculative Execution Mitigations</b>
               
@@ -1487,10 +1600,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="WARN" data-text="netbios over tcp/ip network 2 adapter(s) inherit netbios setting from dhcp. if the dhcp server does not explicitly disable netbios, it may be active.  (get-ciminstance win32_networkadapterconfiguration -filter &#39;ipenabled=true&#39;).settcpipnetbios(2)">
+        
+        
+        <div class="frow is-warn" data-status="WARN" data-text="netbios over tcp/ip network 2 adapter(s) inherit netbios setting from dhcp. if the dhcp server does not explicitly disable netbios, it may be active.  (get-ciminstance win32_networkadapterconfiguration -filter &#39;ipenabled=true&#39;).settcpipnetbios(2)">
           <button class="fhead is-open">
-            <span class="ficon" style="color:#ffb23d">!</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="spill spill-warn">WARN</span>
+            <span class="fsevcell"><span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span></span>
             <span class="fname">
               <b>NetBIOS over TCP/IP</b>
               <div class="fsnip">2 adapter(s) inherit NetBIOS setting from DHCP</div>
@@ -1508,12 +1623,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <div class="rem">
                 <div class="rem-note">Explicitly disable NetBIOS on all adapters rather than relying on DHCP.</div>
                 
-                <div class="code">
+                <div class="code" data-cmd="(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39;).SetTcpipNetbios(2)">
                   <div class="code-bar">
-                    <span class="code-tag">▷ Windows PowerShell · run as Administrator</span>
-                    <button class="copy" type="button">copy</button>
+                    <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
+                    <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd">(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39;).SetTcpipNetbios(2)</pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39;).SetTcpipNetbios(2)</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1523,10 +1638,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="llmnr disabled network llmnr is disabled via group policy. cis 18.6.4.4 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="llmnr disabled network llmnr is disabled via group policy. cis 18.6.4.4 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>LLMNR Disabled</b>
               
@@ -1544,10 +1660,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="listening ports — summary network 33 listening port(s): 135, 139, 445, 902, 912, 1337, 5040, 6060, 6463, 6666, 11434, 13331, 13337, 13344, 15147, 19292, 27015, 27036, 27060, 42050, 49664, 49665, 49666, 49667, 49668, 49669, 49671, 49672, 54235, 55699 … (+3 more)  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="listening ports — summary network 10 listening port(s): 135, 139, 445, 5040, 49664, 49665, 49666, 49667, 49668, 49669  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Listening Ports — Summary</b>
               
@@ -1559,16 +1676,17 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Enumerates all TCP ports in LISTEN state.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">33 listening port(s): 135, 139, 445, 902, 912, 1337, 5040, 6060, 6463, 6666, 11434, 13331, 13337, 13344, 15147, 19292, 27015, 27036, 27060, 42050, 49664, 49665, 49666, 49667, 49668, 49669, 49671, 49672, 54235, 55699 … (+3 more)</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">10 listening port(s): 135, 139, 445, 5040, 49664, 49665, 49666, 49667, 49668, 49669</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="ipv6 status network ipv6 is active on 2 adapter(s).  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="ipv6 status network ipv6 is active on 3 adapter(s).  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>IPv6 Status</b>
               
@@ -1580,7 +1698,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Reports whether IPv6 is active on any network adapter (informational).</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">IPv6 is active on 2 adapter(s).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">IPv6 is active on 3 adapter(s).</span></div>
             
             
           </div>
@@ -1604,10 +1722,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="last windows update patching last update installed 9 day(s) ago (2026-06-26). cis 18.10.94.2.1 ">
+        
+        
+        <div class="frow is-pass" data-status="PASS" data-text="last windows update patching last update installed 18 day(s) ago (2026-06-26). cis 18.10.94.2.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff2d6b;border:1px solid #ff2d6b;background:transparent">CRITICAL</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Last Windows Update</b>
               
@@ -1619,16 +1739,17 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks when the most recent Windows Update was installed.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Last update installed 9 day(s) ago (2026-06-26).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Last update installed 18 day(s) ago (2026-06-26).</span></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.94.2.1</span></span></div>
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="windows update service patching windows update service start type is automatic (current state: stopped); it starts on demand when updates are needed. cis 18.10.94.2.1 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="windows update service patching windows update service start type is automatic (current state: stopped); it starts on demand when updates are needed. cis 18.10.94.2.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Windows Update Service</b>
               
@@ -1646,10 +1767,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="pending windows updates patching no pending windows updates found. cis 18.10.94.2.1 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="pending windows updates patching no pending windows updates were found; the system is up to date. cis 18.10.94.2.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Pending Windows Updates</b>
               
@@ -1661,7 +1783,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Counts Windows Updates that are available but not yet installed.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">No pending Windows Updates found.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">No pending Windows Updates were found; the system is up to date.</span></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.94.2.1</span></span></div>
           </div>
@@ -1685,10 +1807,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="INFO" data-text="startup programs persistence 29 startup program(s): synapse3, onedrivesetup, onedrivesetup, ollama, rainmeter, send to onenote, tamriel trade centre client, steam, overwolf, tsmapplication, battle.net, rzappengine, nordlockersystray, discord, onedrive, microsoft.lists, electron.app.notion, com.squirrel.slack.slack, riotclient, razerappengine … (+9 more)  ">
+        
+        
+        <div class="frow is-info" data-status="INFO" data-text="startup programs persistence 6 startup program(s): onedrive, microsoft teams, windows security, realtek audio console, synaptics touchpad, snipping tool  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Startup Programs</b>
               
@@ -1700,16 +1824,17 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Enumerates programs configured to run at startup (registry Run keys + startup folders).</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">29 startup program(s): Synapse3, OneDriveSetup, OneDriveSetup, Ollama, Rainmeter, Send to OneNote, Tamriel Trade Centre Client, Steam, Overwolf, TSMApplication, Battle.net, RzAppEngine, NordLockerSysTray, Discord, OneDrive, Microsoft.Lists, electron.app.Notion, com.squirrel.slack.slack, RiotClient, RazerAppEngine … (+9 more)</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">6 startup program(s): OneDrive, Microsoft Teams, Windows Security, Realtek Audio Console, Synaptics TouchPad, Snipping Tool</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="scheduled tasks persistence 31 non-microsoft task(s): adobe acrobat update task, adobe-genuine-software-integrity-scheduler-1.0, adobegcinvoker-1.0, adobegcinvokerlogon, bravesoftwareupdatetaskmachinecore{f1c02faa-4d43-4038-8ea2-1c1ac48b3891}, bravesoftwareupdatetaskmachineua{1d11ea5f-d697-4aa7-b078-1e0d309db419}, fancontrol, intel ptt ek recertification, microsoftedgeupdatetaskmachinecore, microsoftedgeupdatetaskmachineua, npcapwatchdog, nvidia app selfupdate_{b2fe1952-0186-46c3-baec-a80aa35ac5b8}, onedrive per-machine standalone update task, onedrive reporting task-s-1-5-21-360431784-1045562088-2322528677-1001, onedrive reporting task-s-1-5-21-360431784-1045562088-2322528677-1014, onedrive startup task-s-1-5-21-360431784-1045562088-2322528677-1001, onedrive startup task-s-1-5-21-360431784-1045562088-2322528677-1014, overwolf updater task, zoomupdatetaskuser-s-1-5-21-360431784-1045562088-2322528677-1001, googleupdatertasksystem137.0.7129.0{6f242de3-9642-4523-98f4-f1166ee7b326} … (+11 more)  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="scheduled tasks persistence 8 non-microsoft task(s): adobe acrobat update task, googleupdatetaskmachinecore, googleupdatetaskmachineua, microsoftedgeupdatetaskmachinecore, microsoftedgeupdatetaskmachineua, onedrive standalone update task, dell supportassist trigger, intel driver &amp; support assistant  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Scheduled Tasks</b>
               
@@ -1721,7 +1846,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Enumerates non-Microsoft scheduled tasks (potential persistence points).</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">31 non-Microsoft task(s): Adobe Acrobat Update Task, Adobe-Genuine-Software-Integrity-Scheduler-1.0, AdobeGCInvoker-1.0, AdobeGCInvokerLogon, BraveSoftwareUpdateTaskMachineCore{F1C02FAA-4D43-4038-8EA2-1C1AC48B3891}, BraveSoftwareUpdateTaskMachineUA{1D11EA5F-D697-4AA7-B078-1E0D309DB419}, FanControl, Intel PTT EK Recertification, MicrosoftEdgeUpdateTaskMachineCore, MicrosoftEdgeUpdateTaskMachineUA, npcapwatchdog, NVIDIA App SelfUpdate_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}, OneDrive Per-Machine Standalone Update Task, OneDrive Reporting Task-S-1-5-21-360431784-1045562088-2322528677-1001, OneDrive Reporting Task-S-1-5-21-360431784-1045562088-2322528677-1014, OneDrive Startup Task-S-1-5-21-360431784-1045562088-2322528677-1001, OneDrive Startup Task-S-1-5-21-360431784-1045562088-2322528677-1014, Overwolf Updater Task, ZoomUpdateTaskUser-S-1-5-21-360431784-1045562088-2322528677-1001, GoogleUpdaterTaskSystem137.0.7129.0{6F242DE3-9642-4523-98F4-F1166EE7B326} … (+11 more)</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">8 non-Microsoft task(s): Adobe Acrobat Update Task, GoogleUpdateTaskMachineCore, GoogleUpdateTaskMachineUA, MicrosoftEdgeUpdateTaskMachineCore, MicrosoftEdgeUpdateTaskMachineUA, OneDrive Standalone Update Task, Dell SupportAssist Trigger, Intel Driver &amp; Support Assistant</span></div>
             
             
           </div>
@@ -1745,10 +1870,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="powershell script block logging powershell script block logging is enabled — powershell commands are logged to the event log. cis 18.10.88.1 ">
+        
+        
+        <div class="frow is-pass" data-status="PASS" data-text="powershell script block logging powershell script block logging is enabled — powershell commands are logged to the event log. cis 18.10.88.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>PowerShell Script Block Logging</b>
               
@@ -1766,10 +1893,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="powershell module logging powershell module logging is enabled — module pipeline execution events are logged.  ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="powershell module logging powershell module logging is enabled — module pipeline execution events are logged.  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>PowerShell Module Logging</b>
               
@@ -1787,10 +1915,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="powershell execution policy powershell execution policy is &#39;undefined&#39;.  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="powershell execution policy powershell execution policy is &#39;undefined&#39;.  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>PowerShell Execution Policy</b>
               
@@ -1808,10 +1937,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="powershell v2 powershell could not determine powershell v2 status (state: &#39;&#39;).  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="powershell v2 powershell could not determine powershell v2 status (state: &#39;&#39;).  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>PowerShell v2</b>
               
@@ -1829,10 +1959,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="powershell constrained language mode powershell powershell language mode: fulllanguage.  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="powershell constrained language mode powershell powershell language mode: fulllanguage.  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>PowerShell Constrained Language Mode</b>
               
@@ -1868,10 +1999,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="rdp enabled remote access remote desktop is disabled (fdenytsconnections = 1). cis 18.10.57.3.2.1 ">
+        
+        
+        <div class="frow is-pass" data-status="PASS" data-text="rdp enabled remote access remote desktop is disabled (fdenytsconnections = 1). cis 18.10.57.3.2.1 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>RDP Enabled</b>
               
@@ -1907,10 +2040,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="unquoted service paths services no services with unquoted paths containing spaces found.  ">
+        
+        
+        <div class="frow is-pass" data-status="PASS" data-text="unquoted service paths services no services with unquoted paths containing spaces found.  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Unquoted Service Paths</b>
               
@@ -1928,10 +2063,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="risky services services no known-risky services are running.  ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="risky services services no known-risky services are running.  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Risky Services</b>
               
@@ -1967,10 +2103,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
       </div>
       <div class="findings">
         
-        <div class="frow" data-status="PASS" data-text="os end-of-support status system windows 11 25h2 is supported until 2027-10-12 (463 days remaining).  ">
+        
+        
+        <div class="frow is-pass" data-status="PASS" data-text="os end-of-support status system windows 11 25h2 is supported until 2027-10-12 (454 days remaining).  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ff5147;border:1px solid #ff5147;background:transparent">HIGH</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>OS End-of-Support Status</b>
               
@@ -1982,16 +2120,17 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether the installed Windows build is still supported by Microsoft.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Windows 11 25H2 is supported until 2027-10-12 (463 days remaining).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Windows 11 25H2 is supported until 2027-10-12 (454 days remaining).</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="system uptime system system uptime is 0 day(s).  ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="system uptime system system uptime is 5 day(s).  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>System Uptime</b>
               
@@ -2003,16 +2142,17 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Warns when uptime exceeds 30 days (suggests pending patch reboots).</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">System uptime is 0 day(s).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">System uptime is 5 day(s).</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="secure boot system secure boot is enabled. cis 18.10.10.2.2 ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="secure boot system secure boot is enabled. cis 18.10.10.2.2 ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Secure Boot</b>
               
@@ -2030,10 +2170,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="PASS" data-text="tpm status system tpm present. ready: true. firmware version: 600.18.30.2361.  ">
+        
+        <div class="frow is-pass" data-status="PASS" data-text="tpm status system tpm present. ready: true. firmware version: 7.2.2.0.  ">
           <button class="fhead">
-            <span class="ficon" style="color:#2bff88">✓</span>
-            <span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span>
+            <span class="spill spill-pass">PASS</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>TPM Status</b>
               
@@ -2045,16 +2186,17 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether a TPM chip is present and functional.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">TPM present. Ready: True. Firmware version: 600.18.30.2361.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">TPM present. Ready: True. Firmware version: 7.2.2.0.</span></div>
             
             
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="os version system microsoft windows 11 pro  (build 26200, version 10.0.26200)  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="os version system microsoft windows 11 pro  (build 26200, version 10.0.26200)  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>OS Version</b>
               
@@ -2072,10 +2214,11 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </div>
         </div>
         
-        <div class="frow" data-status="INFO" data-text="domain membership system workgroup member. workgroup: workgroup  ">
+        
+        <div class="frow is-info" data-status="INFO" data-text="domain membership system workgroup member. workgroup: workgroup  ">
           <button class="fhead">
-            <span class="ficon" style="color:#44e0e6">i</span>
-            <span class="fsev" style="color:#5d776c;border:1px solid #5d776c;background:transparent">INFO</span>
+            <span class="spill spill-info">INFO</span>
+            <span class="fsevcell"></span>
             <span class="fname">
               <b>Domain Membership</b>
               
@@ -2145,12 +2288,25 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
 
   // Executive-summary counters: apply the matching filter (delegate to the
   // toolbar chip so the logic lives in one place) and jump to the results.
-  var toolbar = document.querySelector('.toolbar');
   document.querySelectorAll('.pills .pill[data-k]').forEach(function(pill){
     pill.addEventListener('click', function(){
       var chip = document.querySelector('.fchip[data-k="' + pill.dataset.k + '"]');
       if (chip) chip.click();
-      if (toolbar) window.scrollTo({ top: toolbar.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
+      apoScrollFindings();
+    });
+  });
+
+  // Top-issue "Show remediation command" toggles reveal the adjacent .code block.
+  document.querySelectorAll('.ti-cmd-toggle').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var code = btn.nextElementSibling;
+      if (!code || !code.classList.contains('code')) return;
+      var opening = code.hasAttribute('hidden');
+      btn.setAttribute('aria-expanded', String(opening));
+      if (opening){ code.removeAttribute('hidden'); btn.dataset.on = 'true'; }
+      else { code.setAttribute('hidden', ''); btn.dataset.on = 'false'; }
+      var lbl = btn.querySelector('.lbl');
+      if (lbl) lbl.textContent = opening ? 'Hide command' : 'Show remediation command';
     });
   });
 
@@ -2174,11 +2330,14 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
   document.querySelectorAll('.code .copy').forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
-      // Copy ONLY the command text, not the label bar or button.
-      var pre = btn.closest('.code').querySelector('.code-cmd');
-      var code = pre ? pre.textContent.replace(/\s+$/, '') : '';
+      // Copy the RAW command from data-cmd. The rendered lines carry a
+      // non-selectable "PS>" prompt that must never reach the clipboard.
+      var box = btn.closest('.code');
+      var code = box ? (box.getAttribute('data-cmd') || '') : '';
       if (navigator.clipboard) navigator.clipboard.writeText(code);
-      var t = btn.textContent; btn.textContent = 'copied'; setTimeout(function(){ btn.textContent = t; }, 1300);
+      btn.classList.add('done');
+      var t = btn.textContent; btn.textContent = '✓ Copied';
+      setTimeout(function(){ btn.textContent = t; btn.classList.remove('done'); }, 1400);
     });
   });
 
@@ -2186,6 +2345,13 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
     var el = document.getElementById('cat-' + slug);
     if (!el) return;
     window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
+  };
+
+  // Shared scroll target for the exec-summary pills and the "+N more" link.
+  window.apoScrollFindings = function(){
+    var el = document.getElementById('all-findings');
+    if (!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 14, behavior: 'smooth' });
   };
 })();
 </script>
