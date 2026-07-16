@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [0.1.12] - 2026-07-13
+## [0.1.12] - 2026-07-16
 
 ### Added
 - **Executive report (`--exec-report FILE`) — the Security Posture Assessment.** A
