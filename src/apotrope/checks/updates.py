@@ -73,6 +73,20 @@ _PS_PENDING = (
     "} catch { 'UNAVAILABLE' }"
 )
 
+# Install pending Windows updates. Leads with the reliable built-in path (opens the
+# Windows Update pane); the scripted PSWindowsUpdate route is offered as commented
+# lines because that module is not installed by default and -AutoReboot restarts the
+# machine — a bare "Install-WindowsUpdate" fails with "not recognized" on a stock box.
+_CMD_INSTALL_UPDATES = (
+    "# Install pending updates. Reliable built-in path — opens Windows Update:\n"
+    "Start-Process 'ms-settings:windowsupdate'\n"
+    "# Scripted alternative (installs the PSWindowsUpdate community module; may reboot):\n"
+    "#   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force\n"
+    "#   Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null\n"
+    "#   Install-Module PSWindowsUpdate -Force -Scope CurrentUser -Confirm:$false\n"
+    "#   Import-Module PSWindowsUpdate; Install-WindowsUpdate -AcceptAll -AutoReboot"
+)
+
 
 def _now() -> datetime:
     """Return current UTC time. Exists as a separate function to allow mocking in tests."""
@@ -111,13 +125,7 @@ def _check_last_update() -> list[CheckResult]:
                 "Install all pending quality and security updates. "
                 "Schedule a maintenance window if reboots are deferred."
             ),
-            command=(
-                "# Install the PSWindowsUpdate helper module (first time only)\n"
-                "Install-Module PSWindowsUpdate -Force -Scope CurrentUser\n"
-                "\n"
-                "# Download and install everything available, rebooting if required\n"
-                "Install-WindowsUpdate -AcceptAll -AutoReboot"
-            ),
+            command=_CMD_INSTALL_UPDATES,
         )]
 
     try:
@@ -144,13 +152,7 @@ def _check_last_update() -> list[CheckResult]:
                 "Install all pending quality and security updates. "
                 "Schedule a maintenance window if reboots are deferred."
             ),
-            command=(
-                "# Install the PSWindowsUpdate helper module (first time only)\n"
-                "Install-Module PSWindowsUpdate -Force -Scope CurrentUser\n"
-                "\n"
-                "# Download and install everything available, rebooting if required\n"
-                "Install-WindowsUpdate -AcceptAll -AutoReboot"
-            ),
+            command=_CMD_INSTALL_UPDATES,
         )]
 
     if age_days >= _WARN_DAYS:
@@ -168,13 +170,7 @@ def _check_last_update() -> list[CheckResult]:
                 "Install all pending quality and security updates. "
                 "Schedule a maintenance window if reboots are deferred."
             ),
-            command=(
-                "# Install the PSWindowsUpdate helper module (first time only)\n"
-                "Install-Module PSWindowsUpdate -Force -Scope CurrentUser\n"
-                "\n"
-                "# Download and install everything available, rebooting if required\n"
-                "Install-WindowsUpdate -AcceptAll -AutoReboot"
-            ),
+            command=_CMD_INSTALL_UPDATES,
         )]
 
     return [CheckResult(
@@ -307,10 +303,10 @@ def _check_pending_updates() -> list[CheckResult]:
         description="Counts Windows Updates that are available but not yet installed.",
         details=f"{count} pending Windows Update(s) are available but not installed.",
         remediation=(
-            f"Install the {count} pending update(s) now (requires the "
-            "PSWindowsUpdate module)."
+            f"Install the {count} pending update(s) from Windows Update "
+            "(or the scripted PSWindowsUpdate path shown below)."
         ),
-        command="Install-WindowsUpdate -AcceptAll",
+        command=_CMD_INSTALL_UPDATES,
     )]
 
 

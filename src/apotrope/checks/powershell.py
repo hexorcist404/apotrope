@@ -118,7 +118,7 @@ def _check_script_block_logging() -> list[CheckResult]:
             "" if enabled else
             f"$key = '{_SBL_KEY}'\n"
             "New-Item -Path $key -Force | Out-Null\n"
-            "Set-ItemProperty -Path $key -Name 'EnableScriptBlockLogging' -Value 1"
+            "Set-ItemProperty -Path $key -Name 'EnableScriptBlockLogging' -Value 1 -Type DWord"
         ),
     )]
 
@@ -152,7 +152,9 @@ def _check_module_logging() -> list[CheckResult]:
             "" if enabled else
             f"$key = '{_ML_KEY}'\n"
             "New-Item -Path $key -Force | Out-Null\n"
-            "Set-ItemProperty -Path $key -Name 'EnableModuleLogging' -Value 1"
+            "Set-ItemProperty -Path $key -Name 'EnableModuleLogging' -Value 1 -Type DWord\n"
+            "New-Item -Path \"$key\\ModuleNames\" -Force | Out-Null\n"
+            "Set-ItemProperty -Path \"$key\\ModuleNames\" -Name '*' -Value '*'"
         ),
     )]
 

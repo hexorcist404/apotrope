@@ -53,6 +53,16 @@ _RISKY_PORTS: dict[int, tuple[str, Status, Severity, str]] = {
     3389: ("RDP",   Status.WARN, Severity.MEDIUM,   "RDP is exposed; ensure NLA is enforced."),
 }
 
+# Disable NetBIOS over TCP/IP on every IP-enabled adapter. Get-CimInstance returns
+# inert CIM objects with no callable methods, so SetTcpipNetbios must be invoked via
+# Invoke-CimMethod — the legacy Get-WmiObject "().SetTcpipNetbios(2)" form fails with
+# "does not contain a method named 'SetTcpipNetbios'".
+_CMD_NETBIOS_DISABLE = (
+    "Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' | "
+    "ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios "
+    "-Arguments @{ TcpipNetbiosOptions = 2 } | Out-Null }"
+)
+
 
 def run() -> list[CheckResult]:
     """Return network exposure checks.
@@ -100,16 +110,22 @@ def _check_listening_ports() -> list[CheckResult]:
             # Telnet — catalog entry: stop/disable the service outright.
             remediation = "Stop and disable the Telnet service (it sends credentials in cleartext)."
             command = (
-                "Stop-Service -Name 'TlntSvr' -Force\n"
-                "Set-Service -Name 'TlntSvr' -StartupType Disabled\n"
-                "Disable-WindowsOptionalFeature -Online -FeatureName TelnetServer -NoRestart"
+                "if (Get-Service -Name 'TlntSvr' -ErrorAction SilentlyContinue) {\n"
+                "    Stop-Service -Name 'TlntSvr' -Force\n"
+                "    Set-Service -Name 'TlntSvr' -StartupType Disabled\n"
+                "}\n"
+                "if ((Get-WindowsOptionalFeature -Online -FeatureName TelnetServer "
+                "-ErrorAction SilentlyContinue).State -eq 'Enabled') {\n"
+                "    Disable-WindowsOptionalFeature -Online -FeatureName TelnetServer -NoRestart\n"
+                "}"
             )
         else:
             remediation = (
                 f"Stop the service behind port {port} ({service}) and block the port in Windows Firewall."
             )
             command = (
-                f"New-NetFirewallRule -Direction Inbound -LocalPort {port} -Protocol TCP -Action Block"
+                f"New-NetFirewallRule -DisplayName 'Block inbound TCP {port} (Apotrope)' "
+                f"-Direction Inbound -LocalPort {port} -Protocol TCP -Action Block"
             )
         results.append(CheckResult(
             category=CATEGORY,
@@ -220,10 +236,7 @@ def _check_netbios() -> list[CheckResult]:
             f"NetBIOS exposes the host to name-spoofing and enumeration."
         )
         remediation = "Disable NetBIOS over TCP/IP on all IP-enabled adapters."
-        command = (
-            "(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True')"
-            ".SetTcpipNetbios(2)"
-        )
+        command = _CMD_NETBIOS_DISABLE
     elif dhcp_count > 0:
         status, severity = Status.WARN, Severity.LOW
         details = (
@@ -231,10 +244,7 @@ def _check_netbios() -> list[CheckResult]:
             "If the DHCP server does not explicitly disable NetBIOS, it may be active."
         )
         remediation = "Explicitly disable NetBIOS on all adapters rather than relying on DHCP."
-        command = (
-            "(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True')"
-            ".SetTcpipNetbios(2)"
-        )
+        command = _CMD_NETBIOS_DISABLE
     else:
         status, severity = Status.PASS, Severity.LOW
         details = f"NetBIOS over TCP/IP is explicitly disabled on all {disabled_count} adapter(s)."

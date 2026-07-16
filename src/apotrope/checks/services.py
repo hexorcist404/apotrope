@@ -171,12 +171,18 @@ def _check_unquoted_paths() -> list[CheckResult]:
             "(preserving any arguments) so Windows resolves the intended binary."
         ),
         command=(
-            "# Review the unquoted ImagePath, then re-set it wrapped in quotes\n"
-            "Get-ItemProperty -Path "
-            "'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\<ServiceName>' -Name ImagePath\n"
-            "Set-ItemProperty -Path "
-            "'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\<ServiceName>' "
-            "-Name ImagePath -Value '\"C:\\Path With Spaces\\service.exe\"'"
+            "# Set $svc to the affected service, then re-quote its ImagePath.\n"
+            "# ExpandString keeps the REG_EXPAND_SZ type (e.g. %SystemRoot% paths) and\n"
+            "# preserves any trailing arguments.\n"
+            "$svc = 'ExampleService'\n"
+            "$key = \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\$svc\"\n"
+            "$img = (Get-ItemProperty -Path $key -Name ImagePath).ImagePath\n"
+            "if ($img.TrimStart() -notmatch '^\"' -and "
+            "$img -match '^(?<exe>.*?\\.exe)(?<args>.*)$') {\n"
+            "    $fixed = '\"' + $matches['exe'].Trim() + '\"' + $matches['args']\n"
+            "    New-ItemProperty -Path $key -Name ImagePath -PropertyType ExpandString "
+            "-Value $fixed -Force | Out-Null\n"
+            "}"
         ),
     )]
 
