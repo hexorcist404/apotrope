@@ -79,6 +79,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   incomplete.** Any check with status ERROR, or any check that dropped out of coverage,
   now renders the delta in yellow as "±N raw · indeterminate" instead of a confident
   green/red change.
+- **Remediation commands now run on a stock elevated shell.** An audit of every
+  copy-paste command Apotrope emits corrected four that failed outright and seven that
+  ran without achieving the fix. NetBIOS uses `Invoke-CimMethod` (was a method call on an
+  inert `Get-CimInstance` object); the risky-port firewall rule supplies the mandatory
+  `-DisplayName` (was hanging on a prompt); the built-in Administrator fix targets the
+  RID-500 SID (was renaming the account then disabling it by its old name); Windows Update
+  leads with the built-in `ms-settings:windowsupdate` path (was a bare `Install-WindowsUpdate`
+  from a module absent by default). Password complexity now sets the policy via
+  `secedit /configure`; PowerShell script-block and module logging write typed REG_DWORD
+  values and module logging creates the required `ModuleNames\*` subkey; BitLocker guards
+  the OS edition and adds a recovery-password protector; the Telnet and unquoted-service-path
+  fixes guard for absent services and preserve `REG_EXPAND_SZ`. The sample reports were
+  re-rendered to show the corrected commands.
 
 ### Dev/CI
 - **Brand-asset drift guards expanded across every palette consumer.**
@@ -88,6 +101,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `brand/tokens.json`. Adds a `pillow>=12.0` dev dependency and a dedicated CI step that
   validates the committed brand assets; the exe-build CI step now builds with the real
   icon. `.superpowers/` is gitignored.
+- **Remediation commands are linted so a broken one can't ship again.** The per-check
+  tests only assert command substrings, which cannot catch a command that fails to run.
+  `tools/command_audit.py` + `tests/test_remediation_commands.py` statically extract every
+  emitted command and reject the shipped failure classes (CIM-object method calls,
+  `New-NetFirewallRule` without `-DisplayName`, a bare `Install-WindowsUpdate`, `<…>`
+  placeholders); a Windows-only `tools/verify_commands.py` harness additionally
+  PowerShell-parses each command and resolves every cmdlet it invokes.
 
 ## [0.1.11] - 2026-07-06
 
