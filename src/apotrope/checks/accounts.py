@@ -126,8 +126,11 @@ def _check_builtin_admin() -> list[CheckResult]:
             "Rename the built-in Administrator account and disable it if it is not in active use."
         )
         command = (
-            "Rename-LocalUser -Name 'Administrator' -NewName '<new_name>'\n"
-            "Disable-LocalUser -Name 'Administrator'"
+            "# The built-in admin is identified by its well-known RID-500 SID; pick your\n"
+            "# own name in place of 'RenamedAdmin'.\n"
+            "$admin = Get-LocalUser | Where-Object { $_.SID.Value -like 'S-1-5-21-*-500' }\n"
+            "Rename-LocalUser -SID $admin.SID -NewName 'RenamedAdmin'\n"
+            "Disable-LocalUser -SID $admin.SID"
         )
     elif enabled:
         status, sev = Status.WARN, Severity.LOW
@@ -301,11 +304,18 @@ def _check_password_policy() -> list[CheckResult]:
             ),
             command=(
                 "" if enabled else
-                "# Set via Local Security Policy: secpol.msc -> Account Policies ->\n"
-                "# Password Policy -> Password must meet complexity requirements -> Enabled.\n"
-                "# Verify the current setting:\n"
-                "secedit /export /cfg \"$env:TEMP\\secpol.cfg\" | Out-Null; "
-                "Select-String -Path \"$env:TEMP\\secpol.cfg\" -Pattern 'PasswordComplexity'"
+                "# Enable the password-complexity policy via secedit (no reboot needed).\n"
+                "$inf = \"$env:TEMP\\pwcomplexity.inf\"\n"
+                "@'\n"
+                "[Unicode]\n"
+                "Unicode=yes\n"
+                "[Version]\n"
+                "signature=\"$CHICAGO$\"\n"
+                "[System Access]\n"
+                "PasswordComplexity = 1\n"
+                "'@ | Set-Content -Path $inf -Encoding Unicode\n"
+                "secedit /configure /db \"$env:TEMP\\pwcomplexity.sdb\" "
+                "/cfg $inf /areas SECURITYPOLICY"
             ),
         ))
 

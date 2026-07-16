@@ -68,7 +68,17 @@ def run() -> list[CheckResult]:
                 "Run Apotrope as Administrator to retrieve BitLocker status, then "
                 "encrypt the system drive with BitLocker using the TPM protector."
             ),
-            command="Enable-BitLocker -MountPoint 'C:' -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector",
+            command=(
+                "# BitLocker requires Windows Pro/Enterprise/Education (absent on Home).\n"
+                "if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {\n"
+                "    Enable-BitLocker -MountPoint 'C:' -EncryptionMethod XtsAes256 "
+                "-UsedSpaceOnly -TpmProtector -SkipHardwareTest\n"
+                "    Add-BitLockerKeyProtector -MountPoint 'C:' -RecoveryPasswordProtector\n"
+                "} else {\n"
+                "    Write-Warning 'BitLocker is unavailable on this Windows edition; "
+                "on Home, use Device Encryption.'\n"
+                "}"
+            ),
         )]
 
     results: list[CheckResult] = []
@@ -121,7 +131,15 @@ def _check_volume(vol: dict) -> list[CheckResult]:
             f"Encrypt drive {mount} with BitLocker using the TPM protector."
         ),
         command=(
-            f"Enable-BitLocker -MountPoint '{mount}' "
-            f"-EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector"
+            "# BitLocker requires Windows Pro/Enterprise/Education (absent on Home).\n"
+            "if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {\n"
+            "    Enable-BitLocker -MountPoint '" + mount + "' -EncryptionMethod "
+            "XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest\n"
+            "    if ('" + mount + "' -eq $env:SystemDrive) { "
+            "Add-BitLockerKeyProtector -MountPoint '" + mount + "' -TpmProtector } "
+            "else { Enable-BitLockerAutoUnlock -MountPoint '" + mount + "' }\n"
+            "} else {\n"
+            "    Write-Warning 'BitLocker is unavailable on this Windows edition.'\n"
+            "}"
         ),
     )]

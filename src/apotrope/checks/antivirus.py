@@ -126,7 +126,11 @@ def _check_defender() -> list[CheckResult]:
         ),
         command=(
             "" if rtp_enabled else
-            "Set-MpPreference -DisableRealtimeMonitoring $false"
+            "# Tamper Protection blocks this cmdlet. If it errors, turn Real-time\n"
+            "# protection on in Windows Security -> Virus & threat protection ->\n"
+            "# Manage settings (Tamper Protection must be off to script it).\n"
+            "Set-MpPreference -DisableRealtimeMonitoring $false\n"
+            "(Get-MpComputerStatus).RealTimeProtectionEnabled"
         ),
     ))
 

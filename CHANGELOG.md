@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.1.12] - 2026-07-13
 
 ### Added
 - **Executive report (`--exec-report FILE`) — the Security Posture Assessment.** A
@@ -25,6 +25,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Vector icon masters `assets/icon.svg` + `assets/icon-16.svg`.** The eye-mark on its
   void ground, with a small-size variant (spokes dropped, strokes thickened) for
   legibility at 16–24 px.
+- **Top-Issues remediation toggle carries a full ARIA disclosure contract.** The
+  "show remediation command" control in the HTML report's Top Issues panel now exposes
+  `aria-expanded`/`aria-controls` (pointing at the command block) with an `aria-hidden`
+  chevron, kept in sync by the toggle script, so assistive technology announces the
+  disclosure correctly.
+- **The CLI rejects `--html` and `--exec-report` resolving to the same file.** Passing
+  the same path — or two paths that resolve to one file — for the technical and
+  executive reports now fails fast with an argument error before any scan runs, instead
+  of letting one report silently overwrite the other.
 
 ### Changed
 - **Executable icon is now the official Apotrope brand mark.** `apotrope.exe` ships with
@@ -34,6 +43,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   read from `brand/tokens.json` (`mark.ground` `#0B0D0E`) rather than hardcoded, so it
   can't drift from the palette, and the 16 px frame uses the simplified `icon-16.svg`
   master so it stays crisp instead of muddying the intricate mark.
+- **The technical HTML report (`--html`) is redesigned to the design-system prototype.**
+  Finding rows now lead with a solid status pill and a status-colored left-accent bar
+  instead of a single glyph; severity is shown only on FAIL/WARN; PASS and INFO rows are
+  de-emphasized (dimmed, no bar) until you hover or expand them, while ERROR rows stay at
+  full strength.
+- **Remediation commands render in a cyan "Elevated PowerShell · run as Administrator"
+  console** with per-line `PS>` prompts and muted `#` comment lines. The copy button now
+  reads the raw command from a `data-cmd` attribute, so the prompt and markup never reach
+  the clipboard.
+- **The Top Issues panel surfaces critical- and high-severity findings only** (cap raised
+  from 5 to 8), each with an inline, expandable remediation command and a "+ N additional
+  open findings" link to the full breakdown.
+- **Category Scores switched from animated bars to a plain numeric "N / 100" list.**
+- **The report header shows an animated glitch wordmark**, and the CRT scanline/glow
+  atmosphere now defaults to calm (only the wordmark glitch stays on) and honors
+  `prefers-reduced-motion`; print styles were updated for the new row accents and command
+  syntax.
+- **The executive report's scope line now says Apotrope "attempted" N controls** (was
+  "evaluated"), so the wording stays accurate when some checks error out.
   
 ### Fixed
 - **Baseline comparison no longer reports errored checks as resolved.** A check that was
@@ -41,6 +69,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   was miscounted as remediated. Such checks now appear in a dedicated "Errored (could not
   evaluate)" category — indeterminate, never resolved — mirroring how checks that drop out
   of coverage are already handled.
+- **HTML report footer now reads "No data leaves this machine"** (was the
+  grammatically-off "No data left this machine").
+- **The executive report can no longer claim "all clear" when checks errored.** The cover
+  verdict, executive summary, bottom line, and findings section now state that the
+  assessment is incomplete and name how many controls could not be evaluated; a category
+  is credited as passing only when every one of its results is PASS.
+- **Baseline comparison (`--compare`) flags an indeterminate score delta when coverage is
+  incomplete.** Any check with status ERROR, or any check that dropped out of coverage,
+  now renders the delta in yellow as "±N raw · indeterminate" instead of a confident
+  green/red change.
+- **Remediation commands now run on a stock elevated shell.** An audit of every
+  copy-paste command Apotrope emits corrected four that failed outright and seven that
+  ran without achieving the fix. NetBIOS uses `Invoke-CimMethod` (was a method call on an
+  inert `Get-CimInstance` object); the risky-port firewall rule supplies the mandatory
+  `-DisplayName` (was hanging on a prompt); the built-in Administrator fix targets the
+  RID-500 SID (was renaming the account then disabling it by its old name); Windows Update
+  leads with the built-in `ms-settings:windowsupdate` path (was a bare `Install-WindowsUpdate`
+  from a module absent by default). Password complexity now sets the policy via
+  `secedit /configure`; PowerShell script-block and module logging write typed REG_DWORD
+  values and module logging creates the required `ModuleNames\*` subkey; BitLocker guards
+  the OS edition and adds a recovery-password protector; the Telnet and unquoted-service-path
+  fixes guard for absent services and preserve `REG_EXPAND_SZ`. The sample reports were
+  re-rendered to show the corrected commands.
+
+### Dev/CI
+- **Brand-asset drift guards expanded across every palette consumer.**
+  `tests/test_brand_assets.py` now validates the committed multi-frame `assets/icon.ico`
+  (frame sizes and mark-ground coverage, via Pillow), both SVG masters' visible colors,
+  and the reporter terminal constants plus the report/site CSS variables against
+  `brand/tokens.json`. Adds a `pillow>=12.0` dev dependency and a dedicated CI step that
+  validates the committed brand assets; the exe-build CI step now builds with the real
+  icon. `.superpowers/` is gitignored.
+- **Remediation commands are linted so a broken one can't ship again.** The per-check
+  tests only assert command substrings, which cannot catch a command that fails to run.
+  `tools/command_audit.py` + `tests/test_remediation_commands.py` statically extract every
+  emitted command and reject the shipped failure classes (CIM-object method calls,
+  `New-NetFirewallRule` without `-DisplayName`, a bare `Install-WindowsUpdate`, `<…>`
+  placeholders); a Windows-only `tools/verify_commands.py` harness additionally
+  PowerShell-parses each command and resolves every cmdlet it invokes.
 
 ## [0.1.11] - 2026-07-06
 
