@@ -151,12 +151,12 @@ attestations at install time yet.
 its own box listing each FAIL/WARN finding with its fix and a ready-to-paste
 PowerShell command:
 
-![Apotrope scan overview](assets/screenshots/Ap-scan-overview.png)
+![Apotrope scan overview](https://raw.githubusercontent.com/hexorcist404/apotrope/main/assets/screenshots/Ap-scan-overview.png)
 
 **Verbose mode (`--verbose`) — the same boxes for every category and every check,
 passing ones included:**
 
-![Apotrope verbose output](assets/screenshots/Ap-scan-verbose.png)
+![Apotrope verbose output](https://raw.githubusercontent.com/hexorcist404/apotrope/main/assets/screenshots/Ap-scan-verbose.png)
 
 ---
 
