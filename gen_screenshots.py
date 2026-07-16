@@ -25,9 +25,9 @@ from apotrope.reporter import Reporter, _text, _MUTED, _CYAN, _BRIGHT
 from apotrope.scanner import Scanner
 from apotrope.utils import is_admin
 
-HOSTNAME = "WORKSTATION-01"
-USERNAME = "jdoe"
-PROMPT = r"C:\Users\jdoe\Downloads>"
+HOSTNAME = "WORKSTATION-07"
+USERNAME = "jsmith"
+PROMPT = r"C:\Users\jsmith\Downloads>"
 
 # Mock palette: page #0a0d0b, terminal panel #03060a, default text #c4d6cd.
 THEME = TerminalTheme(
