@@ -866,10 +866,17 @@
         </div>
         
         
-        <div class="frow is-fail" data-status="FAIL" data-text="password policy — complexity accounts password complexity requirement: disabled. cis 1.1.5 # set via local security policy: secpol.msc -&gt; account policies -&gt;
-# password policy -&gt; password must meet complexity requirements -&gt; enabled.
-# verify the current setting:
-secedit /export /cfg &#34;$env:temp\secpol.cfg&#34; | out-null; select-string -path &#34;$env:temp\secpol.cfg&#34; -pattern &#39;passwordcomplexity&#39;">
+        <div class="frow is-fail" data-status="FAIL" data-text="password policy — complexity accounts password complexity requirement: disabled. cis 1.1.5 # enable the password-complexity policy via secedit (no reboot needed).
+$inf = &#34;$env:temp\pwcomplexity.inf&#34;
+@&#39;
+[unicode]
+unicode=yes
+[version]
+signature=&#34;$chicago$&#34;
+[system access]
+passwordcomplexity = 1
+&#39;@ | set-content -path $inf -encoding unicode
+secedit /configure /db &#34;$env:temp\pwcomplexity.sdb&#34; /cfg $inf /areas securitypolicy">
           <button class="fhead is-open">
             <span class="spill spill-fail">FAIL</span>
             <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
@@ -890,15 +897,22 @@ secedit /export /cfg &#34;$env:temp\secpol.cfg&#34; | out-null; select-string -p
               <div class="rem">
                 <div class="rem-note">Enable the password complexity requirement so passwords must mix character types.</div>
                 
-                <div class="code" data-cmd="# Set via Local Security Policy: secpol.msc -&gt; Account Policies -&gt;
-# Password Policy -&gt; Password must meet complexity requirements -&gt; Enabled.
-# Verify the current setting:
-secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -Path &#34;$env:TEMP\secpol.cfg&#34; -Pattern &#39;PasswordComplexity&#39;">
+                <div class="code" data-cmd="# Enable the password-complexity policy via secedit (no reboot needed).
+$inf = &#34;$env:TEMP\pwcomplexity.inf&#34;
+@&#39;
+[Unicode]
+Unicode=yes
+[Version]
+signature=&#34;$CHICAGO$&#34;
+[System Access]
+PasswordComplexity = 1
+&#39;@ | Set-Content -Path $inf -Encoding Unicode
+secedit /configure /db &#34;$env:TEMP\pwcomplexity.sdb&#34; /cfg $inf /areas SECURITYPOLICY">
                   <div class="code-bar">
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-c"># Set via Local Security Policy: secpol.msc -&gt; Account Policies -&gt;</div><div class="cl-c"># Password Policy -&gt; Password must meet complexity requirements -&gt; Enabled.</div><div class="cl-c"># Verify the current setting:</div><div class="cl-x"><span class="ps">PS&gt;</span>secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -Path &#34;$env:TEMP\secpol.cfg&#34; -Pattern &#39;PasswordComplexity&#39;</div></pre>
+                  <pre class="code-cmd"><div class="cl-c"># Enable the password-complexity policy via secedit (no reboot needed).</div><div class="cl-x"><span class="ps">PS&gt;</span>$inf = &#34;$env:TEMP\pwcomplexity.inf&#34;</div><div class="cl-x"><span class="ps">PS&gt;</span>@&#39;</div><div class="cl-x"><span class="ps">PS&gt;</span>[Unicode]</div><div class="cl-x"><span class="ps">PS&gt;</span>Unicode=yes</div><div class="cl-x"><span class="ps">PS&gt;</span>[Version]</div><div class="cl-x"><span class="ps">PS&gt;</span>signature=&#34;$CHICAGO$&#34;</div><div class="cl-x"><span class="ps">PS&gt;</span>[System Access]</div><div class="cl-x"><span class="ps">PS&gt;</span>PasswordComplexity = 1</div><div class="cl-x"><span class="ps">PS&gt;</span>&#39;@ | Set-Content -Path $inf -Encoding Unicode</div><div class="cl-x"><span class="ps">PS&gt;</span>secedit /configure /db &#34;$env:TEMP\pwcomplexity.sdb&#34; /cfg $inf /areas SECURITYPOLICY</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1123,7 +1137,13 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
         
         
         
-        <div class="frow is-fail" data-status="FAIL" data-text="bitlocker — g: encryption drive: g: | type: 1 | status: unknown | encrypted: 0% | protection: off cis 18.10.10 enable-bitlocker -mountpoint &#39;g:&#39; -encryptionmethod xtsaes256 -usedspaceonly -tpmprotector">
+        <div class="frow is-fail" data-status="FAIL" data-text="bitlocker — g: encryption drive: g: | type: 1 | status: unknown | encrypted: 0% | protection: off cis 18.10.10 # bitlocker requires windows pro/enterprise/education (absent on home).
+if (get-command enable-bitlocker -erroraction silentlycontinue) {
+    enable-bitlocker -mountpoint &#39;g:&#39; -encryptionmethod xtsaes256 -usedspaceonly -recoverypasswordprotector -skiphardwaretest
+    if (&#39;g:&#39; -eq $env:systemdrive) { add-bitlockerkeyprotector -mountpoint &#39;g:&#39; -tpmprotector } else { enable-bitlockerautounlock -mountpoint &#39;g:&#39; }
+} else {
+    write-warning &#39;bitlocker is unavailable on this windows edition.&#39;
+}">
           <button class="fhead is-open">
             <span class="spill spill-fail">FAIL</span>
             <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
@@ -1144,12 +1164,18 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <div class="rem">
                 <div class="rem-note">Encrypt drive G: with BitLocker using the TPM protector.</div>
                 
-                <div class="code" data-cmd="Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector">
+                <div class="code" data-cmd="# BitLocker requires Windows Pro/Enterprise/Education (absent on Home).
+if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
+    Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest
+    if (&#39;G:&#39; -eq $env:SystemDrive) { Add-BitLockerKeyProtector -MountPoint &#39;G:&#39; -TpmProtector } else { Enable-BitLockerAutoUnlock -MountPoint &#39;G:&#39; }
+} else {
+    Write-Warning &#39;BitLocker is unavailable on this Windows edition.&#39;
+}">
                   <div class="code-bar">
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector</div></pre>
+                  <pre class="code-cmd"><div class="cl-c"># BitLocker requires Windows Pro/Enterprise/Education (absent on Home).</div><div class="cl-x"><span class="ps">PS&gt;</span>if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {</div><div class="cl-x"><span class="ps">PS&gt;</span>    Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest</div><div class="cl-x"><span class="ps">PS&gt;</span>    if (&#39;G:&#39; -eq $env:SystemDrive) { Add-BitLockerKeyProtector -MountPoint &#39;G:&#39; -TpmProtector } else { Enable-BitLockerAutoUnlock -MountPoint &#39;G:&#39; }</div><div class="cl-x"><span class="ps">PS&gt;</span>} else {</div><div class="cl-x"><span class="ps">PS&gt;</span>    Write-Warning &#39;BitLocker is unavailable on this Windows edition.&#39;</div><div class="cl-x"><span class="ps">PS&gt;</span>}</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1602,7 +1628,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
         
         
         
-        <div class="frow is-warn" data-status="WARN" data-text="netbios over tcp/ip network 2 adapter(s) inherit netbios setting from dhcp. if the dhcp server does not explicitly disable netbios, it may be active.  (get-ciminstance win32_networkadapterconfiguration -filter &#39;ipenabled=true&#39;).settcpipnetbios(2)">
+        <div class="frow is-warn" data-status="WARN" data-text="netbios over tcp/ip network 2 adapter(s) inherit netbios setting from dhcp. if the dhcp server does not explicitly disable netbios, it may be active.  get-ciminstance win32_networkadapterconfiguration -filter &#39;ipenabled=true&#39; | foreach-object { invoke-cimmethod -inputobject $_ -methodname settcpipnetbios -arguments @{ tcpipnetbiosoptions = 2 } | out-null }">
           <button class="fhead is-open">
             <span class="spill spill-warn">WARN</span>
             <span class="fsevcell"><span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span></span>
@@ -1623,12 +1649,12 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
               <div class="rem">
                 <div class="rem-note">Explicitly disable NetBIOS on all adapters rather than relying on DHCP.</div>
                 
-                <div class="code" data-cmd="(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39;).SetTcpipNetbios(2)">
+                <div class="code" data-cmd="Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 } | Out-Null }">
                   <div class="code-bar">
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39;).SetTcpipNetbios(2)</div></pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 } | Out-Null }</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1724,7 +1750,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
         
         
         
-        <div class="frow is-pass" data-status="PASS" data-text="last windows update patching last update installed 18 day(s) ago (2026-06-26). cis 18.10.94.2.1 ">
+        <div class="frow is-pass" data-status="PASS" data-text="last windows update patching last update installed 0 day(s) ago (2026-07-16). cis 18.10.94.2.1 ">
           <button class="fhead">
             <span class="spill spill-pass">PASS</span>
             <span class="fsevcell"></span>
@@ -1739,7 +1765,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks when the most recent Windows Update was installed.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Last update installed 18 day(s) ago (2026-06-26).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Last update installed 0 day(s) ago (2026-07-16).</span></div>
             
             <div class="fld"><span class="k">Mapping</span><span class="vv"><span class="cis">CIS 18.10.94.2.1</span></span></div>
           </div>
@@ -2105,7 +2131,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
         
         
         
-        <div class="frow is-pass" data-status="PASS" data-text="os end-of-support status system windows 11 25h2 is supported until 2027-10-12 (454 days remaining).  ">
+        <div class="frow is-pass" data-status="PASS" data-text="os end-of-support status system windows 11 25h2 is supported until 2027-10-12 (452 days remaining).  ">
           <button class="fhead">
             <span class="spill spill-pass">PASS</span>
             <span class="fsevcell"></span>
@@ -2120,14 +2146,14 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks whether the installed Windows build is still supported by Microsoft.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">Windows 11 25H2 is supported until 2027-10-12 (454 days remaining).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Windows 11 25H2 is supported until 2027-10-12 (452 days remaining).</span></div>
             
             
           </div>
         </div>
         
         
-        <div class="frow is-pass" data-status="PASS" data-text="system uptime system system uptime is 5 day(s).  ">
+        <div class="frow is-pass" data-status="PASS" data-text="system uptime system system uptime is 7 day(s).  ">
           <button class="fhead">
             <span class="spill spill-pass">PASS</span>
             <span class="fsevcell"></span>
@@ -2142,7 +2168,7 @@ secedit /export /cfg &#34;$env:TEMP\secpol.cfg&#34; | Out-Null; Select-String -P
           </button>
           <div class="fbody" hidden>
             <div class="fld"><span class="k">Checks</span><span class="vv">Warns when uptime exceeds 30 days (suggests pending patch reboots).</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">System uptime is 5 day(s).</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">System uptime is 7 day(s).</span></div>
             
             
           </div>
