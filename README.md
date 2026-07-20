@@ -8,6 +8,7 @@ Windows 10 v4.0.0), scores the box 0 to 100, and hands back a scored terminal
 report or a self-contained HTML report you can send to someone who wasn't in the
 room.
 
+[![Mentioned in Awesome my-infosec-awesome](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/pe3zx/my-infosec-awesome#hardening)
 [![Tests](https://github.com/hexorcist404/apotrope/actions/workflows/test.yml/badge.svg)](https://github.com/hexorcist404/apotrope/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/apotrope.svg)](https://pypi.org/project/apotrope/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
