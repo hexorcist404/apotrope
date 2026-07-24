@@ -27,6 +27,37 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def known_categories() -> set[str]:
+    """Return the lowercased ``CATEGORY`` of every check module.
+
+    These are exactly the tokens ``--category`` accepts. Derived from the
+    modules themselves (not hardcoded) so a new module's category is honoured
+    automatically, and mirrors the discovery logic in
+    :meth:`Scanner._discover_modules` (``pkgutil`` from source, the explicit
+    ``checks.MODULES`` registry when frozen). Importing a module does not run
+    its checks, so this is OS-independent and needs no elevation.
+    """
+    import sys
+
+    if getattr(sys, "frozen", False):
+        names: list[str] = list(checks_pkg.MODULES)
+    else:
+        names = [
+            m.name for m in pkgutil.iter_modules(checks_pkg.__path__)
+            if not m.name.startswith("_")
+        ]
+
+    categories: set[str] = set()
+    for name in names:
+        try:
+            module = importlib.import_module(f"apotrope.checks.{name}")
+        except Exception as exc:
+            log.error("Failed to import apotrope.checks.%s: %s", name, exc)
+            continue
+        categories.add(getattr(module, "CATEGORY", name).lower())
+    return categories
+
+
 class Scanner:
     """Discovers check modules and orchestrates an audit run.
 
@@ -261,6 +292,29 @@ class Scanner:
                     module.reset()
                 except Exception as exc:
                     log.warning("reset() on %s failed: %s", module.__name__, exc)
+
+        # A module must return at least one CheckResult (CLAUDE.md contract). An
+        # empty list or a non-CheckResult element would otherwise flow silently
+        # into the report and, being neither FAIL nor WARN, leave the score at
+        # 100 — a false "clean" result. Turn it into a synthetic ERROR instead.
+        if not results or not all(isinstance(r, CheckResult) for r in results):
+            log.error(
+                "%s.run() returned no valid CheckResult objects (%r)",
+                module.__name__, results,
+            )
+            results = [CheckResult(
+                category=cat,
+                check_name=f"{cat} — module error",
+                status=Status.ERROR,
+                severity=Severity.INFO,
+                description="The check module returned no valid results.",
+                details=(
+                    "run() returned an empty list."
+                    if not results
+                    else "run() returned a non-CheckResult element."
+                ),
+                remediation="Run with --log-level DEBUG for more detail.",
+            )]
 
         duration = time.monotonic() - t_start
         for r in results:

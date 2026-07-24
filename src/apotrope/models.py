@@ -112,3 +112,13 @@ class AuditReport:
     def error_count(self) -> int:
         """Number of ERROR results."""
         return len(self.by_status(Status.ERROR))
+
+    @property
+    def evaluated_count(self) -> int:
+        """Number of results that actually evaluated a control (PASS/FAIL/WARN).
+
+        INFO (contextual notes, admin-skipped modules) and ERROR (a check that
+        could not complete) are excluded — neither represents an assessed
+        control, so this is the honest "how much did we actually audit?" count.
+        """
+        return self.pass_count + self.fail_count + self.warn_count

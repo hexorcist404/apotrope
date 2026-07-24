@@ -549,6 +549,112 @@ class TestMainErrorPaths:
         load_mock.assert_called_once_with("custom.toml")
 
 
+class TestCategoryValidation:
+    """--category is validated against the real known category set before scanning."""
+    _SCANNER_PATH  = "apotrope.scanner.Scanner"
+    _REPORTER_PATH = "apotrope.reporter.Reporter"
+    _ADMIN_PATH    = "apotrope.utils.is_admin"
+    _PROFILE_PATH  = "apotrope.profile.load_profile"
+
+    def _reporter(self):
+        # A trustworthy, complete report so a valid run reaches exit 0.
+        mock_report = MagicMock(fail_count=0, warn_count=0, error_count=0,
+                                evaluated_count=10, score=90)
+        mock_reporter = MagicMock()
+        mock_reporter.run_with_progress.return_value = mock_report
+        return mock_reporter
+
+    def _patches(self, argv, mock_reporter):
+        # Only Scanner is patched; known_categories() runs for real (importing
+        # a check module does not run its checks, so this stays OS-independent).
+        return (
+            patch("sys.argv", ["apotrope"] + argv),
+            patch(self._SCANNER_PATH, return_value=MagicMock(is_admin=False)),
+            patch(self._REPORTER_PATH, return_value=mock_reporter),
+            patch(self._ADMIN_PATH, return_value=False),
+            patch(self._PROFILE_PATH, return_value=MagicMock()),
+        )
+
+    def _run(self, argv, mock_reporter):
+        from apotrope.cli import main
+        p1, p2, p3, p4, p5 = self._patches(argv, mock_reporter)
+        with p1, p2, p3, p4, p5:
+            main()
+
+    def test_unknown_category_exits_2(self, capsys):
+        rep = self._reporter()
+        with pytest.raises(SystemExit) as exc:
+            self._run(["--category", "firewal"], rep)
+        assert exc.value.code == 2
+        assert "unknown categor" in capsys.readouterr().err
+        rep.run_with_progress.assert_not_called()
+
+    def test_blank_category_token_exits_2(self, capsys):
+        rep = self._reporter()
+        with pytest.raises(SystemExit) as exc:
+            self._run(["--category", "firewall,,"], rep)
+        assert exc.value.code == 2
+        assert "empty category name" in capsys.readouterr().err
+
+    def test_comma_only_category_exits_2(self):
+        rep = self._reporter()
+        with pytest.raises(SystemExit) as exc:
+            self._run(["--category", ","], rep)
+        assert exc.value.code == 2
+
+    def test_valid_categories_lowercased_and_passed(self):
+        rep = self._reporter()
+        p1, p2, p3, p4, p5 = self._patches(["--category", "Firewall,PATCHING"], rep)
+        with p1, p2 as MockScanner, p3, p4, p5:
+            from apotrope.cli import main
+            main()
+        assert MockScanner.call_args[1]["categories"] == ["firewall", "patching"]
+
+
+class TestExitCodes:
+    """Exit code reflects assessment trustworthiness, not only the score."""
+    _SCANNER_PATH  = "apotrope.scanner.Scanner"
+    _REPORTER_PATH = "apotrope.reporter.Reporter"
+    _ADMIN_PATH    = "apotrope.utils.is_admin"
+    _PROFILE_PATH  = "apotrope.profile.load_profile"
+
+    def _run(self, *, evaluated_count, error_count, score):
+        mock_report = MagicMock(fail_count=0, warn_count=0,
+                                evaluated_count=evaluated_count,
+                                error_count=error_count, score=score)
+        mock_reporter = MagicMock()
+        mock_reporter.run_with_progress.return_value = mock_report
+        from apotrope.cli import main
+        with (
+            patch("sys.argv", ["apotrope"]),
+            patch(self._SCANNER_PATH, return_value=MagicMock(is_admin=False)),
+            patch(self._REPORTER_PATH, return_value=mock_reporter),
+            patch(self._ADMIN_PATH, return_value=False),
+            patch(self._PROFILE_PATH, return_value=MagicMock()),
+        ):
+            main()
+
+    def test_exit_2_when_zero_controls_evaluated(self):
+        # The false-assurance case: nothing ran, score defaults to 100.
+        with pytest.raises(SystemExit) as exc:
+            self._run(evaluated_count=0, error_count=0, score=100)
+        assert exc.value.code == 2
+
+    def test_exit_2_when_any_error(self):
+        with pytest.raises(SystemExit) as exc:
+            self._run(evaluated_count=12, error_count=1, score=100)
+        assert exc.value.code == 2
+
+    def test_exit_1_when_complete_and_failing(self):
+        with pytest.raises(SystemExit) as exc:
+            self._run(evaluated_count=12, error_count=0, score=55)
+        assert exc.value.code == 1
+
+    def test_exit_0_when_complete_and_passing(self):
+        # Returns normally (no SystemExit).
+        self._run(evaluated_count=12, error_count=0, score=85)
+
+
 # ---------------------------------------------------------------------------
 # python -m apotrope entry point
 # ---------------------------------------------------------------------------

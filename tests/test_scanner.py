@@ -216,6 +216,35 @@ class TestModuleErrorHandling:
         results = scanner._run_module(mod)
         assert results[0].status == Status.ERROR
 
+    def test_empty_list_becomes_error(self):
+        # A module that returns [] must not silently vanish (it would leave the
+        # score at 100). It is turned into a synthetic ERROR result instead.
+        scanner = Scanner()
+        mod = ModuleType("empty_mod")
+        mod.CATEGORY = "Test"
+        mod.run = lambda: []
+        results = scanner._run_module(mod)
+        assert len(results) == 1
+        assert results[0].status == Status.ERROR
+        assert "empty list" in results[0].details
+
+    def test_non_checkresult_element_becomes_error(self):
+        scanner = Scanner()
+        mod = ModuleType("junk_mod")
+        mod.CATEGORY = "Test"
+        mod.run = lambda: ["not a CheckResult"]
+        results = scanner._run_module(mod)
+        assert len(results) == 1
+        assert results[0].status == Status.ERROR
+        assert "non-CheckResult" in results[0].details
+
+    def test_valid_results_untouched(self):
+        scanner = Scanner()
+        mod = _make_module(results=[_pass_result()])
+        results = scanner._run_module(mod)
+        assert len(results) == 1
+        assert results[0].status == Status.PASS
+
 
 # ---------------------------------------------------------------------------
 # Timing
@@ -390,6 +419,39 @@ class TestDiscoverModules:
             mods = Scanner()._discover_modules()
         assert mods == [good]
         imp.assert_called_once_with("apotrope.checks.frozen_mod")
+
+    def test_known_categories_contains_expected(self):
+        from apotrope.scanner import known_categories
+
+        cats = known_categories()
+        # Tokens are the modules' CATEGORY values, not their filenames.
+        assert {"firewall", "patching", "access control", "file sharing"} <= cats
+        assert "uac" not in cats       # filename, not a CATEGORY value
+        assert "updates" not in cats
+
+    def test_known_categories_frozen_uses_registry(self):
+        import sys
+        from apotrope.scanner import known_categories
+
+        good = _make_module("apotrope.checks.frozen_mod", "Frozen")
+        with (
+            patch.object(sys, "frozen", True, create=True),
+            patch("apotrope.checks.MODULES", ["frozen_mod"]),
+            patch("apotrope.scanner.importlib.import_module", return_value=good),
+        ):
+            assert known_categories() == {"frozen"}
+
+    def test_known_categories_skips_import_failures(self):
+        from types import SimpleNamespace
+        from apotrope.scanner import known_categories
+
+        with (
+            patch("apotrope.scanner.pkgutil.iter_modules",
+                  return_value=[SimpleNamespace(name="broken")]),
+            patch("apotrope.scanner.importlib.import_module",
+                  side_effect=ImportError("nope")),
+        ):
+            assert known_categories() == set()
 
 
 # ---------------------------------------------------------------------------

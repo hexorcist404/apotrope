@@ -38,3 +38,30 @@ class TestByCategory:
     def test_unknown_category_returns_empty(self):
         report = _report([_result("Firewall")])
         assert report.by_category("Nope") == []
+
+
+def _status_result(status: Status) -> CheckResult:
+    return CheckResult(
+        category="Test", check_name="x", status=status,
+        severity=Severity.LOW, description="d", details="ok",
+    )
+
+
+class TestEvaluatedCount:
+    def test_counts_pass_fail_warn_only(self):
+        report = _report([
+            _status_result(Status.PASS),
+            _status_result(Status.FAIL),
+            _status_result(Status.WARN),
+            _status_result(Status.INFO),
+            _status_result(Status.ERROR),
+        ])
+        # INFO and ERROR are not evaluated controls.
+        assert report.evaluated_count == 3
+
+    def test_all_error_report_evaluates_nothing(self):
+        report = _report([_status_result(Status.ERROR), _status_result(Status.ERROR)])
+        assert report.evaluated_count == 0
+
+    def test_empty_report_evaluates_nothing(self):
+        assert _report([]).evaluated_count == 0
