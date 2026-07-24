@@ -3,9 +3,10 @@
 Parses arguments and dispatches to the scanner and reporter.
 
 Exit codes:
-    0  Score >= 70 (passing) and no fatal scan errors
-    1  Score <  70 (failing security posture)
-    2  Fatal scan error (unhandled exception from the scanner)
+    0  Assessment completed and scored >= 70 (passing posture)
+    1  Assessment completed and scored <  70 (failing posture)
+    2  Result not trustworthy: invalid arguments, a fatal scan error,
+       zero controls evaluated, or one or more checks errored
 """
 
 from __future__ import annotations
@@ -167,14 +168,24 @@ def main() -> None:
     )
 
     # Import here so startup is fast for --version / --help
-    from apotrope.scanner import Scanner
+    from apotrope.scanner import Scanner, known_categories
     from apotrope.reporter import Reporter
     from apotrope.profile import load_profile
     from apotrope.utils import is_admin
 
     categories: list[str] | None = None
-    if args.category:
-        categories = [c.strip().lower() for c in args.category.split(",")]
+    if args.category is not None:
+        requested = [c.strip().lower() for c in args.category.split(",")]
+        if any(not tok for tok in requested):
+            parser.error("--category contains an empty category name")
+        valid = known_categories()
+        unknown = sorted({tok for tok in requested if tok not in valid})
+        if unknown:
+            parser.error(
+                f"unknown categor{'y' if len(unknown) == 1 else 'ies'}: "
+                f"{', '.join(unknown)}. Valid categories: {', '.join(sorted(valid))}"
+            )
+        categories = requested
 
     # Load optional profile (auto-detects apotrope.toml if --profile not given)
     profile = load_profile(getattr(args, "profile", None))
@@ -252,7 +263,13 @@ def main() -> None:
         diff = compare_reports(baseline, report)
         reporter.print_comparison(diff)
 
-    # Exit codes: 0 = score >= 70, 1 = score < 70, 2 = fatal error (handled above)
+    # Exit codes:
+    #   2  result cannot be trusted: zero controls evaluated, or >=1 ERROR
+    #   1  complete assessment, failing score (< 70)
+    #   0  complete assessment, passing score (>= 70)
+    # ERROR never changes the score (scoring.py) — it only affects the exit code.
+    if report.evaluated_count == 0 or report.error_count:
+        sys.exit(2)
     if report.score < 70:
         sys.exit(1)
 

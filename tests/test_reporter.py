@@ -936,6 +936,23 @@ class TestBuildExecutiveSummary:
         s = self._summary(results, score=100)
         assert "pass" in s.lower() or "no failure" in s.lower()
 
+    def test_all_error_report_not_marked_clean(self):
+        # Every check errored: score is 100 (ERROR does not deduct) but the
+        # machine was never actually assessed — must not claim "all passed".
+        results = [
+            CheckResult("Firewall", "FW", Status.ERROR, Severity.INFO, "d", "boom"),
+            CheckResult("Accounts", "AC", Status.ERROR, Severity.INFO, "d", "boom"),
+        ]
+        s = self._summary(results, score=100)
+        assert "all checks passed" not in s.lower()
+        assert "best practices" not in s.lower()
+        assert "could not complete" in s.lower()
+
+    def test_empty_report_not_marked_clean(self):
+        s = self._summary([], score=100)
+        assert "all checks passed" not in s.lower()
+        assert "best practices" not in s.lower()
+
     def test_critical_failures_called_out(self):
         results = [
             CheckResult("Firewall", "FW", Status.FAIL, Severity.CRITICAL, "d", "off", "fix"),

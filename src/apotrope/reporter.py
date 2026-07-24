@@ -870,7 +870,8 @@ class Reporter:
             f"across {total} security checks."
         )
 
-        if report.fail_count == 0 and report.warn_count == 0:
+        if (report.evaluated_count > 0 and report.error_count == 0
+                and report.fail_count == 0 and report.warn_count == 0):
             parts.append(
                 "All checks passed with no failures or warnings detected. "
                 "The system appears to be well-configured according to "
@@ -963,7 +964,8 @@ class Reporter:
             f"<b>{report.score}/100 ({letter})</b> across {total} security checks."
         ]
 
-        if report.fail_count == 0 and report.warn_count == 0:
+        if (report.evaluated_count > 0 and report.error_count == 0
+                and report.fail_count == 0 and report.warn_count == 0):
             parts.append(
                 '<span class="hl-ok">All checks passed with no failures or '
                 "warnings detected — the system is configured in line with "
