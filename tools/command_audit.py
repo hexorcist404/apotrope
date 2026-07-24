@@ -70,13 +70,15 @@ def _collect_constants(tree: ast.Module) -> dict[str, str]:
         and n.targets[0].id != "command"
     ]
     for node in sorted(assigns, key=lambda n: n.lineno):
+        target = node.targets[0]
+        assert isinstance(target, ast.Name)  # guaranteed by the comprehension filter
         value = node.value
         if isinstance(value, ast.Constant) and isinstance(value.value, (str, int, float, bool)):
-            consts[node.targets[0].id] = str(value.value)
+            consts[target.id] = str(value.value)
         else:
             resolved = _resolve(value, consts)
             if resolved is not None:
-                consts[node.targets[0].id] = resolved
+                consts[target.id] = resolved
     return consts
 
 
@@ -141,7 +143,7 @@ def collect_commands() -> list[Command]:
 
         # Every `command=` keyword on any call, plus every `command = ...` assignment
         # (checks that build the string in a local variable before passing it on).
-        exprs: list[ast.AST] = []
+        exprs: list[ast.expr] = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 for kw in node.keywords:

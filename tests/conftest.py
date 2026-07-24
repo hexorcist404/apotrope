@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 
@@ -13,14 +14,48 @@ from apotrope.models import AuditReport, CheckResult, Severity, Status
 def _reset_powershell_cache():
     """Clear the cached PowerShell resolution between tests.
 
-    ``utils._ps_executable()`` caches both outcomes in a module global. Without
-    this, whichever test resolves first would decide the value every later test
-    sees — an order-dependent failure that looks like flakiness.
+    ``utils._ps_executable()`` memoises both outcomes. Without this, whichever
+    test resolves first would decide the value every later test sees — an
+    order-dependent failure that looks like flakiness.
     """
     from apotrope import utils
     utils._reset_ps_cache()
     yield
     utils._reset_ps_cache()
+
+
+@pytest.fixture(autouse=True)
+def _forbid_unmocked_subprocess(request):
+    """Fail loudly if any test reaches the real ``powershell.exe``.
+
+    Tests must mock the ``utils`` helpers (``run_powershell`` etc.) so the suite
+    is hermetic and OS-independent. A forgotten patch previously reached real
+    PowerShell on Windows (and degraded to ``[]`` on Linux, hiding the problem);
+    this guard turns that into an immediate error. A test that genuinely needs
+    the boundary can opt out with ``@pytest.mark.allow_subprocess``.
+    """
+    if request.node.get_closest_marker("allow_subprocess"):
+        yield
+        return
+
+    import apotrope.utils as u
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError(
+            "unmocked subprocess.run reached the real boundary — patch "
+            "run_powershell / run_powershell_json / get_wmi_object instead"
+        )
+
+    # Explicit sentinel so a test can prove WHICH callable is installed.
+    # unittest.mock's ``_mock_name`` is useless here — _boom is a plain
+    # function, not a Mock, so it has no such attribute either and asserting on
+    # it passes whether or not the guard is active. An identity check against
+    # ``subprocess.run`` proves nothing either: apotrope.utils imports the very
+    # same module object the test sees.
+    _boom._apotrope_guard = True
+
+    with patch.object(u.subprocess, "run", _boom):
+        yield
 
 
 @pytest.fixture()

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "apotrope"
 version = "0.1.12"
 description = "A portable Windows security posture auditor"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [{ name = "Apotrope Contributors" }]
 keywords = ["windows", "security", "audit", "posture", "hardening"]
@@ -15,7 +16,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
@@ -40,6 +40,8 @@ dev = [
     "pillow>=12.0",  # test_brand_assets.py uses Image.get_flattened_data (12+)
     "build>=1.0",
     "twine>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
 ]
 
 [project.scripts]
@@ -54,6 +56,12 @@ apotrope = ["templates/*.j2", "templates/*.png"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+markers = [
+    "allow_subprocess: test may reach the real subprocess boundary (opt out of the hermeticity guard)",
+]
+
+[tool.mypy]
+python_version = "3.12"
 
 [tool.coverage.run]
 source = ["src/apotrope"]

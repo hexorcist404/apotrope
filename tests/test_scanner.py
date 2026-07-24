@@ -5,9 +5,18 @@ from __future__ import annotations
 from types import ModuleType
 from unittest.mock import patch
 
+import pytest
 
 from apotrope.models import AuditReport, CheckResult, Severity, Status
 from apotrope.scanner import Scanner
+
+
+@pytest.fixture(autouse=True)
+def _stub_wmi():
+    """Scanner.run() calls _detect_product_type() -> get_wmi_object; stub it so
+    the scanner tests never reach the real WMI / PowerShell boundary."""
+    with patch("apotrope.scanner.get_wmi_object", return_value=[]):
+        yield
 
 
 # ---------------------------------------------------------------------------

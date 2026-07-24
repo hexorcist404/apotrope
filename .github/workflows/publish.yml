@@ -28,6 +28,17 @@ jobs:
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
 
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          got="$(python -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")"
+          echo "tag=$want pyproject=$got"
+          if [ "$want" != "$got" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match pyproject version $got"
+            exit 1
+          fi
+
       - name: Run tests
         # Gate publication on the tagged commit passing tests. test.yml does
         # NOT run on tags, so without this gate a v* tag could publish untested
@@ -47,9 +58,37 @@ jobs:
           name: dist
           path: dist/
 
+  validate-wheel:
+    name: Validate built wheel (Windows)
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the built wheel and smoke-test it
+        # Tests run against the editable install; this proves the *packaged*
+        # wheel actually installs and runs on Windows before it ships.
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install "$(ls dist/*.whl)"
+          apotrope --version
+          apotrope --dry-run --no-color
+
   publish:
     name: Publish to PyPI
-    needs: build
+    needs: [build, validate-wheel]
     runs-on: ubuntu-latest
     # The environment must match the one named in the PyPI trusted publisher.
     environment:
