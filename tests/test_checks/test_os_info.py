@@ -243,6 +243,15 @@ class TestCheckUptime:
         assert "45 days" in results[0].details
         assert results[0].remediation != ""
 
+    def test_uptime_reboot_command_is_commented(self):
+        # A bare Restart-Computer would restart the machine the moment the
+        # block is pasted; the reboot must be a commented manual step.
+        with patch("apotrope.checks.os_info.run_powershell", return_value="45"):
+            results = os_info._check_uptime()
+        active = [ln for ln in results[0].command.splitlines()
+                  if not ln.strip().startswith("#")]
+        assert not any("Restart-Computer" in ln for ln in active)
+
     def test_ps_error_returns_error_result(self):
         with patch("apotrope.checks.os_info.run_powershell",
                    side_effect=ApotropeError("timeout")):
@@ -337,6 +346,17 @@ class TestCheckTpm:
                    return_value=_tpm_json(present=True, ready=False)):
             results = os_info._check_tpm()
         assert results[0].status == Status.WARN
+
+    def test_tpm_not_ready_command_is_readonly(self):
+        # The "not ready" remediation must never ship a TPM-clear: -AllowClear /
+        # Clear-Tpm can invalidate BitLocker protectors and force recovery.
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value=_tpm_json(present=True, ready=False)):
+            cmd = os_info._check_tpm()[0].command
+        assert "AllowClear" not in cmd
+        assert "AllowPhysicalPresence" not in cmd
+        assert "Initialize-Tpm" not in cmd
+        assert "Clear-Tpm" not in cmd
 
     def test_no_tpm_returns_warn(self):
         with patch("apotrope.checks.os_info.run_powershell_json",

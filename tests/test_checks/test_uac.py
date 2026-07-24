@@ -41,6 +41,14 @@ class TestCheckUacEnabled:
         assert r.severity == Severity.CRITICAL
         assert "EnableLUA" in r.command
 
+    def test_uac_disabled_reboot_command_is_commented(self):
+        # The EnableLUA fix requires a reboot, but a bare Restart-Computer must
+        # not restart the machine the moment the block is pasted.
+        r = uac._check_uac_enabled(_data(lua=0))[0]
+        active = [ln for ln in r.command.splitlines()
+                  if not ln.strip().startswith("#")]
+        assert not any("Restart-Computer" in ln for ln in active)
+
     def test_uac_absent_is_warn(self):
         r = uac._check_uac_enabled({})[0]
         assert r.status == Status.WARN

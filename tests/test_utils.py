@@ -48,7 +48,8 @@ class TestRunPowershell:
             assert "-NoProfile" in args
             assert "-ExecutionPolicy" in args
             assert "Bypass" in args
-            assert "Get-Date" in args
+            # The command rides in the last argument (behind the UTF-8 preamble).
+            assert any("Get-Date" in a for a in args)
 
     def test_nonzero_exit_raises_apotrope_error(self):
         with patch(
@@ -121,6 +122,53 @@ class TestRunPowershell:
         env = kwargs["env"]
         assert not any(k.lower() == "psmodulepath" for k in env)
         assert env["PATH"] == r"C:\Windows\System32"
+
+
+class TestPowershellExecutable:
+    """powershell.exe is resolved to a trusted absolute path (no PATH/CWD hijack)."""
+
+    def test_resolves_system32_path_on_windows(self):
+        def _isfile(p):
+            return "System32" in p and p.endswith("powershell.exe")
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch.dict("apotrope.utils.os.environ", {"SystemRoot": r"C:\FakeWin"}),
+            patch("apotrope.utils.os.path.isfile", side_effect=_isfile),
+        ):
+            path = utils._powershell_path()
+        assert "System32" in path
+        assert path.endswith("powershell.exe")
+
+    def test_prefers_sysnative_when_present(self):
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch.dict("apotrope.utils.os.environ", {"SystemRoot": r"C:\FakeWin"}),
+            patch("apotrope.utils.os.path.isfile", side_effect=lambda p: "Sysnative" in p),
+        ):
+            assert "Sysnative" in utils._powershell_path()
+
+    def test_fails_closed_when_binary_missing_on_windows(self):
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch("apotrope.utils.os.path.isfile", return_value=False),
+        ):
+            with pytest.raises(ApotropeError, match="Trusted powershell.exe not found"):
+                utils._powershell_path()
+
+    def test_bare_name_off_windows(self):
+        with patch.object(utils.sys, "platform", "linux"):
+            assert utils._powershell_path() == "powershell.exe"
+
+
+class TestSubprocessDecoding:
+    def test_decodes_utf8_and_forces_ps_utf8_output(self):
+        with patch("apotrope.utils.subprocess.run", return_value=_mock_ps("ok")) as mock_run:
+            utils.run_powershell("Get-Thing")
+        _, kwargs = mock_run.call_args
+        assert kwargs["encoding"] == "utf-8"
+        assert kwargs["errors"] == "replace"
+        # PS is told to emit UTF-8 so the decode above is correct for non-ASCII.
+        assert "OutputEncoding" in mock_run.call_args[0][0][-1]
 
 
 # ---------------------------------------------------------------------------

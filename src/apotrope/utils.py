@@ -18,15 +18,45 @@ from apotrope.exceptions import ApotropeError
 
 log = logging.getLogger(__name__)
 
+def _powershell_path() -> str:
+    """Return the absolute path to Windows PowerShell.
+
+    Resolving the full ``System32`` path — ``Sysnative`` first so a 32-bit
+    process on 64-bit Windows still reaches the native binary — avoids the
+    executable-search hijack where an elevated run would otherwise pick up a
+    ``powershell.exe`` planted in the application directory or the current
+    directory ahead of the real one. On Windows we fail closed (never fall back
+    to a ``PATH``/CWD search) if the trusted binary is missing; off Windows the
+    bare name is returned so the mocked test suite is unaffected.
+    """
+    if sys.platform != "win32":
+        return "powershell.exe"
+    system_root = os.environ.get("SystemRoot", r"C:\Windows")
+    for subdir in ("Sysnative", "System32"):
+        candidate = os.path.join(
+            system_root, subdir, "WindowsPowerShell", "v1.0", "powershell.exe"
+        )
+        if os.path.isfile(candidate):
+            return candidate
+    raise ApotropeError(
+        r"Trusted powershell.exe not found under %SystemRoot%\System32"
+    )
+
+
 # Base PowerShell invocation flags shared by every helper
 _PS_CMD = [
-    "powershell.exe",
+    _powershell_path(),
     "-NonInteractive",
     "-NoProfile",
     "-ExecutionPolicy",
     "Bypass",
     "-Command",
 ]
+
+# Force PowerShell to emit UTF-8 so the ``encoding="utf-8"`` decode below is
+# correct for localized / non-ASCII output (service names, usernames), instead
+# of depending on the host's OEM/ANSI console code page.
+_OUTPUT_ENCODING_PREAMBLE = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; "
 
 
 def _child_env() -> dict[str, str]:
@@ -64,9 +94,11 @@ def run_powershell(command: str, timeout: int = 30) -> str:
     log.debug("run_powershell: %s", command[:200])
     try:
         result = subprocess.run(
-            [*_PS_CMD, command],
+            [*_PS_CMD, _OUTPUT_ENCODING_PREAMBLE + command],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             env=_child_env(),
         )
