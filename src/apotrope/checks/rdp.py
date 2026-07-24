@@ -14,14 +14,18 @@ CATEGORY = "Remote Access"
 
 _RDP_DEFAULT_PORT = 3389
 
-# Fetch all RDP-relevant registry values in one PS call.
+# Fetch all RDP-relevant registry values in one PS call. The Group Policy keys
+# under ...\Policies\... override the Terminal Server values, so they are read too.
 _PS_RDP = (
     "$ts  = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server'; "
     "$rdp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp'; "
+    "$pol = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; "
     "@{ "
-    "fDenyTSConnections  = (Get-ItemProperty $ts  -ErrorAction SilentlyContinue).fDenyTSConnections; "
-    "UserAuthentication  = (Get-ItemProperty $rdp -ErrorAction SilentlyContinue).UserAuthentication; "
-    "PortNumber          = (Get-ItemProperty $rdp -ErrorAction SilentlyContinue).PortNumber "
+    "fDenyTSConnections       = (Get-ItemProperty $ts  -ErrorAction SilentlyContinue).fDenyTSConnections; "
+    "UserAuthentication       = (Get-ItemProperty $rdp -ErrorAction SilentlyContinue).UserAuthentication; "
+    "PortNumber               = (Get-ItemProperty $rdp -ErrorAction SilentlyContinue).PortNumber; "
+    "PolicyDenyTSConnections  = (Get-ItemProperty $pol -ErrorAction SilentlyContinue).fDenyTSConnections; "
+    "PolicyUserAuthentication = (Get-ItemProperty $pol -ErrorAction SilentlyContinue).UserAuthentication "
     "} | ConvertTo-Json -Compress"
 )
 
@@ -65,21 +69,34 @@ def _check_rdp_enabled(data: dict) -> tuple[list[CheckResult], bool]:
     fDenyTSConnections = 0 → RDP enabled
     fDenyTSConnections = 1 (or absent) → RDP disabled
     """
-    raw = data.get("fDenyTSConnections")
+    # Group Policy overrides the Terminal Server value, so it wins when present.
+    policy_raw = data.get("PolicyDenyTSConnections")
+    system_raw = data.get("fDenyTSConnections")
+    effective = policy_raw if policy_raw is not None else system_raw
 
-    if raw is None:
-        # Key absent typically means RDP is disabled (default on desktop SKUs)
+    if effective is None:
+        # Neither value was readable. Do NOT assume RDP is disabled — a fail-open
+        # PASS here would hide an exposed RDP service on a machine we couldn't read.
         return ([CheckResult(
             category=CATEGORY,
             check_name="RDP Enabled",
-            status=Status.PASS,
+            status=Status.WARN,
             severity=Severity.HIGH,
             description="Checks whether Remote Desktop is enabled.",
-            details="RDP is disabled (fDenyTSConnections key not found — default disabled state).",
-            remediation="",
+            details=(
+                "Could not determine RDP state (neither the Terminal Server value nor "
+                "the policy override was readable). Not assuming RDP is disabled."
+            ),
+            remediation="Verify the RDP state and disable it if it is not required.",
+            command=(
+                "# Disable Remote Desktop if it is not required:\n"
+                "Set-ItemProperty -Path "
+                "'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' "
+                "-Name 'fDenyTSConnections' -Value 1"
+            ),
         )], False)
 
-    rdp_enabled = int(raw) == 0   # 0 = connections allowed
+    rdp_enabled = int(effective) == 0   # 0 = connections allowed
 
     if rdp_enabled:
         result = CheckResult(
@@ -120,7 +137,10 @@ def _check_rdp_enabled(data: dict) -> tuple[list[CheckResult], bool]:
 
 def _check_rdp_nla(data: dict) -> list[CheckResult]:
     """Check whether Network Level Authentication is required for RDP."""
-    raw = data.get("UserAuthentication")
+    # Policy value overrides the per-listener value when present.
+    raw = data.get("PolicyUserAuthentication")
+    if raw is None:
+        raw = data.get("UserAuthentication")
 
     if raw is None:
         return [CheckResult(

@@ -43,10 +43,23 @@ class TestCheckRdpEnabled:
         results, _ = rdp._check_rdp_enabled(_data(deny=0))
         assert "fDenyTSConnections" in results[0].command
 
-    def test_key_absent_treated_as_disabled(self):
+    def test_both_keys_absent_is_warn_not_pass(self):
+        # Fail-closed: with neither the Terminal Server value nor the policy
+        # override readable, do NOT assume RDP is disabled.
         results, enabled = rdp._check_rdp_enabled({})
-        assert results[0].status == Status.PASS
+        assert results[0].status == Status.WARN
         assert enabled is False
+
+    def test_policy_override_enables_rdp(self):
+        # The GPO key overrides the Terminal Server value.
+        results, enabled = rdp._check_rdp_enabled(
+            {"fDenyTSConnections": 1, "PolicyDenyTSConnections": 0}
+        )
+        assert enabled is True
+
+    def test_policy_nla_override_fails(self):
+        r = rdp._check_rdp_nla({"UserAuthentication": 1, "PolicyUserAuthentication": 0})[0]
+        assert r.status == Status.FAIL
 
     def test_returns_tuple(self):
         result = rdp._check_rdp_enabled(_data())

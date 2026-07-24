@@ -206,3 +206,34 @@ class TestIpv6ErrorFallback:
             r = network._check_ipv6()[0]
         assert r.status == Status.INFO
         assert "not active" in r.details
+
+
+class TestNetworkFixes:
+    def _ports(self, conns):
+        with patch("apotrope.checks.network.run_powershell_json", return_value=conns):
+            return network._check_listening_ports()
+
+    def _netbios(self, value):
+        with patch("apotrope.checks.network.run_powershell_json", return_value=value):
+            return network._check_netbios()
+
+    def test_process_lookup_casts_to_int(self):
+        # Int32 (Get-Process.Id) vs UInt32 (OwningProcess) mismatch made every
+        # port resolve to "Unknown" until the lookup key is cast to [int].
+        assert "[int]$_.OwningProcess" in network._PS_TCP_LISTEN
+
+    def test_single_dhcp_netbios_scalar_zero_is_warn(self):
+        # A lone DHCP adapter serialises as the bare scalar 0 and must not be dropped.
+        r = self._netbios(0)[0]
+        assert r.status == Status.WARN
+        assert r.severity == Severity.LOW
+
+    def test_single_disabled_netbios_scalar_two_is_pass(self):
+        r = self._netbios(2)[0]
+        assert r.status == Status.PASS
+
+    def test_rdp_port_command_enforces_nla_not_block(self):
+        results = self._ports([_conn(3389)])
+        r = next(r for r in results if "3389" in r.check_name)
+        assert "Action Block" not in r.command
+        assert "UserAuthentication" in r.command

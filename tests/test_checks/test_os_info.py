@@ -477,3 +477,37 @@ class TestListShapedPayloads:
 class TestNowHelper:
     def test_now_returns_utc_aware_datetime(self):
         assert os_info._now().tzinfo is timezone.utc
+
+
+class TestOsInfoFailClosed:
+    def test_tpm_null_present_is_info(self):
+        # Non-admin Get-Tpm returns TpmPresent=null (does not throw) — "unknown",
+        # not "no TPM".
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value={"TpmPresent": None, "TpmReady": None,
+                                 "ManufacturerVersion": None}):
+            r = os_info._check_tpm()[0]
+        assert r.status == Status.INFO
+
+    def test_tpm_genuine_absent_still_warns(self):
+        with patch("apotrope.checks.os_info.run_powershell_json",
+                   return_value={"TpmPresent": False, "TpmReady": False,
+                                 "ManufacturerVersion": None}):
+            r = os_info._check_tpm()[0]
+        assert r.status == Status.WARN
+
+    def test_secure_boot_access_denied_is_info(self):
+        with patch("apotrope.checks.os_info.run_powershell", return_value="ACCESSDENIED"):
+            r = os_info._check_secure_boot()[0]
+        assert r.status == Status.INFO
+
+    def test_secure_boot_unsupported_still_warns(self):
+        with patch("apotrope.checks.os_info.run_powershell", return_value="UNSUPPORTED"):
+            r = os_info._check_secure_boot()[0]
+        assert r.status == Status.WARN
+
+    def test_eol_fallback_bounded_for_distant_build(self):
+        # Build 25398 (a server annual-channel build) sits ~5000 builds above the
+        # nearest base 20348 but below 26100 — it must NOT inherit 20348's EOL
+        # date (which would report a dead build as supported).
+        assert os_info._lookup_eol(25398, product_type=3) is None

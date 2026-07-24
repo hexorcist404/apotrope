@@ -176,3 +176,34 @@ class TestEncryptionRunMultipleDrives:
             results = encryption.run()
         assert len(results) == 1
         assert results[0].status == Status.FAIL  # ProtectionStatus None → 0 → Off
+
+
+class TestEncryptionFixes:
+    def _run(self, vol):
+        with patch("apotrope.checks.encryption.run_powershell_json", return_value=[vol]):
+            return encryption.run()
+
+    def test_protected_but_partial_is_warn_not_pass(self):
+        # Protection On but only 55% encrypted → not yet fully protected → WARN.
+        vol = _vol("C:", "OperatingSystem", "EncryptionInProgress", protection=1, pct=55)
+        r = self._run(vol)[0]
+        assert r.status == Status.WARN
+        assert "55%" in r.details
+
+    def test_integer_enums_mapped_in_details(self):
+        # PS 5.1 serialises the enums as integers; they must render as names.
+        vol = {"MountPoint": "C:", "VolumeType": 0, "VolumeStatus": 1,
+               "ProtectionStatus": 1, "EncryptionMethod": "XtsAes256",
+               "EncryptionPercentage": 100}
+        r = self._run(vol)[0]
+        assert r.status == Status.PASS
+        assert "OperatingSystem" in r.details
+        assert "FullyEncrypted" in r.details
+
+    def test_ps7_string_protection_status_handled(self):
+        # PS 7 may serialise ProtectionStatus/percentage as strings; int() would crash.
+        vol = {"MountPoint": "C:", "VolumeType": "OperatingSystem",
+               "VolumeStatus": "FullyEncrypted", "ProtectionStatus": "On",
+               "EncryptionMethod": "XtsAes256", "EncryptionPercentage": "100"}
+        r = self._run(vol)[0]
+        assert r.status == Status.PASS

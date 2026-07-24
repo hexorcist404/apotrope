@@ -108,6 +108,11 @@ def _channel_for(product_type: int | None, build: int) -> str:
     return "client"
 
 
+# Max build gap for the nearest-lower-base EOL fallback: a cumulative update sits
+# a few hundred builds above its base, but a larger gap is a different release.
+_FALLBACK_MAX_DELTA = 500
+
+
 def _lookup_eol(
     build: int,
     product_type: int | None = None,
@@ -131,6 +136,13 @@ def _lookup_eol(
     base = max((b for b in known if b <= build), default=None)
     if base is None:
         return None
+    # Post-GA cumulative updates sit just above their base build, but an unknown
+    # build far above the nearest base is a *different* release (e.g. a Server
+    # annual-channel build between two LTSC entries). Don't inherit the base's
+    # EOL date in that case — treat it as unknown so the caller WARNs instead of
+    # reporting a dead build as supported.
+    if build - base > _FALLBACK_MAX_DELTA:
+        return None
     rel = _RELEASES[(channel, base)]
     return (rel.name, rel.eol_date())
 
@@ -150,11 +162,21 @@ _PS_DOMAIN = (
     "| Select-Object PartOfDomain, Domain, Workgroup "
     "| ConvertTo-Json -Compress"
 )
-_PS_SECUREBOOT = "try { Confirm-SecureBootUEFI } catch { 'UNSUPPORTED' }"
+# Distinguish access-denied (non-admin) from a genuinely unsupported platform
+# (legacy BIOS): the generic catch defaults to ACCESSDENIED so an unexpected
+# error is treated as "could not determine" (INFO), never a false legacy-BIOS WARN.
+_PS_SECUREBOOT = (
+    "try { [string](Confirm-SecureBootUEFI) } "
+    "catch [System.PlatformNotSupportedException] { 'UNSUPPORTED' } "
+    "catch [System.UnauthorizedAccessException] { 'ACCESSDENIED' } "
+    "catch { 'ACCESSDENIED' }"
+)
 _PS_TPM = (
     "try { Get-Tpm | Select-Object TpmPresent, TpmReady, ManufacturerVersion "
     "| ConvertTo-Json -Compress } "
-    "catch { '{\"TpmPresent\":false,\"TpmReady\":false,\"ManufacturerVersion\":null}' }"
+    # null (not false) on failure: a thrown Get-Tpm means "could not determine",
+    # which must not be reported as "no TPM present".
+    "catch { '{\"TpmPresent\":null,\"TpmReady\":null,\"ManufacturerVersion\":null}' }"
 )
 
 
@@ -363,6 +385,19 @@ def _check_secure_boot() -> list[CheckResult]:
     except ApotropeError as exc:
         return [_error("Secure Boot", str(exc))]
 
+    if output.upper() == "ACCESSDENIED":
+        return [CheckResult(
+            category=CATEGORY,
+            check_name="Secure Boot",
+            status=Status.INFO,
+            severity=Severity.INFO,
+            description="Checks whether UEFI Secure Boot is enabled.",
+            details="Could not determine Secure Boot state (Confirm-SecureBootUEFI "
+                    "requires Administrator / elevation).",
+            remediation="",
+            command="Confirm-SecureBootUEFI",
+        )]
+
     if output.upper() == "UNSUPPORTED":
         return [CheckResult(
             category=CATEGORY,
@@ -415,7 +450,24 @@ def _check_tpm() -> list[CheckResult]:
     if isinstance(data, list):
         data = data[0] if data else {}
 
-    present = bool(data.get("TpmPresent", False))
+    raw_present = data.get("TpmPresent")
+    if raw_present is None:
+        # Non-admin Get-Tpm returns TpmPresent=null (it does not throw), and the
+        # catch fallback emits null too. Either way the state is unknown — report
+        # INFO, never a false "No TPM chip detected" WARN on a machine that has one.
+        return [CheckResult(
+            category=CATEGORY,
+            check_name="TPM Status",
+            status=Status.INFO,
+            severity=Severity.INFO,
+            description="Checks whether a TPM chip is present and functional.",
+            details="Could not determine TPM state (Get-Tpm returned no value; this "
+                    "typically requires Administrator privileges).",
+            remediation="",
+            command="Get-Tpm",
+        )]
+
+    present = bool(raw_present)
     ready = bool(data.get("TpmReady", False))
     # Get-Tpm's ManufacturerVersion can carry trailing NUL bytes from the
     # firmware WMI string; strip them so they don't leak into report output.

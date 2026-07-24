@@ -166,9 +166,11 @@ class TestCheckPsv2:
         r = self._run("Disabled")[0]
         assert r.status == Status.PASS
 
-    def test_unavailable_is_pass(self):
+    def test_unavailable_is_info_not_pass(self):
+        # 'UNAVAILABLE' is a query-failure sentinel (needs elevation), not proof
+        # v2 is absent — it must not be reported as a secure PASS.
         r = self._run("UNAVAILABLE")[0]
-        assert r.status == Status.PASS
+        assert r.status == Status.INFO
 
     def test_unknown_state_is_info(self):
         r = self._run("SomeOtherState")[0]

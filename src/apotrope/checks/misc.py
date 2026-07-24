@@ -22,6 +22,25 @@ _PS_AUTOPLAY = (
     "-ErrorAction SilentlyContinue).NoDriveTypeAutoRun; "
     "if ($null -eq $v) { 'NOTSET' } else { [string]$v }"
 )
+# Create the policy key first: Set-ItemProperty -Force does NOT create a missing
+# key, and the NOTSET finding fires precisely when that key is absent.
+_CMD_AUTOPLAY_DISABLE = (
+    f"New-Item -Path '{_AUTOPLAY_KEY}' -Force | Out-Null\n"
+    f"Set-ItemProperty -Path '{_AUTOPLAY_KEY}' -Name NoDriveTypeAutoRun -Value 255 "
+    "-Type DWord -Force"
+)
+
+# The five security-relevant audit subcategories Apotrope requires (order fixed
+# for deterministic "missing" reporting).
+_EXPECTED_AUDIT = (
+    "Logon", "Account Lockout", "Logoff",
+    "Credential Validation", "Sensitive Privilege Use",
+)
+
+# Machine-wide inactivity lock policy (applies even without a per-user screensaver).
+_MACHINE_INACTIVITY_KEY = (
+    "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
+)
 
 _PS_WINRM = "(Get-Service -Name WinRM -ErrorAction SilentlyContinue).Status"
 
@@ -50,10 +69,12 @@ _PS_AUDIT = (
 _SCREEN_KEY = "HKCU:\\Control Panel\\Desktop"
 _PS_SCREEN = (
     f"$d = Get-ItemProperty -LiteralPath '{_SCREEN_KEY}' -ErrorAction SilentlyContinue; "
+    f"$m = Get-ItemProperty -LiteralPath '{_MACHINE_INACTIVITY_KEY}' -ErrorAction SilentlyContinue; "
     "@{ "
     "Active=$d.ScreenSaveActive; "
     "Secure=$d.ScreenSaverIsSecure; "
-    "Timeout=$d.ScreenSaveTimeOut "
+    "Timeout=$d.ScreenSaveTimeOut; "
+    "MachineInactivity=$m.InactivityTimeoutSecs "
     "} | ConvertTo-Json -Compress"
 )
 
@@ -103,10 +124,7 @@ def _check_autoplay() -> list[CheckResult]:
                 "Configuration → Administrative Templates → Windows Components → AutoPlay "
                 "Policies → Turn off AutoPlay → Enabled."
             ),
-            command=(
-                f"Set-ItemProperty -Path '{_AUTOPLAY_KEY}' "
-                "-Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force"
-            ),
+            command=_CMD_AUTOPLAY_DISABLE,
         )]
 
     try:
@@ -144,10 +162,7 @@ def _check_autoplay() -> list[CheckResult]:
                 "Disable AutoPlay for all drive types so the remaining drive types "
                 "can no longer auto-execute content."
             ),
-            command=(
-                f"Set-ItemProperty -Path '{_AUTOPLAY_KEY}' "
-                "-Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force"
-            ),
+            command=_CMD_AUTOPLAY_DISABLE,
         )]
 
     return [CheckResult(
@@ -158,10 +173,7 @@ def _check_autoplay() -> list[CheckResult]:
         description="Checks whether AutoPlay is disabled for all drive types.",
         details=f"AutoPlay may be enabled (NoDriveTypeAutoRun = {val}).",
         remediation="Disable AutoPlay for all drive types so removable media cannot auto-execute content.",
-        command=(
-            f"Set-ItemProperty -Path '{_AUTOPLAY_KEY}' "
-            "-Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force"
-        ),
+        command=_CMD_AUTOPLAY_DISABLE,
     )]
 
 
@@ -297,15 +309,19 @@ def _check_audit_policy() -> list[CheckResult]:
     entries = data if isinstance(data, list) else ([data] if data else [])
 
     if not entries:
+        # auditpol needs elevation (and its subcategory names are localized), so an
+        # empty result on a default non-admin run does not mean auditing is off.
+        # Report INFO (score-neutral), not a WARN that penalises a healthy machine.
         return [CheckResult(
             category=CATEGORY,
             check_name="Audit Policy",
-            status=Status.WARN,
-            severity=Severity.MEDIUM,
+            status=Status.INFO,
+            severity=Severity.INFO,
             description="Checks that key audit policy subcategories log Success/Failure events.",
             details=(
-                "Could not retrieve audit policy (auditpol may require elevation). "
-                "Key events like logon failures may not be recorded."
+                "Could not retrieve audit policy (auditpol typically requires "
+                "Administrator, or subcategory names are localized). Key events may "
+                "not be assessed."
             ),
             remediation="Run Apotrope as Administrator to check audit policy.",
         )]
@@ -318,9 +334,11 @@ def _check_audit_policy() -> list[CheckResult]:
         if name:
             audit_map[name] = setting
 
-    no_audit = [name for name, setting in audit_map.items() if setting == "No Auditing"]
+    no_audit = [name for name in _EXPECTED_AUDIT if audit_map.get(name) == "No Auditing"]
+    missing = [name for name in _EXPECTED_AUDIT if name not in audit_map]
 
-    if no_audit:
+    if no_audit or missing:
+        problem = no_audit + [f"{name} (not reported)" for name in missing]
         return [CheckResult(
             category=CATEGORY,
             check_name="Audit Policy",
@@ -328,27 +346,24 @@ def _check_audit_policy() -> list[CheckResult]:
             severity=Severity.MEDIUM,
             description="Checks that key audit policy subcategories log Success/Failure events.",
             details=(
-                f"The following subcategories have auditing disabled: "
-                f"{', '.join(no_audit)}. "
-                "Security-relevant events may not be recorded."
+                "Not all expected audit subcategories are confirmed logging: "
+                f"{', '.join(problem)}. Security-relevant events may not be recorded."
             ),
             remediation=(
-                "Enable audit logging for the key subcategories that currently have "
-                "auditing disabled so security-relevant events are recorded. This can "
-                "also be configured via Group Policy (secpol.msc → Advanced Audit Policy "
-                "Configuration)."
+                "Enable audit logging for the listed subcategories so security-relevant "
+                "events are recorded. This can also be configured via Group Policy "
+                "(secpol.msc → Advanced Audit Policy Configuration)."
             ),
             command="auditpol /set /subcategory:'Logon' /success:enable /failure:enable",
         )]
 
-    checked = ", ".join(audit_map.keys()) if audit_map else "none found"
     return [CheckResult(
         category=CATEGORY,
         check_name="Audit Policy",
         status=Status.PASS,
         severity=Severity.MEDIUM,
         description="Checks that key audit policy subcategories log Success/Failure events.",
-        details=f"Auditing is configured for checked subcategories: {checked}.",
+        details=f"Auditing is configured for all expected subcategories: {', '.join(_EXPECTED_AUDIT)}.",
         remediation="",
     )]
 
@@ -369,6 +384,27 @@ def _check_screen_lock() -> list[CheckResult]:
 
     screensaver_active = active == "1"
     password_on_resume = secure == "1"
+
+    # A machine-wide inactivity limit locks the console even without a per-user
+    # screensaver, so a properly hardened machine should not be WARNed here.
+    machine_raw = data.get("MachineInactivity")
+    try:
+        machine_secs = int(machine_raw) if machine_raw is not None else 0
+    except (TypeError, ValueError):
+        machine_secs = 0
+    if 0 < machine_secs <= _LOCK_WARN_SECS:
+        return [CheckResult(
+            category=CATEGORY,
+            check_name="Screen Lock Timeout",
+            status=Status.PASS,
+            severity=Severity.MEDIUM,
+            description=f"Checks that the screen automatically locks within {_LOCK_WARN_SECS // 60} minutes.",
+            details=(
+                f"Machine inactivity limit is set to {machine_secs // 60} minute(s); "
+                "the machine locks automatically on inactivity."
+            ),
+            remediation="",
+        )]
 
     if not screensaver_active:
         return [CheckResult(

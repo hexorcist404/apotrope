@@ -68,7 +68,7 @@ _PS_WU_SERVICE = (
 _PS_PENDING = (
     "try { "
     "$s = New-Object -ComObject Microsoft.Update.Session; "
-    "$r = $s.CreateUpdateSearcher().Search(\"IsInstalled=0 and Type='Software'\"); "
+    "$r = $s.CreateUpdateSearcher().Search(\"IsInstalled=0 and IsHidden=0 and Type='Software'\"); "
     "$r.Updates.Count "
     "} catch { 'UNAVAILABLE' }"
 )

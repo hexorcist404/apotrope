@@ -18,7 +18,10 @@ _PS_TCP_LISTEN = (
     "Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $procs[$_.Id] = $_.ProcessName }; "
     "Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue "
     "| Select-Object LocalPort, LocalAddress, "
-    "@{N='ProcessName';E={if($procs[$_.OwningProcess]){$procs[$_.OwningProcess]}else{'Unknown'}}} "
+    # OwningProcess is a UInt32 but the hashtable is keyed by Get-Process.Id
+    # (Int32); cast the lookup key so the boxed-numeric types match (otherwise
+    # every port resolves to 'Unknown').
+    "@{N='ProcessName';E={if($procs[[int]$_.OwningProcess]){$procs[[int]$_.OwningProcess]}else{'Unknown'}}} "
     "| ConvertTo-Json -Compress"
 )
 
@@ -119,6 +122,23 @@ def _check_listening_ports() -> list[CheckResult]:
                 "    Disable-WindowsOptionalFeature -Online -FeatureName TelnetServer -NoRestart\n"
                 "}"
             )
+        elif port == 3389:
+            # The finding is "RDP exposed; ensure NLA" — so the command must enforce
+            # NLA and scope access, NOT blindly block 3389 (which would sever the
+            # operator's own RDP session mid-audit).
+            remediation = (
+                "RDP is exposed. Require Network Level Authentication and restrict who "
+                "can reach 3389 (firewall scope or a VPN / RD gateway) rather than "
+                "blocking it outright."
+            )
+            command = (
+                "# Require Network Level Authentication for RDP:\n"
+                "Set-ItemProperty -Path "
+                "'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' "
+                "-Name 'UserAuthentication' -Value 1\n"
+                "# Restrict RDP to the local subnet (adjust the scope as needed):\n"
+                "Set-NetFirewallRule -DisplayGroup 'Remote Desktop' -RemoteAddress LocalSubnet"
+            )
         else:
             remediation = (
                 f"Stop the service behind port {port} ({service}) and block the port in Windows Firewall."
@@ -203,7 +223,11 @@ def _check_netbios() -> list[CheckResult]:
     except ApotropeError as exc:
         return [_error("NetBIOS over TCP/IP", str(exc))]
 
-    options = data if isinstance(data, list) else ([data] if data else [])
+    # A single IP-enabled adapter with TcpipNetbiosOptions=0 (the DHCP default)
+    # serialises as the bare scalar 0. Do NOT use `[data] if data else []` here:
+    # 0 is falsy and would be dropped, making a DHCP adapter look like "no
+    # adapters". The empty-stdout case already arrives as [] (a list).
+    options = data if isinstance(data, list) else [data]
     # Normalise to plain ints
     opt_ints = []
     for o in options:

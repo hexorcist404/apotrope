@@ -64,7 +64,7 @@ def run() -> list[CheckResult]:
             remediation="Ensure Get-NetFirewallProfile is available. Run with --log-level DEBUG.",
         )]
 
-    profiles = data if isinstance(data, list) else [data]
+    profiles = data if isinstance(data, list) else ([data] if data else [])
     results: list[CheckResult] = []
 
     for profile in profiles:
@@ -93,10 +93,12 @@ def run() -> list[CheckResult]:
 
         # --- Check 2: default inbound action ---
         # "NotConfigured" inherits from Group Policy; the Windows built-in default
-        # is Block, so it is NOT treated as a finding.  Only explicit "Allow" warns.
+        # is Block, so it PASSes. Everything else — an explicit "Allow" or an
+        # unknown/unreadable value — fails closed to WARN rather than silently PASS.
         inbound_lower = inbound.lower()
-        inbound_explicit_allow = inbound_lower == "allow"
-        inbound_status = Status.WARN if inbound_explicit_allow else Status.PASS
+        inbound_ok = inbound_lower in ("block", "notconfigured")
+        inbound_needs_fix = not inbound_ok
+        inbound_status = Status.PASS if inbound_ok else Status.WARN
         results.append(CheckResult(
             category=CATEGORY,
             check_name=f"Firewall — {name} Default Inbound Action",
@@ -112,12 +114,34 @@ def run() -> list[CheckResult]:
                 f"DefaultOutboundAction: {outbound}"
             ),
             remediation=(
-                "" if not inbound_explicit_allow else
+                "" if not inbound_needs_fix else
                 f"Set the {name} firewall profile to block inbound connections by default."
             ),
             command=(
-                "" if not inbound_explicit_allow else
+                "" if not inbound_needs_fix else
                 f"Set-NetFirewallProfile -Profile {name} -DefaultInboundAction Block"
+            ),
+        ))
+
+    # All three profiles must be reported; a missing profile means the query was
+    # incomplete (e.g. elevation required), so surface an ERROR rather than let the
+    # whole Firewall category silently vanish from the report.
+    present = {str(p.get("Name", "")).strip() for p in profiles}
+    missing = {"Domain", "Private", "Public"} - present
+    if missing:
+        results.append(CheckResult(
+            category=CATEGORY,
+            check_name="Firewall — Profiles Present",
+            status=Status.ERROR,
+            severity=Severity.HIGH,
+            description="Verifies all three Windows Firewall profiles are reported.",
+            details=(
+                f"Missing profile(s): {', '.join(sorted(missing))}. Firewall status "
+                "could not be fully assessed (elevation may be required)."
+            ),
+            remediation=(
+                "Run Apotrope as Administrator and ensure the Windows Firewall "
+                "service is running."
             ),
         ))
 

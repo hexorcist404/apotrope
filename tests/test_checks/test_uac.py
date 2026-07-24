@@ -173,3 +173,15 @@ class TestRun:
             results = uac.run()
         statuses = {r.check_name: r.status for r in results}
         assert statuses["UAC Enabled"] == Status.FAIL
+
+
+class TestUacUnknownConsent:
+    def test_unknown_admin_consent_value_is_info_not_pass(self):
+        # An unrecognized ConsentPromptBehaviorAdmin value is not proof of a safe
+        # config — it must not silently PASS.
+        r = uac._check_admin_behavior(_data(admin_behavior=99))[0]
+        assert r.status == Status.INFO
+
+    def test_known_admin_consent_value_still_passes(self):
+        r = uac._check_admin_behavior(_data(admin_behavior=5))[0]
+        assert r.status == Status.PASS
