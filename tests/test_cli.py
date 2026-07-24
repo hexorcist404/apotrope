@@ -467,25 +467,25 @@ class TestMainErrorPaths:
         mock_reporter.generate_executive_report.assert_not_called()
 
     def test_exec_href_passed_when_both_outputs(self):
-        """The technical report links to the exec report only when it exists."""
+        """The technical report links to the exec report only when it was written."""
         mock_reporter, mock_report = self._reporter_with_report()
-        with patch("pathlib.Path.exists", return_value=True):
-            self._run_main(
-                ["--html", "out.html", "--exec-report", "brief.html"],
-                mock_reporter,
-            )
+        mock_reporter.generate_executive_report.return_value = True
+        self._run_main(
+            ["--html", "out.html", "--exec-report", "brief.html"],
+            mock_reporter,
+        )
         mock_reporter.generate_html_report.assert_called_once_with(
             mock_report, "out.html", exec_href="brief.html"
         )
 
-    def test_exec_href_none_when_exec_file_missing(self):
-        """No dangling header link when exec generation wrote nothing."""
+    def test_exec_href_none_when_exec_generation_failed(self):
+        """No dangling header link when exec generation returned False."""
         mock_reporter, mock_report = self._reporter_with_report()
-        with patch("pathlib.Path.exists", return_value=False):
-            self._run_main(
-                ["--html", "out.html", "--exec-report", "brief.html"],
-                mock_reporter,
-            )
+        mock_reporter.generate_executive_report.return_value = False
+        self._run_main(
+            ["--html", "out.html", "--exec-report", "brief.html"],
+            mock_reporter,
+        )
         mock_reporter.generate_html_report.assert_called_once_with(
             mock_report, "out.html", exec_href=None
         )
@@ -653,6 +653,67 @@ class TestExitCodes:
     def test_exit_0_when_complete_and_passing(self):
         # Returns normally (no SystemExit).
         self._run(evaluated_count=12, error_count=0, score=85)
+
+
+class TestOutputIntegrity:
+    """Output-path validation, fail-closed profile, and honest footer."""
+    _SCANNER_PATH  = "apotrope.scanner.Scanner"
+    _REPORTER_PATH = "apotrope.reporter.Reporter"
+    _ADMIN_PATH    = "apotrope.utils.is_admin"
+    _PROFILE_PATH  = "apotrope.profile.load_profile"
+
+    def _reporter(self):
+        rep = MagicMock()
+        rep.run_with_progress.return_value = MagicMock(
+            fail_count=0, warn_count=0, error_count=0, evaluated_count=10, score=90)
+        return rep
+
+    def _run(self, argv, rep, profile_error=None):
+        from apotrope.cli import main
+        profile_patch = (
+            patch(self._PROFILE_PATH, side_effect=profile_error) if profile_error
+            else patch(self._PROFILE_PATH, return_value=MagicMock())
+        )
+        with (
+            patch("sys.argv", ["apotrope"] + argv),
+            patch(self._SCANNER_PATH, return_value=MagicMock(is_admin=False)),
+            patch(self._REPORTER_PATH, return_value=rep),
+            patch(self._ADMIN_PATH, return_value=False),
+            profile_patch,
+        ):
+            main()
+
+    def test_json_baseline_collision_exits_2(self, tmp_path, capsys):
+        rep = self._reporter()
+        p = str(tmp_path / "out.dat")
+        with pytest.raises(SystemExit) as exc:
+            self._run(["--json", p, "--baseline", p], rep)
+        assert exc.value.code == 2
+        assert "different files" in capsys.readouterr().err
+        rep.run_with_progress.assert_not_called()
+
+    def test_unwritable_output_dir_exits_2(self, capsys):
+        rep = self._reporter()
+        with pytest.raises(SystemExit) as exc:
+            self._run(["--json", "/no_such_dir_xyz_apotrope/out.json"], rep)
+        assert exc.value.code == 2
+        assert "writable" in capsys.readouterr().err
+        rep.run_with_progress.assert_not_called()
+
+    def test_bad_profile_exits_2(self, capsys):
+        from apotrope.exceptions import ProfileError
+        rep = self._reporter()
+        with pytest.raises(SystemExit) as exc:
+            self._run(["--profile", "x.toml"], rep, profile_error=ProfileError("boom"))
+        assert exc.value.code == 2
+        assert "[ERROR]" in capsys.readouterr().err
+
+    def test_footer_omits_html_when_generation_fails(self, tmp_path):
+        rep = self._reporter()
+        rep.generate_html_report.return_value = False
+        self._run(["--html", str(tmp_path / "r.html")], rep)
+        _, kwargs = rep.print_terminal.call_args
+        assert kwargs["html_path"] is None
 
 
 # ---------------------------------------------------------------------------

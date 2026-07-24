@@ -144,23 +144,53 @@ def _exec_href(html_path: str, exec_path: str) -> str:
 
 def _validate_output_paths(
     parser: argparse.ArgumentParser,
-    html_path: str | None,
-    exec_path: str | None,
+    args: argparse.Namespace,
 ) -> None:
-    """Reject technical and executive reports that resolve to one file."""
-    if not html_path or not exec_path:
-        return
+    """Reject colliding or unwritable output paths *before* the scan runs.
+
+    Every requested output (``--html`` / ``--exec-report`` / ``--json`` /
+    ``--baseline``) must resolve to a distinct file, and each target directory
+    must be writable — checked up front so a bad path fails fast with a clear
+    message (exit 2) instead of a late traceback after a full scan.
+    """
+    import os
     from pathlib import Path
 
-    if Path(html_path).resolve() == Path(exec_path).resolve():
+    named = [
+        (flag, path) for flag, path in (
+            ("--html", args.html),
+            ("--exec-report", args.exec_report),
+            ("--json", args.json),
+            ("--baseline", args.baseline),
+        ) if path
+    ]
+
+    # Preserve the original, specific message for the html/exec pair.
+    if args.html and args.exec_report and (
+        Path(args.html).resolve() == Path(args.exec_report).resolve()
+    ):
         parser.error("--html and --exec-report must use different files")
+
+    seen: dict[Path, str] = {}
+    for flag, path in named:
+        resolved = Path(path).resolve()
+        if resolved in seen:
+            parser.error(f"{seen[resolved]} and {flag} must use different files")
+        seen[resolved] = flag
+
+    for flag, path in named:
+        parent = Path(path).resolve().parent
+        if not parent.is_dir() or not os.access(parent, os.W_OK):
+            parser.error(
+                f"cannot write {flag} to {path}: {parent} is not a writable directory"
+            )
 
 
 def main() -> None:
     """Parse arguments, run the audit, and produce output."""
     parser = build_parser()
     args = parser.parse_args()
-    _validate_output_paths(parser, args.html, args.exec_report)
+    _validate_output_paths(parser, args)
 
     logging.basicConfig(
         level=getattr(logging, args.log_level),
@@ -171,6 +201,7 @@ def main() -> None:
     from apotrope.scanner import Scanner, known_categories
     from apotrope.reporter import Reporter
     from apotrope.profile import load_profile
+    from apotrope.exceptions import ProfileError
     from apotrope.utils import is_admin
 
     categories: list[str] | None = None
@@ -187,8 +218,13 @@ def main() -> None:
             )
         categories = requested
 
-    # Load optional profile (auto-detects apotrope.toml if --profile not given)
-    profile = load_profile(getattr(args, "profile", None))
+    # Load optional profile (auto-detects apotrope.toml if --profile not given).
+    # An explicitly requested profile that is missing/unparseable fails closed.
+    try:
+        profile = load_profile(getattr(args, "profile", None))
+    except ProfileError as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        sys.exit(2)
 
     admin    = is_admin()
     scanner  = Scanner(categories=categories, is_admin=admin, profile=profile)
@@ -233,29 +269,31 @@ def main() -> None:
         sys.exit(2)
 
     # Save outputs. The executive report is generated first so the technical
-    # report's header link is only rendered once the target actually exists
-    # (generation is a no-op when Jinja2 or the template is unavailable).
-    if args.exec_report:
-        reporter.generate_executive_report(report, args.exec_report)
+    # report's header link is only rendered once it was actually written. Each
+    # generate_* returns whether the file was produced, so the footer below
+    # reports only the outputs that truly exist — never a file that failed.
+    exec_ok = bool(args.exec_report) and reporter.generate_executive_report(
+        report, args.exec_report
+    )
 
+    html_ok = False
     if args.html:
-        exec_href = None
-        if args.exec_report:
-            from pathlib import Path
-            if Path(args.exec_report).exists():
-                exec_href = _exec_href(args.html, args.exec_report)
-        reporter.generate_html_report(report, args.html, exec_href=exec_href)
+        exec_href = _exec_href(args.html, args.exec_report) if exec_ok else None
+        html_ok = reporter.generate_html_report(report, args.html, exec_href=exec_href)
 
-    if args.json:
-        reporter.generate_json_report(report, args.json)
+    json_ok = bool(args.json) and reporter.generate_json_report(report, args.json)
 
     if args.baseline:
         from apotrope.compare import save_baseline
         save_baseline(report, args.baseline)
 
-    # Terminal output
-    reporter.print_terminal(report, html_path=args.html, json_path=args.json,
-                            exec_path=args.exec_report)
+    # Terminal output — footer lists only the outputs actually written.
+    reporter.print_terminal(
+        report,
+        html_path=args.html if html_ok else None,
+        json_path=args.json if json_ok else None,
+        exec_path=args.exec_report if exec_ok else None,
+    )
 
     # Comparison diff display
     if baseline is not None:

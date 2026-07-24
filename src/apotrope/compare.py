@@ -112,14 +112,12 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
             else:
                 unchanged_count += 1
         elif c is None and b is not None:
-            # Only in baseline: this check did not run in the current scan.
-            # A bad check vanishing is NOT remediation — it can be a narrower
-            # --category set, a disabled/admin-gated check, an import failure,
-            # or a rename. Bucket it as coverage lost, never as resolved.
-            if b.status in _BAD:
-                missing_findings.append(b)
-            else:
-                unchanged_count += 1
+            # Present in baseline, absent from the current scan: coverage was lost
+            # for this control, whatever its prior status. A vanished PASS is still
+            # a control we can no longer confirm (narrower --category, a disabled /
+            # admin-gated check, an import failure, or a rename), so surface every
+            # absent baseline control as a missing control — never as remediation.
+            missing_findings.append(b)
         else:
             assert b is not None and c is not None
             b_bad = b.status in _BAD
@@ -142,7 +140,10 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
 
     score_delta = current.score - baseline.score
     current_has_error = any(result.status == Status.ERROR for result in current.results)
-    score_delta_reliable = not missing_findings and not current_has_error
+    # A score delta is only reliable when the two scans covered the exact same set
+    # of controls (no missing baseline controls AND no current-only additions) and
+    # nothing errored in the current run.
+    score_delta_reliable = (set(base_map) == set(curr_map)) and not current_has_error
 
     return ScanDiff(
         baseline_score=baseline.score,
@@ -220,6 +221,8 @@ def load_baseline(path: str) -> AuditReport:
             results=results,
             score=int(data.get("score", 0)),
             is_admin=bool(data.get("is_admin", False)),
+            cis_version=data.get("cis_version", ""),
+            cis_caveat=data.get("cis_caveat", ""),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"Malformed baseline JSON in {path!r}: {exc}") from exc

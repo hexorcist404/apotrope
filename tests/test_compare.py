@@ -249,6 +249,21 @@ class TestBaselineSerialization:
         loaded = self._roundtrip([])
         assert loaded.hostname == "PC"
 
+    def test_cis_version_and_caveat_preserved(self):
+        # --json serialises cis_version/cis_caveat; load_baseline must restore them.
+        report = _make_report([])
+        report.cis_version = "v4.0.0"
+        report.cis_caveat = "Server 2022 best-effort mapping"
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            path = f.name
+        try:
+            save_baseline(report, path)
+            loaded = load_baseline(path)
+        finally:
+            os.unlink(path)
+        assert loaded.cis_version == "v4.0.0"
+        assert loaded.cis_caveat == "Server 2022 best-effort mapping"
+
     def test_score_preserved(self):
         loaded = self._roundtrip([], score=73)
         assert loaded.score == 73
@@ -338,9 +353,12 @@ class TestOneSidedGoodResults:
         assert diff.new_findings == []
         assert diff.unchanged_count == 1
 
-    def test_baseline_only_pass_counts_as_unchanged(self):
+    def test_baseline_only_pass_is_missing_control(self):
+        # A control present in the baseline but absent now is coverage lost —
+        # surfaced as a missing control (not counted as unchanged/remediated).
         baseline = _make_report([_make_result("Old Pass", Status.PASS)])
         current = _make_report([])
         diff = compare_reports(baseline, current)
         assert diff.resolved_findings == []
-        assert diff.unchanged_count == 1
+        assert len(diff.missing_findings) == 1
+        assert diff.unchanged_count == 0

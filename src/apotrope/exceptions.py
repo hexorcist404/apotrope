@@ -21,3 +21,12 @@ class PowerShellUnavailableError(ApotropeError):
     total execution failure into confident PASS/FAIL verdicts derived from no
     data. Helpers re-raise it instead.
     """
+
+
+class ProfileError(ApotropeError):
+    """Raised when an explicitly requested ``--profile`` is missing or unparseable.
+
+    An auto-discovered ``apotrope.toml`` falls back to defaults, but a profile the
+    user asked for by name must fail closed rather than silently scan with the
+    default profile (which could change which checks run).
+    """

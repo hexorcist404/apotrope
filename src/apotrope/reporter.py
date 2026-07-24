@@ -344,6 +344,14 @@ def _truncate(text: str, maxlen: int) -> str:
     return text if len(text) <= maxlen else text[:maxlen - 1] + "~"
 
 
+_CTRL_CHARS = __import__("re").compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+def _plain(s: str) -> str:
+    """Strip terminal control characters from untrusted text (e.g. baseline data)."""
+    return _CTRL_CHARS.sub("", s)
+
+
 # ── Reporter ──────────────────────────────────────────────────────────────────
 
 class Reporter:
@@ -479,7 +487,7 @@ class Reporter:
         report: AuditReport,
         path: str,
         exec_href: str | None = None,
-    ) -> None:
+    ) -> bool:
         """Render and save a self-contained HTML report via the Jinja2 template.
 
         Args:
@@ -487,12 +495,17 @@ class Reporter:
             path:      Destination file path for the HTML file.
             exec_href: Optional href to a co-generated executive report; when
                        set, the header renders an "Executive Report ↗" link.
+
+        Returns:
+            ``True`` only if the file was written; ``False`` on any failure
+            (missing Jinja2, template error, or write error) so the caller does
+            not claim success for a report that was never produced.
         """
         try:
             from jinja2 import Environment, FileSystemLoader
         except ImportError:
             log.error("Jinja2 not installed — cannot generate HTML report")
-            return
+            return False
 
         template_dir = self._resolve_template_dir()
         env = Environment(
@@ -505,16 +518,21 @@ class Reporter:
             template = env.get_template("report.html.j2")
         except Exception as exc:
             log.error("Could not load HTML template: %s", exc)
-            return
+            return False
 
         ctx = self._build_template_context(report)
         ctx["logo_data_uri"] = self._encode_logo_data_uri(template_dir)
         ctx["exec_href"] = exec_href
         html = template.render(**ctx)
-        Path(path).write_text(html, encoding="utf-8")
+        try:
+            Path(path).write_text(html, encoding="utf-8")
+        except OSError as exc:
+            log.error("Could not write HTML report to %s: %s", path, exc)
+            return False
         log.info("HTML report saved to %s", path)
+        return True
 
-    def generate_executive_report(self, report: AuditReport, path: str) -> None:
+    def generate_executive_report(self, report: AuditReport, path: str) -> bool:
         """Render and save the executive report (Security Posture Assessment).
 
         A plain-English, print-first HTML document for non-technical decision
@@ -525,12 +543,15 @@ class Reporter:
         Args:
             report: Completed :class:`~apotrope.models.AuditReport`.
             path:   Destination file path for the HTML file.
+
+        Returns:
+            ``True`` only if the file was written; ``False`` on any failure.
         """
         try:
             from jinja2 import Environment, FileSystemLoader
         except ImportError:
             log.error("Jinja2 not installed — cannot generate executive report")
-            return
+            return False
 
         template_dir = self._resolve_template_dir()
         env = Environment(
@@ -541,13 +562,18 @@ class Reporter:
             template = env.get_template("exec_report.html.j2")
         except Exception as exc:
             log.error("Could not load executive report template: %s", exc)
-            return
+            return False
 
         ctx = self._build_exec_template_context(report)
         ctx["logo_data_uri"] = self._encode_logo_data_uri(template_dir)
         html = template.render(**ctx)
-        Path(path).write_text(html, encoding="utf-8")
+        try:
+            Path(path).write_text(html, encoding="utf-8")
+        except OSError as exc:
+            log.error("Could not write executive report to %s: %s", path, exc)
+            return False
         log.info("Executive report saved to %s", path)
+        return True
 
     @staticmethod
     def _encode_logo_data_uri(template_dir: Path) -> str | None:
@@ -568,12 +594,15 @@ class Reporter:
             return None
         return "data:image/png;base64," + base64.b64encode(data).decode("ascii")
 
-    def generate_json_report(self, report: AuditReport, path: str) -> None:
+    def generate_json_report(self, report: AuditReport, path: str) -> bool:
         """Serialize the AuditReport to a JSON file.
 
         Args:
             report: Completed :class:`~apotrope.models.AuditReport`.
             path:   Destination file path for the JSON file.
+
+        Returns:
+            ``True`` only if the file was written; ``False`` on a write error.
         """
 
         def _default(obj):
@@ -583,11 +612,16 @@ class Reporter:
                 return obj.value
             raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
-        Path(path).write_text(
-            json.dumps(dataclasses.asdict(report), indent=2, default=_default),
-            encoding="utf-8",
-        )
+        try:
+            Path(path).write_text(
+                json.dumps(dataclasses.asdict(report), indent=2, default=_default),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            log.error("Could not write JSON report to %s: %s", path, exc)
+            return False
         log.info("JSON report saved to %s", path)
+        return True
 
     def print_comparison(self, diff: object) -> None:
         """Print a scan comparison diff table to the terminal.
@@ -620,7 +654,7 @@ class Reporter:
 
         sections: list[tuple[str, str, list]] = [
             ("green",   "Resolved", diff.resolved_findings),
-            ("magenta", "Not scanned (coverage lost)", diff.missing_findings),
+            ("magenta", "Missing controls (coverage lost)", diff.missing_findings),
             (_MUTED,    "Errored (could not evaluate)", diff.errored_findings),
             ("red",     "New",      diff.new_findings),
             ("yellow",  "Worsened", diff.worsened_findings),
@@ -634,11 +668,16 @@ class Reporter:
             any_printed = True
             console.print(f"\n  [{colour} bold]{label}[/{colour} bold]  ({len(findings)})")
             for r in findings:
-                console.print(
-                    f"    [{colour}]{r.status.value:5}[/{colour}]  "
-                    f"[dim]{r.severity.value:8}[/dim]  "
-                    f"{r.category} / {r.check_name}"
-                )
+                # category / check_name come from the baseline file (untrusted), so
+                # append them as data via _text() instead of into a markup f-string.
+                console.print(_text(
+                    ("    ", None),
+                    (f"{r.status.value:5}", colour),
+                    ("  ", None),
+                    (f"{r.severity.value:8}", "dim"),
+                    ("  ", None),
+                    (_plain(f"{r.category} / {r.check_name}"), None),
+                ))
 
         if not any_printed:
             console.print(
@@ -1114,7 +1153,9 @@ class Reporter:
 
     def _build_exec_verdict(self, report: AuditReport) -> str:
         """One-sentence gradebox verdict (plain text, counts only)."""
-        total  = len(report.results)
+        # "Evaluated" excludes INFO/ERROR so the verdict matches the compliance
+        # tile (pass_count / total) instead of over-counting INFO notes as passes.
+        evaluated = report.evaluated_count
         open_n = report.fail_count + report.warn_count
         p1 = sum(
             1 for r in report.results
@@ -1122,10 +1163,10 @@ class Reporter:
             and r.severity in (Severity.CRITICAL, Severity.HIGH)
         )
 
-        if total == 0:
+        if evaluated == 0:
             return "No controls could be evaluated in this assessment."
         if open_n == 0 and report.error_count == 0:
-            return (f"All {total} evaluated controls passed; no corrective "
+            return (f"All {evaluated} evaluated controls passed; no corrective "
                     "action is required at this time.")
         if open_n == 0:
             e = report.error_count
@@ -1459,6 +1500,7 @@ class Reporter:
         return commands
 
     def _make_console(self):
+        import os
         import sys
 
         from rich.console import Console
@@ -1478,7 +1520,10 @@ class Reporter:
         # which downsamples the brand palette (green #2bff88 → cyan) and mangles
         # the wordmark glyph. Redirected/piped stdout and --no-color/NO_COLOR
         # fall through to Rich's defaults so no escape codes leak into files.
-        if not self.no_color and Console().is_terminal:
+        # Honor the NO_COLOR env var too: passing an explicit no_color=False on
+        # the truecolor path would otherwise override Rich's own NO_COLOR check.
+        no_color = self.no_color or bool(os.environ.get("NO_COLOR"))
+        if not no_color and Console().is_terminal:
             _modernize_windows_console()
             return Console(
                 no_color=False,
@@ -1486,7 +1531,7 @@ class Reporter:
                 color_system="truecolor",
                 legacy_windows=False,
             )
-        return Console(no_color=self.no_color, highlight=False)
+        return Console(no_color=no_color, highlight=False)
 
     def _print_non_admin_warning(self, console) -> None:
         """Note (no box) that the scan is running without elevation."""
