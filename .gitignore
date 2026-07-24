@@ -59,11 +59,19 @@ $RECYCLE.BIN/
 # file, so a future brand token (e.g. brand/palette.json) can't silently fall
 # back into the *.json ignore above.
 !brand/*.json
+# TestDriver (Node) setup — the *.json rule above is for Apotrope report output,
+# not the Node package manifests, so keep these tracked.
+!package.json
+!package-lock.json
 # docs/ is the published marketing site (GitHub Pages) — commit all of its HTML
 !docs/index.html
 !docs/report.html
 !docs/**/*.html
 apotrope_report_*
+
+# Node / TestDriver
+node_modules/
+.testdriver/
 
 # Design review scaffolding
 gen_sample_report.py

@@ -1,0 +1,28 @@
+{
+  "name": "workspace",
+  "version": "1.0.0",
+  "description": "TestDriver.ai test suite",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "keywords": [
+    "testdriver",
+    "testing",
+    "e2e"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "devDependencies": {
+    "testdriverai": "^7.11.36-test",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
