@@ -295,6 +295,27 @@ class TestMiscFixes:
             r = misc._check_autoplay()[0]
         assert "New-Item" in r.command
 
+    def test_autoplay_new_item_is_guarded_by_test_path(self):
+        # `New-Item -Force` on the registry provider REPLACES an existing key,
+        # deleting the unrelated Explorer policies that share it. Assert the
+        # guard wraps the New-Item rather than merely appearing somewhere in the
+        # block — an unguarded create on a later line would still be destructive.
+        with patch("apotrope.checks.misc.run_powershell", return_value="NOTSET"):
+            r = misc._check_autoplay()[0]
+        guard = r.command.splitlines()[0]
+        assert guard.startswith("if (-not (Test-Path ")
+        assert "New-Item" in guard
+        assert "New-Item" not in "\n".join(r.command.splitlines()[1:])
+
+    def test_autoplay_remediation_guarded_on_every_branch(self):
+        # 158 -> "partially disabled" WARN; 0 and an unparseable value -> the
+        # AutoPlay-enabled branch. Both read a value back, so the key provably
+        # exists — precisely the case an unguarded New-Item -Force would wipe.
+        for output in ("158", "0", "notanint"):
+            with patch("apotrope.checks.misc.run_powershell", return_value=output):
+                r = misc._check_autoplay()[0]
+            assert "Test-Path" in r.command, f"unguarded New-Item for output {output!r}"
+
     def test_machine_inactivity_policy_is_pass(self):
         # A machine-wide inactivity lock counts even without a per-user screensaver.
         with patch("apotrope.checks.misc.run_powershell_json",

@@ -24,8 +24,20 @@ _PS_AUTOPLAY = (
 )
 # Create the policy key first: Set-ItemProperty -Force does NOT create a missing
 # key, and the NOTSET finding fires precisely when that key is absent.
+# `Set-ItemProperty -Force` cannot create a missing key, so the NOTSET branch
+# genuinely needs a New-Item — but on the *registry* provider `New-Item -Force`
+# REPLACES an existing key, deleting every value and subkey under it. This key is
+# shared with unrelated Explorer policies (NoRecentDocsHistory, NoActiveDesktop,
+# ForceActiveDesktopOn, ...), and the two other branches that emit this command
+# are only reachable when a value was read back, i.e. when the key already
+# exists. Unguarded, the paste would destroy those neighbouring policies.
+#
+# Kept as one module-level string so tools/command_audit.py still resolves it
+# statically; a wrapper it cannot resolve collapses the command to "{expr}" and
+# drops it from the lint inventory.
 _CMD_AUTOPLAY_DISABLE = (
-    f"New-Item -Path '{_AUTOPLAY_KEY}' -Force | Out-Null\n"
+    f"if (-not (Test-Path '{_AUTOPLAY_KEY}')) "
+    f"{{ New-Item -Path '{_AUTOPLAY_KEY}' -Force | Out-Null }}\n"
     f"Set-ItemProperty -Path '{_AUTOPLAY_KEY}' -Name NoDriveTypeAutoRun -Value 255 "
     "-Type DWord -Force"
 )
