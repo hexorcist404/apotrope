@@ -14,6 +14,7 @@ import ntpath
 import os
 import subprocess
 import sys
+from typing import cast
 
 from apotrope.exceptions import ApotropeError, PowerShellUnavailableError
 
@@ -70,7 +71,11 @@ def _system_windows_directory() -> str:
             f"GetSystemWindowsDirectoryW failed (error {last_error})"
         )
 
-    path = buf[:written]
+    # cast: ctypes special-cases c_wchar arrays so slicing one returns str, but
+    # typeshed declares Array.__getitem__(slice) as list[T]. Only the Windows
+    # mypy legs see this — the sys.platform guard above makes the whole function
+    # unreachable to mypy on Linux, so the ubuntu legs never type-check it.
+    path = cast("str", buf[:written])
     # ntpath, not os.path: this is always a Windows path, and os.path is
     # posixpath on the Linux CI legs where the mocked tests run.
     if not ntpath.isabs(path):
