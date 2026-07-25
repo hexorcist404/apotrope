@@ -111,8 +111,8 @@ class TestLookupOsAware:
 def _fake_module() -> ModuleType:
     # setattr (not mod.attr =) so mypy accepts dynamic attributes on ModuleType.
     mod = ModuleType("fake")
-    setattr(mod, "CATEGORY", "Test")
-    setattr(mod, "run", lambda: [CheckResult("Test", "x", Status.PASS, Severity.LOW, "d", "ok")])
+    mod.CATEGORY = "Test"
+    mod.run = lambda: [CheckResult("Test", "x", Status.PASS, Severity.LOW, "d", "ok")]
     return mod
 
 

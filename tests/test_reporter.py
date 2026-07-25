@@ -27,7 +27,8 @@ def _make_report(
     base = [
         CheckResult("Firewall", "Domain Profile",  Status.PASS, Severity.HIGH,   "desc", "ok"),
         CheckResult("Firewall", "Public Profile",  Status.FAIL, Severity.CRITICAL,"desc", "off", "Enable it"),
-        CheckResult("Services", "Risky Services",  Status.WARN, Severity.MEDIUM,  "desc", "SNMP running", "Disable SNMP"),
+        CheckResult("Services", "Risky Services",  Status.WARN, Severity.MEDIUM,
+                    "desc", "SNMP running", "Disable SNMP"),
         CheckResult("OS",       "OS Version",       Status.INFO, Severity.INFO,    "desc", "Win11 22621"),
     ]
     results = base + (extra_results or [])

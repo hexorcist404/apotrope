@@ -22,6 +22,9 @@ from apotrope.scoring import calculate_score
 from apotrope.utils import get_wmi_object
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import ModuleType
+
     from apotrope import cis_map
     from apotrope.profile import Profile
 
@@ -52,8 +55,8 @@ def known_categories() -> set[str]:
     for name in names:
         try:
             module = importlib.import_module(f"apotrope.checks.{name}")
-        except Exception as exc:
-            log.error("Failed to import apotrope.checks.%s: %s", name, exc)
+        except Exception:
+            log.exception("Failed to import apotrope.checks.%s", name)
             continue
         categories.add(getattr(module, "CATEGORY", name).lower())
     return categories
@@ -102,8 +105,8 @@ class Scanner:
 
     def run(
         self,
-        modules: list | None = None,
-        on_module_start=None,
+        modules: list[ModuleType] | None = None,
+        on_module_start: Callable[[ModuleType], None] | None = None,
     ) -> AuditReport:
         """Discover check modules, run them, and return an AuditReport.
 
@@ -126,7 +129,9 @@ class Scanner:
                 try:
                     on_module_start(module)
                 except Exception:
-                    pass
+                    log.exception(
+                        "on_module_start callback failed for %s", module.__name__
+                    )
             module_results = self._run_module(module)
             results.extend(module_results)
 
@@ -193,8 +198,14 @@ class Scanner:
         discovered = []
 
         if getattr(sys, "frozen", False):
-            # PyInstaller bundle: use the explicit module registry
-            check_names: list[str] = list(checks_pkg.MODULES)
+            # PyInstaller bundle: use the explicit module registry.
+            # dict.fromkeys de-duplicates while preserving order. importlib
+            # returns the *cached* module for a repeated name, so a duplicated
+            # registry entry would append the same module twice and emit every
+            # one of its CheckResults twice — double-deducting each FAIL/WARN
+            # from the score. tests/test_checks_registry.py also asserts the
+            # registry is duplicate-free; this is the belt to that braces.
+            check_names: list[str] = list(dict.fromkeys(checks_pkg.MODULES))
         else:
             check_names = [
                 m.name for m in pkgutil.iter_modules(checks_pkg.__path__)
@@ -206,8 +217,8 @@ class Scanner:
             full_name = f"apotrope.checks.{name}"
             try:
                 module = importlib.import_module(full_name)
-            except Exception as exc:
-                log.error("Failed to import %s: %s", full_name, exc)
+            except Exception:
+                log.exception("Failed to import %s", full_name)
                 continue
 
             # Category filter (case-insensitive on both sides — a library caller
@@ -228,7 +239,7 @@ class Scanner:
 
         return discovered
 
-    def _run_module(self, module) -> list[CheckResult]:
+    def _run_module(self, module: ModuleType) -> list[CheckResult]:
         """Run a single check module and return its results.
 
         Handles three cases:
@@ -266,8 +277,8 @@ class Scanner:
             try:
                 module.configure(self.profile.thresholds)
                 configured = True
-            except Exception as exc:
-                log.warning("configure() on %s failed: %s", module.__name__, exc)
+            except Exception:
+                log.exception("configure() on %s failed", module.__name__)
 
         log.debug("Running %s", module.__name__)
         t_start = time.monotonic()
@@ -278,7 +289,7 @@ class Scanner:
                     f"run() must return list[CheckResult], got {type(results)}"
                 )
         except Exception as exc:
-            log.error("Error in %s.run(): %s", module.__name__, exc, exc_info=True)
+            log.exception("Error in %s.run()", module.__name__)
             results = [CheckResult(
                 category=cat,
                 check_name=f"{cat} — module error",
@@ -295,8 +306,8 @@ class Scanner:
                 if callable(reset_fn):
                     try:
                         reset_fn()
-                    except Exception as exc:
-                        log.warning("reset() on %s failed: %s", module.__name__, exc)
+                    except Exception:
+                        log.exception("reset() on %s failed", module.__name__)
                 else:
                     # configure() applied thresholds but there is no reset() to undo
                     # them — warn loudly, since they will leak into the next scan.

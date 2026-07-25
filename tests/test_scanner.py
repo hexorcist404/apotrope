@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from types import ModuleType
 from unittest.mock import patch
 
@@ -33,14 +34,14 @@ def _make_module(
     """Return a minimal fake check module."""
     # setattr (not mod.attr =) so mypy accepts dynamic attributes on ModuleType.
     mod = ModuleType(name)
-    setattr(mod, "CATEGORY", category)
+    mod.CATEGORY = category
     if requires_admin:
-        setattr(mod, "REQUIRES_ADMIN", True)
+        mod.REQUIRES_ADMIN = True
 
     if run_raises is not None:
         def _run():
             raise run_raises
-        setattr(mod, "run", _run)
+        mod.run = _run
     else:
         _results = results or [CheckResult(
             category=category,
@@ -50,7 +51,7 @@ def _make_module(
             description="desc",
             details="ok",
         )]
-        setattr(mod, "run", lambda: _results)
+        mod.run = lambda: _results
 
     return mod
 
@@ -70,7 +71,7 @@ class TestThresholdConfigureReset:
     def _configurable_module(self, calls: list) -> ModuleType:
         """A fake module that records its configure/run/reset call order."""
         mod = ModuleType("configurable_mod")
-        setattr(mod, "CATEGORY", "Configurable")
+        mod.CATEGORY = "Configurable"
 
         def _configure(thresholds):
             calls.append(("configure", dict(thresholds)))
@@ -82,9 +83,9 @@ class TestThresholdConfigureReset:
             calls.append(("run", None))
             return []
 
-        setattr(mod, "configure", _configure)
-        setattr(mod, "reset", _reset)
-        setattr(mod, "run", _run)
+        mod.configure = _configure
+        mod.reset = _reset
+        mod.run = _run
         return mod
 
     def test_configure_then_run_then_reset_in_order(self):
@@ -154,7 +155,7 @@ class TestThresholdConfigureReset:
         def _bad_reset():
             raise RuntimeError("boom")
 
-        setattr(module, "reset", _bad_reset)
+        module.reset = _bad_reset
         scanner = Scanner(profile=Profile(thresholds={"max_update_age_fail": 90}))
         results = scanner._run_module(module)  # must not raise
         assert isinstance(results, list)
@@ -274,7 +275,7 @@ class TestModuleErrorHandling:
         scanner = Scanner()
         mod = ModuleType("empty_mod")
         mod.CATEGORY = "Test"
-        mod.run = lambda: []
+        mod.run = list
         results = scanner._run_module(mod)
         assert len(results) == 1
         assert results[0].status == Status.ERROR
@@ -671,3 +672,17 @@ class TestPowerShellUnavailable:
             side_effect=PowerShellUnavailableError("no powershell"),
         ):
             assert Scanner._detect_product_type() is None
+
+
+class TestFrozenRegistryDuplicates:
+    """A duplicated MODULES entry must not run a check twice in the frozen exe."""
+
+    def test_duplicate_registry_entry_runs_module_once(self, monkeypatch):
+        import apotrope.checks as checks_pkg
+
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+        monkeypatch.setattr(checks_pkg, "MODULES", ["rdp", "rdp", "uac"])
+        scanner = Scanner()
+        modules = scanner._discover_modules()
+        names = [m.__name__ for m in modules]
+        assert len(names) == len(set(names)), names

@@ -27,7 +27,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from command_audit import collect_commands  # noqa: E402
+from command_audit import collect_commands
 
 # Sample values for the runtime interpolations in command templates.
 _PLACEHOLDERS = {
@@ -108,6 +108,10 @@ def main() -> int:
         env={**__import__("os").environ, "APOTROPE_CMD_FILE": cmd_file},
         capture_output=True,
         text=True,
+        # Explicitly False, never True: the return code is this script's own
+        # exit code (see main()), so check=True would turn a reported command
+        # failure into a CalledProcessError traceback in the CI step.
+        check=False,
     )
     print(proc.stdout)
     if proc.stderr.strip():

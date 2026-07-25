@@ -239,6 +239,7 @@ def run_powershell(command: str, timeout: int = 30) -> str:
             errors="replace",
             timeout=timeout,
             env=_child_env(),
+            check=False,
         )
     except subprocess.TimeoutExpired as exc:
         raise ApotropeError(
@@ -290,7 +291,8 @@ def run_powershell_json(command: str, timeout: int = 30) -> dict | list:
         return []
 
     try:
-        return json.loads(output)
+        # json.loads is typed Any; the declared return type is the contract.
+        return cast("dict | list", json.loads(output))
     except json.JSONDecodeError as exc:
         raise ApotropeError(
             f"Failed to parse PowerShell JSON output: {exc}"
@@ -457,7 +459,7 @@ def is_admin() -> bool:
         return False
     try:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except Exception:
+    except (AttributeError, OSError):
         return False
 
 

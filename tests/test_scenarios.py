@@ -150,7 +150,8 @@ def _neglected_win10_home_results() -> list[CheckResult]:
         _r("Patching", "Pending Updates",     Status.FAIL, Severity.HIGH, "15 updates", "Install updates"),
         # Accounts — guest enabled, many admins
         _r("Accounts", "Guest Account",          Status.FAIL, Severity.HIGH, "Enabled", "Disable guest"),
-        _r("Accounts", "Built-in Administrator", Status.FAIL, Severity.MEDIUM, "Enabled, default name", "Rename/disable"),
+        _r("Accounts", "Built-in Administrator", Status.FAIL, Severity.MEDIUM,
+           "Enabled, default name", "Rename/disable"),
         _r("Accounts", "Local Administrators",   Status.WARN, Severity.MEDIUM, "5 admins", "Reduce admins"),
         _r("Accounts", "Password Length",        Status.FAIL, Severity.HIGH, "6 chars min", "Increase length"),
         _r("Accounts", "Account Lockout",        Status.WARN, Severity.MEDIUM, "Disabled", "Enable lockout"),

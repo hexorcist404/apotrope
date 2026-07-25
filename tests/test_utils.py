@@ -395,7 +395,9 @@ class TestReadRegistry:
 
     def test_returns_integer_when_value_is_numeric(self):
         with patch("apotrope.utils.subprocess.run", return_value=_mock_ps("1")):
-            result = utils.read_registry("HKLM", "SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "SMB1")
+            result = utils.read_registry(
+                "HKLM", "SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters", "SMB1"
+            )
         assert result == 1
         assert isinstance(result, int)
 

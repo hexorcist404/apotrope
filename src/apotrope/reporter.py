@@ -319,8 +319,8 @@ def _modernize_windows_console() -> None:
             return  # redirected / no console attached
         kernel32.SetConsoleMode(handle, mode.value | enable_vt_processing)
         kernel32.SetConsoleOutputCP(65001)
-    except Exception:
-        return
+    except (AttributeError, OSError):
+        return  # no console / non-Windows ctypes surface
 
 
 def _text(*segments):
@@ -517,8 +517,8 @@ class Reporter:
         )
         try:
             template = env.get_template("report.html.j2")
-        except Exception as exc:
-            log.error("Could not load HTML template: %s", exc)
+        except Exception:
+            log.exception("Could not load HTML template")
             return False
 
         ctx = self._build_template_context(report)
@@ -561,8 +561,8 @@ class Reporter:
         )
         try:
             template = env.get_template("exec_report.html.j2")
-        except Exception as exc:
-            log.error("Could not load executive report template: %s", exc)
+        except Exception:
+            log.exception("Could not load executive report template")
             return False
 
         ctx = self._build_exec_template_context(report)
@@ -1511,7 +1511,7 @@ class Reporter:
         # check data to '?' rather than crashing mid-render. Under UTF-8 every
         # glyph we emit is encodable, so 'replace' never actually fires.
         try:
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
         except (AttributeError, ValueError):
             pass
 

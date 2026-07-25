@@ -189,7 +189,10 @@ def _check_listening_ports() -> list[CheckResult]:
         status=Status.INFO,
         severity=Severity.INFO,
         description="Enumerates all TCP ports in LISTEN state.",
-        details=f"{len(unique_ports)} listening port(s): {port_summary}" if unique_ports else "No listening TCP ports found.",
+        details=(
+            f"{len(unique_ports)} listening port(s): {port_summary}"
+            if unique_ports else "No listening TCP ports found."
+        ),
         remediation="",
     ))
 

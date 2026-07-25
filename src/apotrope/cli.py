@@ -18,6 +18,8 @@ import sys
 
 from apotrope import __version__
 
+log = logging.getLogger(__name__)
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build and return the argument parser."""
@@ -304,8 +306,7 @@ def main() -> None:
     try:
         report = reporter.run_with_progress(scanner)
     except Exception as exc:
-        _log = logging.getLogger(__name__)
-        _log.critical("Fatal scan error: %s", exc, exc_info=True)
+        log.critical("Fatal scan error: %s", exc, exc_info=True)
         print(f"\n[FATAL] Scan could not complete: {exc}", file=sys.stderr)
         sys.exit(2)
 

@@ -79,12 +79,42 @@ jobs:
       - name: Install the built wheel and smoke-test it
         # Tests run against the editable install; this proves the *packaged*
         # wheel actually installs and runs on Windows before it ships.
+        #
+        # `--dry-run` alone is not a gate: it prints "0 module(s) would run" and
+        # returns 0, so a wheel that shipped no check modules and no templates
+        # passed it. The probes below assert instead. This job does no checkout,
+        # so the only importable `apotrope` is the one pip just installed —
+        # every assertion is necessarily about the shipped artifact, which is
+        # also why they must be inline `python -c` rather than a tools/ script.
         shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install "$(ls dist/*.whl)"
           apotrope --version
           apotrope --dry-run --no-color
+          python -c "
+          import apotrope.checks as c
+          from apotrope.scanner import Scanner
+          # Compare the IMPORTABLE set against the registry. Counting
+          # len(c.MODULES) would prove nothing: it is a hand-written list whose
+          # length is 14 whether or not the modules made it into the wheel.
+          got = {n.rsplit('.', 1)[1] for n in Scanner().dry_run()}
+          want = set(c.MODULES)
+          assert want, 'MODULES registry is empty'
+          assert got == want, ('check modules missing from the wheel', want ^ got)
+          print(f'ok: {len(got)} check modules importable from the wheel')
+          "
+          python -c "
+          import pathlib, apotrope.reporter as r
+          # Probe the real loader path (FileSystemLoader over __file__'s parent),
+          # not importlib.resources: packages.find uses non-namespace discovery,
+          # so apotrope.templates is not a package.
+          d = pathlib.Path(r.__file__).parent / 'templates'
+          want = {'report.html.j2', 'exec_report.html.j2'}
+          have = {p.name for p in d.iterdir()} if d.is_dir() else set()
+          assert want <= have, ('templates missing from the wheel', want - have)
+          print(f'ok: templates present ({sorted(have)})')
+          "
 
   publish:
     name: Publish to PyPI

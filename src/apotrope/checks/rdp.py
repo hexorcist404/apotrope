@@ -115,7 +115,7 @@ _REMEDIATION_NLA_BY_POLICY = (
 
 def _effective_value(
     data: dict, policy_name: str, local_name: str
-) -> tuple[object | None, bool]:
+) -> tuple[int | str | None, bool]:
     """Return ``(winning_value, policy_managed)`` for a policy-backed setting.
 
     The Group Policy value under ``...\\Policies\\...`` overrides the local

@@ -4,7 +4,17 @@ on:
   push:
     branches: ["main", "feat/**", "fix/**"]
   pull_request:
-    branches: ["main"]
+    # No branch filter: a stacked PR (base = another fix/** branch, as when
+    # these PRs are chained) produced no pull_request-triggered run at all, so
+    # it was never checked against its merge preview and offered no check
+    # context a branch-protection rule could require.
+
+# One run per ref. Without this the push and pull_request triggers both fire on
+# every push to an open PR branch, duplicating a 4-leg matrix (two of them
+# Windows) and leaving superseded runs to finish.
+concurrency:
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
 
 jobs:
   test:
