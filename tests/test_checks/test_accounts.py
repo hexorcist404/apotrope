@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
+from apotrope import cis_map
 from apotrope.checks import accounts
 from apotrope.exceptions import ApotropeError
 from apotrope.models import CheckResult, Status, Severity
@@ -251,6 +250,45 @@ class TestCheckPasswordPolicy:
                    side_effect=ApotropeError("secedit denied")):
             results = accounts._check_password_policy()
         assert any(r.status == Status.ERROR for r in results)
+
+    def test_secedit_failure_degrades_every_control_separately(self):
+        # A single collapsed "Password Policy" result DELETED three CIS-mapped
+        # rows from the report rather than degrading them — the operator saw no
+        # Minimum Length / Account Lockout / Complexity row at all. Each control
+        # must survive the failure under its own name.
+        with patch("apotrope.checks.accounts.run_powershell",
+                   side_effect=ApotropeError("secedit denied")):
+            results = accounts._check_password_policy()
+        assert [r.check_name for r in results] == list(accounts._PW_POLICY_CHECKS)
+        assert all(r.status == Status.ERROR for r in results)
+
+    def test_secedit_failure_names_stay_cis_mapped(self):
+        # These check_name strings key cis_map.py, --compare and
+        # profile.disabled_checks; a renamed result silently loses all three.
+        with patch("apotrope.checks.accounts.run_powershell",
+                   side_effect=ApotropeError("secedit denied")):
+            results = accounts._check_password_policy()
+        for r in results:
+            assert cis_map.lookup(r.check_name), f"{r.check_name!r} has no CIS reference"
+
+    def test_secedit_failure_points_at_elevation(self):
+        # secedit exports from a database readable only by SYSTEM and
+        # Administrators, so the documented non-elevated invocation always lands
+        # here. Say so — a bare stderr string is not actionable.
+        with patch("apotrope.checks.accounts.run_powershell",
+                   side_effect=ApotropeError("secedit denied")):
+            results = accounts._check_password_policy()
+        for r in results:
+            assert "Administrator" in r.remediation
+            assert "Administrators" in r.details
+
+    def test_success_and_failure_paths_agree_on_names(self):
+        # If the two paths ever disagree, a --compare diff reads the mismatch as
+        # one control vanishing and another appearing.
+        with patch("apotrope.checks.accounts.run_powershell",
+                   return_value=self._inf()):
+            ok = accounts._check_password_policy()
+        assert [r.check_name for r in ok] == list(accounts._PW_POLICY_CHECKS)
 
 
 # ---------------------------------------------------------------------------

@@ -56,6 +56,15 @@ _PS_SECEDIT = (
     "finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }"
 )
 
+# The three password-policy controls. These strings key cis_map.py, --compare and
+# profile.disabled_checks, so they are defined once and shared by the evaluators
+# and by the secedit-failure path: a name that appears in only one of the two
+# drops the control out of the report instead of degrading it to ERROR.
+_PW_MIN_LENGTH = "Password Policy — Minimum Length"
+_PW_LOCKOUT = "Password Policy — Account Lockout"
+_PW_COMPLEXITY = "Password Policy — Complexity"
+_PW_POLICY_CHECKS = (_PW_MIN_LENGTH, _PW_LOCKOUT, _PW_COMPLEXITY)
+
 _ADMIN_WARN_THRESHOLD = 2
 _MIN_PW_FAIL = 8
 _MIN_PW_WARN = 12
@@ -238,7 +247,7 @@ def _check_password_policy() -> list[CheckResult]:
     try:
         inf_text = run_powershell(_PS_SECEDIT)
     except ApotropeError as exc:
-        return [_error("Password Policy", str(exc))]
+        return _password_policy_unavailable(exc)
 
     policy = _parse_secedit_inf(inf_text)
     return [
@@ -248,8 +257,35 @@ def _check_password_policy() -> list[CheckResult]:
     ]
 
 
+def _password_policy_unavailable(exc: ApotropeError) -> list[CheckResult]:
+    """Degrade a failed secedit export into one ERROR *per* password-policy control.
+
+    These three ``check_name`` strings key ``cis_map.py``, ``--compare``, and
+    ``profile.disabled_checks``, so collapsing the failure into a single
+    differently-named "Password Policy" result deleted three CIS-mapped rows from
+    the report rather than degrading them: the operator saw no Minimum Length,
+    Account Lockout or Complexity row at all, and a baseline diff read the
+    disappearance as lost coverage on both sides.
+
+    The overwhelmingly common cause is elevation, not a broken machine — secedit
+    exports from ``%windir%\\security\\database\\secedit.sdb``, which is ACL'd to
+    SYSTEM and Administrators only, so the documented non-elevated invocation
+    always lands here. Say that in ``details`` instead of surfacing a bare
+    stderr, and point the remediation at re-running elevated.
+    """
+    detail = (
+        f"Could not export the local security policy ({exc}) — password policy "
+        "was not evaluated. secedit reads a database readable only by SYSTEM and "
+        "Administrators, so a scan run without elevation always reports this."
+    )
+    return [
+        _error(name, detail, remediation="Re-run Apotrope as Administrator to evaluate password policy.")
+        for name in _PW_POLICY_CHECKS
+    ]
+
+
 def _eval_min_length(policy: dict[str, str]) -> CheckResult:
-    name = "Password Policy — Minimum Length"
+    name = _PW_MIN_LENGTH
     raw = policy.get("minimumpasswordlength")
     if raw is None:
         return _error(name, "MinimumPasswordLength missing from the exported security policy.")
@@ -286,7 +322,7 @@ def _eval_min_length(policy: dict[str, str]) -> CheckResult:
 
 
 def _eval_lockout(policy: dict[str, str]) -> CheckResult:
-    name = "Password Policy — Account Lockout"
+    name = _PW_LOCKOUT
     raw = policy.get("lockoutbadcount")
     if raw is None:
         return _error(name, "LockoutBadCount missing from the exported security policy.")
@@ -320,7 +356,7 @@ def _eval_lockout(policy: dict[str, str]) -> CheckResult:
 
 
 def _eval_complexity(policy: dict[str, str]) -> CheckResult:
-    name = "Password Policy — Complexity"
+    name = _PW_COMPLEXITY
     raw = policy.get("passwordcomplexity")
     if raw not in ("0", "1"):
         return _error(
@@ -374,7 +410,11 @@ def _parse_secedit_inf(text: str) -> dict[str, str]:
     return result
 
 
-def _error(check_name: str, details: str) -> CheckResult:
+def _error(
+    check_name: str,
+    details: str,
+    remediation: str = "Run with --log-level DEBUG for more detail.",
+) -> CheckResult:
     return CheckResult(
         category=CATEGORY,
         check_name=check_name,
@@ -382,5 +422,5 @@ def _error(check_name: str, details: str) -> CheckResult:
         severity=Severity.INFO,
         description="An error occurred while running this check.",
         details=details,
-        remediation="Run with --log-level DEBUG for more detail.",
+        remediation=remediation,
     )
