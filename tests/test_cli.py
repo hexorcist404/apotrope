@@ -479,13 +479,20 @@ class TestMainErrorPaths:
         )
 
     def test_exec_href_none_when_exec_generation_failed(self):
-        """No dangling header link when exec generation returned False."""
+        """No dangling header link when exec generation returned False.
+
+        A requested output that was not produced now also forces exit 2, so the
+        call is wrapped — print_terminal/generate_html_report still record their
+        calls before main() exits.
+        """
         mock_reporter, mock_report = self._reporter_with_report()
         mock_reporter.generate_executive_report.return_value = False
-        self._run_main(
-            ["--html", "out.html", "--exec-report", "brief.html"],
-            mock_reporter,
-        )
+        with pytest.raises(SystemExit) as exc:
+            self._run_main(
+                ["--html", "out.html", "--exec-report", "brief.html"],
+                mock_reporter,
+            )
+        assert exc.value.code == 2
         mock_reporter.generate_html_report.assert_called_once_with(
             mock_report, "out.html", exec_href=None
         )
@@ -711,9 +718,81 @@ class TestOutputIntegrity:
     def test_footer_omits_html_when_generation_fails(self, tmp_path):
         rep = self._reporter()
         rep.generate_html_report.return_value = False
-        self._run(["--html", str(tmp_path / "r.html")], rep)
+        # The failed write now also forces exit 2; print_terminal is still
+        # called (and recorded) before main() exits.
+        with pytest.raises(SystemExit) as exc:
+            self._run(["--html", str(tmp_path / "r.html")], rep)
+        assert exc.value.code == 2
         _, kwargs = rep.print_terminal.call_args
         assert kwargs["html_path"] is None
+
+    def test_failed_json_write_exits_2_on_clean_passing_scan(self, tmp_path, capsys):
+        """A requested artifact that was not produced must not exit 0."""
+        rep = self._reporter()          # trustworthy, score 90 -> would be exit 0
+        rep.generate_json_report.return_value = False
+        with pytest.raises(SystemExit) as exc:
+            self._run(["--json", str(tmp_path / "r.json")], rep)
+        assert exc.value.code == 2
+        assert "could not write --json" in capsys.readouterr().err
+
+    def test_successful_outputs_still_exit_0(self, tmp_path):
+        """The tri-state must not treat un-requested outputs as failures."""
+        rep = self._reporter()
+        self._run(["--json", str(tmp_path / "r.json")], rep)   # no SystemExit
+
+    def test_baseline_skipped_when_untrustworthy(self, tmp_path, capsys):
+        """An untrustworthy scan must not overwrite a good baseline."""
+        rep = self._reporter()
+        rep.run_with_progress.return_value = MagicMock(
+            fail_count=0, warn_count=0, error_count=3, evaluated_count=0, score=100
+        )
+        target = tmp_path / "base.json"
+        with patch("apotrope.compare.save_baseline") as save_mock, \
+                pytest.raises(SystemExit) as exc:
+            self._run(["--baseline", str(target)], rep)
+        assert exc.value.code == 2
+        save_mock.assert_not_called()
+        err = capsys.readouterr().err
+        assert "--baseline not written" in err
+        # A policy skip is not a write failure — it must not be reported as one.
+        assert "could not write --baseline" not in err
+
+    def test_baseline_written_when_trustworthy(self, tmp_path):
+        rep = self._reporter()          # evaluated_count=10, error_count=0
+        target = tmp_path / "base.json"
+        with patch("apotrope.compare.save_baseline") as save_mock:
+            self._run(["--baseline", str(target)], rep)
+        save_mock.assert_called_once()
+
+    def test_probe_does_not_create_file_when_target_absent(self, tmp_path):
+        """The writability probe must never leave a stray 0-byte artifact."""
+        rep = self._reporter()
+        target = tmp_path / "r.json"
+        self._run(["--json", str(target)], rep)
+        # Reporter is a mock, so nothing should have written the file.
+        assert not target.exists()
+
+    def test_existing_file_under_unwritable_parent_is_accepted(self, tmp_path):
+        """An existing writable target must not be rejected for its parent."""
+        import os
+        if os.geteuid() == 0:
+            pytest.skip("root bypasses directory permissions")
+        target = tmp_path / "r.json"
+        target.write_text("{}", encoding="utf-8")
+        tmp_path.chmod(0o555)           # readable/executable, not writable
+        try:
+            rep = self._reporter()
+            self._run(["--json", str(target)], rep)   # must not exit
+        finally:
+            tmp_path.chmod(0o755)
+
+    def test_directory_target_is_rejected_with_distinct_message(self, tmp_path, capsys):
+        rep = self._reporter()
+        with pytest.raises(SystemExit) as exc:
+            self._run(["--json", str(tmp_path)], rep)
+        assert exc.value.code == 2
+        assert "it is a directory" in capsys.readouterr().err
+        rep.run_with_progress.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
