@@ -83,18 +83,21 @@ def load_profile(path: str | None = None) -> Profile:
             parsed. An auto-discovered ``apotrope.toml`` never raises — a parse
             error there is logged and a default Profile is returned.
     """
+    # The explicit and auto-discovered paths are disjoint — the block below always
+    # returns or raises — so they use separate names. Sharing one name gave it two
+    # incompatible types (Path here, Path | None below) for no benefit.
     if path is not None:
-        resolved = Path(path)
-        if not resolved.exists():
+        explicit = Path(path)
+        if not explicit.exists():
             raise ProfileError(f"Profile file not found: {path}")
         try:
-            return _parse_toml(resolved)
+            return _parse_toml(explicit)
         except ProfileError:
             raise
         except Exception as exc:
             raise ProfileError(f"Could not parse profile {path}: {exc}") from exc
 
-    resolved = None
+    resolved: Path | None = None
     for candidate in _SEARCH_PATHS:
         if candidate.exists():
             resolved = candidate

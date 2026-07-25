@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import re
 import textwrap
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -344,7 +345,7 @@ def _truncate(text: str, maxlen: int) -> str:
     return text if len(text) <= maxlen else text[:maxlen - 1] + "~"
 
 
-_CTRL_CHARS = __import__("re").compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+_CTRL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 
 
 def _plain(s: str) -> str:
