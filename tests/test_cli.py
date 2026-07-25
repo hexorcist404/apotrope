@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -772,9 +773,16 @@ class TestOutputIntegrity:
         # Reporter is a mock, so nothing should have written the file.
         assert not target.exists()
 
+    @pytest.mark.skipif(
+        os.name != "posix",
+        reason=(
+            "POSIX directory-permission semantics. On Windows a directory's "
+            "writability is a DACL, which chmod() cannot set, so the "
+            "unwritable-parent premise cannot be constructed there."
+        ),
+    )
     def test_existing_file_under_unwritable_parent_is_accepted(self, tmp_path):
         """An existing writable target must not be rejected for its parent."""
-        import os
         if os.geteuid() == 0:
             pytest.skip("root bypasses directory permissions")
         target = tmp_path / "r.json"
