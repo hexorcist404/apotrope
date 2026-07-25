@@ -111,6 +111,11 @@ class TestRunPowershell:
             assert kwargs["timeout"] == 5
 
     def test_psmodulepath_stripped_from_child_env(self):
+        # Only asserts the platform-independent half of _child_env's contract.
+        # PATH is deliberately NOT asserted here: on Windows it is pinned to the
+        # kernel-reported system directory, so an equality check against the
+        # inherited value passes on Linux and fails on the Windows matrix legs.
+        # Both branches are pinned explicitly in the platform-specific tests below.
         polluted = {
             "PSModulePath": r"C:\Program Files\PowerShell\7\Modules",
             "PATH": r"C:\Windows\System32",
@@ -121,7 +126,6 @@ class TestRunPowershell:
                 _, kwargs = mock_run.call_args
         env = kwargs["env"]
         assert not any(k.lower() == "psmodulepath" for k in env)
-        assert env["PATH"] == r"C:\Windows\System32"
 
     def test_child_env_pins_systemroot_and_path_on_windows(self):
         """A trustworthy binary handed an attacker-supplied %SystemRoot% is not safe."""
