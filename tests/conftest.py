@@ -9,6 +9,20 @@ import pytest
 from apotrope.models import AuditReport, CheckResult, Severity, Status
 
 
+@pytest.fixture(autouse=True)
+def _reset_powershell_cache():
+    """Clear the cached PowerShell resolution between tests.
+
+    ``utils._ps_executable()`` caches both outcomes in a module global. Without
+    this, whichever test resolves first would decide the value every later test
+    sees — an order-dependent failure that looks like flakiness.
+    """
+    from apotrope import utils
+    utils._reset_ps_cache()
+    yield
+    utils._reset_ps_cache()
+
+
 @pytest.fixture()
 def pass_result() -> CheckResult:
     """A sample PASS CheckResult."""

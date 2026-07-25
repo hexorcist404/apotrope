@@ -10,16 +10,78 @@ from __future__ import annotations
 import ctypes
 import json
 import logging
+import ntpath
 import os
 import subprocess
 import sys
 
-from apotrope.exceptions import ApotropeError
+from apotrope.exceptions import ApotropeError, PowerShellUnavailableError
 
 log = logging.getLogger(__name__)
 
+_MAX_PATH = 260
+
+
+def _system_windows_directory() -> str:
+    """Return the shared Windows directory, via Win32 rather than the environment.
+
+    ``%SystemRoot%`` is part of the process environment block, which is supplied
+    by whoever created the process — so a hostile parent that elevates Apotrope
+    can point it at a directory it controls. ``GetSystemWindowsDirectoryW`` asks
+    the kernel instead. It is preferred over ``GetWindowsDirectoryW`` because
+    under Terminal Services / RDS the latter returns a *per-user* private
+    directory, while this one always returns the shared system directory where
+    the real ``powershell.exe`` lives.
+
+    Raises:
+        ApotropeError: If the API fails or returns anything but an absolute path.
+            Failing closed matters: the documented failure modes leave the buffer
+            untouched, and a caller that used it anyway would build the *relative*
+            path ``System32\\...\\powershell.exe`` and resolve it against the
+            current directory — reinstating the very hijack this exists to close.
+    """
+    if sys.platform != "win32":
+        # Unreachable via _powershell_path, which returns early off Windows.
+        # Kept explicit so the ctypes.WinDLL access below type-checks on the
+        # Linux CI legs, where typeshed marks it win32-only.
+        raise ApotropeError("GetSystemWindowsDirectoryW is Windows-only")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    get_dir = kernel32.GetSystemWindowsDirectoryW
+    # uSize is documented in TCHARs (WCHARs here), NOT bytes: passing
+    # ctypes.sizeof(buf) would claim twice the real capacity and invite the API
+    # to write past the end of the allocation.
+    get_dir.argtypes = (ctypes.c_wchar_p, ctypes.c_uint)
+    get_dir.restype = ctypes.c_uint
+
+    # On success the return value is the length excluding the terminating null,
+    # so it is strictly less than uSize. If the buffer is too small the return
+    # value is instead the required size *including* the null, and nothing was
+    # copied — hence ``>=`` rather than ``>`` for the too-small test.
+    buf = ctypes.create_unicode_buffer(_MAX_PATH)
+    written = get_dir(buf, len(buf))
+    if written >= len(buf):
+        buf = ctypes.create_unicode_buffer(written)
+        written = get_dir(buf, len(buf))
+    if written == 0 or written >= len(buf):
+        # get_last_error only exists on a Windows ctypes build; the mocked tests
+        # reach here with sys.platform patched on Linux.
+        last_error = getattr(ctypes, "get_last_error", lambda: 0)()
+        raise ApotropeError(
+            f"GetSystemWindowsDirectoryW failed (error {last_error})"
+        )
+
+    path = buf[:written]
+    # ntpath, not os.path: this is always a Windows path, and os.path is
+    # posixpath on the Linux CI legs where the mocked tests run.
+    if not ntpath.isabs(path):
+        raise ApotropeError(
+            f"GetSystemWindowsDirectoryW returned a relative path: {path!r}"
+        )
+    return path
+
+
 def _powershell_path() -> str:
-    """Return the absolute path to Windows PowerShell.
+    """Resolve the absolute path to Windows PowerShell.
 
     Resolving the full ``System32`` path — ``Sysnative`` first so a 32-bit
     process on 64-bit Windows still reaches the native binary — avoids the
@@ -28,30 +90,73 @@ def _powershell_path() -> str:
     directory ahead of the real one. On Windows we fail closed (never fall back
     to a ``PATH``/CWD search) if the trusted binary is missing; off Windows the
     bare name is returned so the mocked test suite is unaffected.
+
+    Deliberately pure and uncached — :func:`_ps_executable` owns the caching, so
+    tests can drive this directly without cross-test contamination.
     """
     if sys.platform != "win32":
         return "powershell.exe"
-    system_root = os.environ.get("SystemRoot", r"C:\Windows")
+    system_root = _system_windows_directory()
     for subdir in ("Sysnative", "System32"):
         candidate = os.path.join(
             system_root, subdir, "WindowsPowerShell", "v1.0", "powershell.exe"
         )
         if os.path.isfile(candidate):
             return candidate
-    raise ApotropeError(
-        r"Trusted powershell.exe not found under %SystemRoot%\System32"
+    raise PowerShellUnavailableError(
+        rf"Trusted powershell.exe not found under {system_root}\System32"
     )
 
 
+# Resolution result, cached after the first attempt. A dict rather than a plain
+# module global so the cache is *mutated* rather than rebound — no ``global``
+# statement, and therefore no lint suppression, for what is only a memo.
+# Both outcomes are cached: retrying a failure once per helper call would mean
+# ~39 identical failures and ~39 identical log lines in a single scan.
+_ps_resolution: dict[str, str | PowerShellUnavailableError] = {}
+
+
+def _ps_executable() -> str:
+    """Return the cached PowerShell path, resolving it on first use.
+
+    Resolution is deliberately *lazy*. Doing it at import time meant a machine
+    without a trusted ``powershell.exe`` raised while ``apotrope.utils`` was
+    still being imported — an uncaught traceback that killed ``--dry-run`` and
+    exited 1, which the CLI documents as "complete assessment, failing score".
+
+    Raises:
+        PowerShellUnavailableError: If the trusted binary cannot be resolved.
+    """
+    if "exe" not in _ps_resolution:
+        try:
+            _ps_resolution["exe"] = _powershell_path()
+        except ApotropeError as exc:
+            _ps_resolution["exe"] = PowerShellUnavailableError(str(exc))
+    resolved = _ps_resolution["exe"]
+    if isinstance(resolved, PowerShellUnavailableError):
+        raise resolved
+    return resolved
+
+
+def _reset_ps_cache() -> None:
+    """Clear the cached resolution. For tests; see ``tests/conftest.py``."""
+    _ps_resolution.clear()
+
+
 # Base PowerShell invocation flags shared by every helper
-_PS_CMD = [
-    _powershell_path(),
+_PS_FLAGS = [
     "-NonInteractive",
     "-NoProfile",
     "-ExecutionPolicy",
     "Bypass",
     "-Command",
 ]
+
+
+def _ps_argv(command: str) -> list[str]:
+    """Build the full argv for a PowerShell invocation of *command*."""
+    return [_ps_executable(), *_PS_FLAGS, command]
+
 
 # Force PowerShell to emit UTF-8 so the ``encoding="utf-8"`` decode below is
 # correct for localized / non-ASCII output (service names, usernames), instead
@@ -60,17 +165,45 @@ _OUTPUT_ENCODING_PREAMBLE = "[Console]::OutputEncoding=[System.Text.Encoding]::U
 
 
 def _child_env() -> dict[str, str]:
-    """Environment for powershell.exe children, minus ``PSModulePath``.
+    """Environment for powershell.exe children.
 
-    A PowerShell 7 parent leaves its own Core-only module paths in the
-    inherited ``PSModulePath``; Windows PowerShell 5.1 then resolves modules
-    that exist in both editions (e.g. Microsoft.PowerShell.Security, home of
+    Two adjustments to the inherited environment:
+
+    ``PSModulePath`` is stripped. A PowerShell 7 parent leaves its own Core-only
+    module paths there; Windows PowerShell 5.1 then resolves modules that exist
+    in both editions (e.g. Microsoft.PowerShell.Security, home of
     ``Get-ExecutionPolicy``) to the PS7 copy and fails to load it. pwsh strips
     its paths when launching powershell.exe itself, but a Python parent passes
-    the environment through raw, so we strip the variable here — powershell.exe
-    rebuilds its correct default when it is absent.
+    the environment through raw — powershell.exe rebuilds its correct default
+    when the variable is absent.
+
+    ``SystemRoot``, ``windir`` and ``PATH`` are pinned to the kernel-reported
+    Windows directory. :func:`_powershell_path` goes to some trouble to resolve
+    a *trustworthy* binary; handing that binary an attacker-supplied
+    ``%SystemRoot%`` and ``%PATH%`` would let the hostile parent redirect what
+    the script it runs then loads. Off Windows the values are left alone, since
+    the whole path is mocked there.
     """
-    return {k: v for k, v in os.environ.items() if k.lower() != "psmodulepath"}
+    env = {k: v for k, v in os.environ.items() if k.lower() != "psmodulepath"}
+    if sys.platform != "win32":
+        return env
+    try:
+        system_root = _system_windows_directory()
+    except ApotropeError:
+        # Nothing trustworthy to pin to. run_powershell will fail at
+        # _ps_executable() anyway; don't mask that with a second error here.
+        return env
+    env["SystemRoot"] = system_root
+    env["windir"] = system_root
+    # ntpath and an explicit ';' — this is a Windows PATH, and os.path/os.pathsep
+    # are the posix flavours on the Linux CI legs where the mocked tests run.
+    env["PATH"] = ";".join((
+        ntpath.join(system_root, "System32"),
+        system_root,
+        ntpath.join(system_root, "System32", "Wbem"),
+        ntpath.join(system_root, "System32", "WindowsPowerShell", "v1.0"),
+    ))
+    return env
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +227,7 @@ def run_powershell(command: str, timeout: int = 30) -> str:
     log.debug("run_powershell: %s", command[:200])
     try:
         result = subprocess.run(
-            [*_PS_CMD, _OUTPUT_ENCODING_PREAMBLE + command],
+            _ps_argv(_OUTPUT_ENCODING_PREAMBLE + command),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -220,6 +353,11 @@ def read_registry(hive: str, path: str, value_name: str) -> str | int | None:
 
     try:
         output = run_powershell(script)
+    except PowerShellUnavailableError:
+        # No PowerShell at all: every read would fail identically. Returning
+        # None here would read as "value not set" and produce a confident
+        # verdict from no data, so let it propagate.
+        raise
     except ApotropeError as exc:
         log.warning(
             "Registry read failed (%s\\%s\\%s): %s", hive, path, value_name, exc
@@ -276,6 +414,9 @@ def get_wmi_object(
 
     try:
         output = run_powershell(script)
+    except PowerShellUnavailableError:
+        # See read_registry: [] would read as "no instances found".
+        raise
     except ApotropeError as exc:
         log.warning("WMI query failed for %s: %s", wmi_class, exc)
         return []

@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from apotrope import checks as checks_pkg
+from apotrope.exceptions import PowerShellUnavailableError
 from apotrope.models import AuditReport, CheckResult, Status, Severity
 from apotrope.scoring import calculate_score
 from apotrope.utils import get_wmi_object
@@ -333,7 +334,17 @@ class Scanner:
         denied, or a missing/non-integer value — so ``family_for_build`` falls
         back to build-only classification.
         """
-        rows = get_wmi_object("Win32_OperatingSystem", properties=["ProductType"])
+        try:
+            rows = get_wmi_object("Win32_OperatingSystem", properties=["ProductType"])
+        except PowerShellUnavailableError:
+            # get_wmi_object re-raises this rather than degrading to [], because
+            # for a *check* an empty result would read as "none found". Here the
+            # documented contract is None-on-unreadable, and this call sits in
+            # Scanner.run() after every module has already produced its results —
+            # letting it escape would unwind to cli.main()'s handler and discard
+            # the entire report on exactly the machine this case describes.
+            log.warning("Cannot determine ProductType: PowerShell is unavailable")
+            return None
         if not rows:
             return None
         product_type = rows[0].get("ProductType")
