@@ -93,6 +93,49 @@ class TestThresholdConfigureReset:
         scanner._run_module(module)
         assert [c[0] for c in calls] == ["run"]
 
+    def test_configure_without_reset_warns_about_leaking_thresholds(self, caplog):
+        """A module that configures but cannot reset must say so loudly.
+
+        configure() writes this scan's profile thresholds into module globals; with
+        no reset() they persist into the next scan in the same process, silently
+        scoring it against the previous profile. Nothing else guards this branch —
+        it is not a type error and not a lint error — so this test is the only
+        thing standing between a bad merge resolution and a silent regression.
+        """
+        from apotrope.profile import Profile
+        calls: list = []
+        module = self._configurable_module(calls)
+        del module.reset  # configure() present, reset() absent
+
+        scanner = Scanner(profile=Profile(thresholds={"max_update_age_fail": 90}))
+        with caplog.at_level("WARNING", logger="apotrope.scanner"):
+            scanner._run_module(module)
+
+        assert [c[0] for c in calls] == ["configure", "run"]
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("configure() but no reset()" in m for m in messages), (
+            f"no threshold-leak warning was emitted; records were {messages}"
+        )
+
+    def test_configure_with_reset_does_not_warn(self, caplog):
+        """The companion assertion: a well-behaved module must stay silent.
+
+        Without this, a resolution that warns unconditionally would still satisfy
+        the test above.
+        """
+        from apotrope.profile import Profile
+        calls: list = []
+        module = self._configurable_module(calls)
+
+        scanner = Scanner(profile=Profile(thresholds={"max_update_age_fail": 90}))
+        with caplog.at_level("WARNING", logger="apotrope.scanner"):
+            scanner._run_module(module)
+
+        assert [c[0] for c in calls] == ["configure", "run", "reset"]
+        assert not any(
+            "configure() but no reset()" in r.getMessage() for r in caplog.records
+        )
+
     def test_reset_failure_is_swallowed(self):
         """A module whose reset() raises must not break the scan."""
         from apotrope.profile import Profile
