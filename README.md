@@ -490,7 +490,22 @@ python build_exe.py --no-icon
 1. Fork the repo and create a branch: `git checkout -b feat/my-change`
 2. Make your changes — each check module is self-contained in `src/apotrope/checks/`
 3. Add or update tests in `tests/`
-4. Run `pytest tests/ -q` — all tests must pass
+4. Run the three gates CI enforces — all must be clean:
+
+   ```bash
+   pytest tests/ -q --cov --cov-fail-under=95   # tests + coverage floor
+   ruff check src tests tools                   # lint
+   mypy src/apotrope tools                      # types
+   ```
+
+   A bare `pytest -q` runs the tests but *not* the coverage floor — that
+   threshold is passed on the CI command line, so pass it locally too or you will
+   find out on the PR.
+
+   `pip install -e ".[dev]"` installs `ruff` and `mypy` at the exact versions CI
+   pins. Run them at those versions — both add rules in minor releases, so a
+   newer one reports failures CI will not, and an older one misses failures it
+   will.
 5. Open a pull request into `main`
 
 ### Adding a New Check Module
@@ -516,7 +531,15 @@ def run() -> list[CheckResult]:
     )]
 ```
 
-The scanner auto-discovers all modules in `checks/` — no registration needed.
+Then add `"mycheck"` to `MODULES` in `src/apotrope/checks/__init__.py`, keeping
+the list alphabetically sorted.
+
+Running from source, the scanner discovers modules with `pkgutil`, so a new file
+is picked up on its own — but the frozen `.exe` cannot traverse its own archive
+and uses the explicit `MODULES` registry instead. A module missing from that list
+therefore works everywhere you test it and silently vanishes from the shipped
+executable. `tests/test_checks_registry.py` fails CI when the two disagree, in
+either direction, so you will hear about it before release rather than after.
 
 ---
 

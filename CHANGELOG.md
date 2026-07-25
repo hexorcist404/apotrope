@@ -5,6 +5,88 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- **Removed two machine-damaging remediations from copy-paste output.** The "TPM
+  present but not ready" finding shipped `Initialize-Tpm -AllowClear
+  -AllowPhysicalPresence`, where `-AllowClear` can wipe the TPM, invalidate
+  BitLocker protectors and force recovery; it is now a read-only `Get-Tpm`. The
+  uptime and `EnableLUA` remediations ended in a bare `Restart-Computer`, so
+  pasting either block restarted the machine unattended; both are now commented
+  manual steps. A new `destructive-command` lint rule in `tools/command_audit.py`
+  fails the build if any of them come back.
+- **`powershell.exe` is resolved by absolute path.** Invoking it by bare name let
+  Windows search the application directory and CWD first, so an elevated
+  `apotrope.exe` sitting beside a malicious `powershell.exe` would execute
+  attacker code elevated. The path now comes from `GetSystemWindowsDirectoryW`
+  (not `%SystemRoot%`, which the parent process controls), and `SystemRoot`,
+  `windir` and `PATH` are pinned in the child environment.
+- **The AutoPlay remediation no longer destroys unrelated policy.** It led with
+  `New-Item -Path '...\Policies\Explorer' -Force`, which on the registry provider
+  replaces the key and deletes every value under it — including
+  `NoRecentDocsHistory`, `NoActiveDesktop` and friends. The create is now guarded
+  by `Test-Path`.
+
+### Changed
+
+- **Exit code 2 now means "the result is not trustworthy"**, not merely "a fatal
+  scan error". It additionally covers zero controls evaluated, one or more checks
+  errored, and a requested output file that could not be written. Treat 2 as *do
+  not gate on this run* rather than as a failing posture.
+- **`--profile` fails closed.** A profile requested explicitly that is missing or
+  unparseable now exits 2 instead of silently falling back to defaults and
+  scanning a different set of checks than asked for. An auto-discovered
+  `apotrope.toml` still warns and falls back.
+- **`--baseline` is skipped, with a warning, when the scan was not trustworthy**,
+  so a good baseline is never overwritten by a scan we are about to reject.
+- **All four output paths are validated before the scan**, for collisions and for
+  writability, instead of failing after the work is done.
+- **Password policy is reported per control when it cannot be read.** A failed
+  `secedit` export previously collapsed Minimum Length, Account Lockout and
+  Complexity into one differently-named result, which removed three CIS-mapped
+  rows from the report instead of degrading them to ERROR.
+
+### Fixed
+
+- **Security principals are identified by SID, not by localized display name.**
+  The built-in Administrator/Guest are matched on RID suffix (`-500`/`-501`) and
+  the Administrators group by `S-1-5-32-544`, so a renamed account or a
+  non-English install is no longer reported as "not found". An empty
+  Administrators group is an ERROR rather than a reassuring "0 administrators"
+  PASS, since that group always has at least one member.
+- **Checks fail closed on uncertainty.** Unreadable or access-denied state across
+  TPM, Secure Boot, PowerShell v2, audit policy, UAC, RDP and firewall now
+  reports INFO or ERROR instead of a confident PASS or a scored WARN that
+  penalises a healthy machine.
+- **Firewall profiles cannot silently vanish** — a missing profile is a
+  HIGH-severity ERROR (`Firewall — Profiles Present`) rather than an absent row.
+- **Policy-managed RDP findings point at the controlling GPO** instead of emitting
+  a local-registry command the policy overrides on its next refresh.
+- **Locale-neutral firewall selectors** — `-Group '@FirewallAPI.dll,-28752'`
+  replaces the localized `-DisplayGroup 'Remote Desktop'`, which matched nothing
+  on non-English Windows and no-opped without a visible error.
+- Duplicate entries in the `checks.MODULES` registry were imported twice and
+  their FAIL/WARN results double-deducted from the score.
+- Several verdict bugs: BitLocker mid-encryption is a WARN rather than a PASS,
+  the Int32/UInt32 join that made every listening port report "Unknown", a
+  dropped DHCP adapter, and an unbounded OS end-of-life fallback.
+
+### Dev/CI
+
+- `ruff` and `mypy` are now enforced CI gates, at exact pinned versions rather
+  than floors, with a repo-owned rule set so upstream default churn cannot turn
+  the build red without a code change.
+- Tests are hermetic: an autouse guard fails any test that reaches the real
+  `subprocess` boundary (opt out with `@pytest.mark.allow_subprocess`). The
+  mocked suite dropped from ~22s to ~4s.
+- Publishing is gated on the tag matching `pyproject`'s version and on a Windows
+  job that installs the built wheel and smoke-tests it against the check registry
+  and the packaged templates.
+
+---
+
 ## [0.1.12] - 2026-07-16
 
 ### Added
