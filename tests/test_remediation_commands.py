@@ -64,3 +64,46 @@ def test_commented_reboot_is_not_flagged_destructive() -> None:
     # A reboot kept as a comment is safe — the lint only inspects active lines.
     ok = [Command("fake.py", 1, "Set-ItemProperty -Path X -Name Y -Value 1\n# Restart-Computer")]
     assert not [v for v in lint_commands(ok) if v.rule == "destructive-command"]
+
+
+class TestLocalizedFirewallSelectorRule:
+    """Regression guard: -DisplayGroup must never come back."""
+
+    def test_rule_flags_displaygroup_selectors(self):
+        planted = [
+            Command("fake.py", 1, "Disable-NetFirewallRule -DisplayGroup 'Remote Desktop'"),
+            Command("fake.py", 2,
+                    "Set-NetFirewallRule -DisplayGroup 'Remote Desktop' -RemoteAddress LocalSubnet"),
+        ]
+        hits = [v for v in lint_commands(planted) if v.rule == "localized-firewall-selector"]
+        assert len(hits) == 2
+
+    def test_group_indirect_string_is_accepted(self):
+        ok = [Command("fake.py", 1, "Disable-NetFirewallRule -Group '@FirewallAPI.dll,-28752'")]
+        assert not [v for v in lint_commands(ok) if v.rule == "localized-firewall-selector"]
+
+    def test_new_rule_displayname_is_not_flagged(self):
+        """-DisplayName *names* a rule being created; it is not a localized selector."""
+        ok = [Command("fake.py", 1,
+                      "New-NetFirewallRule -DisplayName 'Block inbound TCP 21 (Apotrope)' "
+                      "-Direction Inbound -LocalPort 21 -Protocol TCP -Action Block")]
+        assert not [v for v in lint_commands(ok) if v.rule == "localized-firewall-selector"]
+
+    def test_commented_selector_is_ignored(self):
+        ok = [Command("fake.py", 1, "# Set-NetFirewallRule -DisplayGroup 'Remote Desktop'")]
+        assert not [v for v in lint_commands(ok) if v.rule == "localized-firewall-selector"]
+
+
+class TestUnresolvedExpressionRule:
+    """A '{expr}' in collected text means the real command was never linted."""
+
+    def test_rule_flags_unresolved_expression(self):
+        planted = [Command("fake.py", 1, "Set-ItemProperty -Path 'X'\n{expr}")]
+        hits = [v for v in lint_commands(planted) if v.rule == "unresolved-expression"]
+        assert len(hits) == 1
+
+    def test_real_inventory_has_no_unresolved_expressions(self):
+        """Guards the policy-aware `A if cond else B` conditionals in rdp.py."""
+        bad = [v for v in lint_commands(collect_commands())
+               if v.rule == "unresolved-expression"]
+        assert not bad, bad

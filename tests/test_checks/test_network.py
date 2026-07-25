@@ -237,3 +237,35 @@ class TestNetworkFixes:
         r = next(r for r in results if "3389" in r.check_name)
         assert "Action Block" not in r.command
         assert "UserAuthentication" in r.command
+
+
+class TestRdpPortRemediationSafety:
+    """The port-3389 remediation must not lock the operator out of their own box."""
+
+    @staticmethod
+    def _rdp_command():
+        from apotrope.checks import network
+        return network._CMD_RDP_EXPOSED
+
+    @staticmethod
+    def _active_lines(cmd):
+        return [ln for ln in cmd.splitlines() if not ln.lstrip().startswith("#")]
+
+    def test_localsubnet_is_not_shipped_at_all(self):
+        # Making the selector locale-neutral is exactly what makes an active
+        # scoping line dangerous: it now matches everywhere, so a LocalSubnet
+        # default would cut off any operator on another subnet.
+        assert "LocalSubnet" not in self._rdp_command()
+
+    def test_scoping_line_is_commented_out(self):
+        active = "\n".join(self._active_lines(self._rdp_command()))
+        assert "Set-NetFirewallRule" not in active
+
+    def test_nla_line_is_active(self):
+        active = "\n".join(self._active_lines(self._rdp_command()))
+        assert "UserAuthentication" in active
+
+    def test_uses_locale_neutral_group_id(self):
+        cmd = self._rdp_command()
+        assert "@FirewallAPI.dll,-28752" in cmd
+        assert "-DisplayGroup" not in cmd

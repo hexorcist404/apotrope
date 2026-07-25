@@ -66,6 +66,30 @@ _CMD_NETBIOS_DISABLE = (
     "-Arguments @{ TcpipNetbiosOptions = 2 } | Out-Null }"
 )
 
+# Port 3389. Two deliberate choices here:
+#
+# -Group '@FirewallAPI.dll,-28752' rather than -DisplayGroup 'Remote Desktop':
+# DisplayGroup is the resolved MUI string, so it matches nothing on non-English
+# Windows and the cmdlet no-ops with a non-terminating error the operator will
+# not notice.
+#
+# The scoping line is COMMENTED OUT and carries no default scope. Making the
+# selector locale-neutral is exactly what makes an active scoping line
+# dangerous: 'LocalSubnet' locks out any operator connected from another subnet
+# — a jump host, a VPN pool, a different VLAN — which is the normal enterprise
+# case and the very outcome the NLA-not-block choice was meant to avoid. The
+# operator must supply their own management network.
+_CMD_RDP_EXPOSED = (
+    "# Require Network Level Authentication for RDP:\n"
+    "Set-ItemProperty -Path "
+    "'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' "
+    "-Name 'UserAuthentication' -Value 1\n"
+    "# Then restrict who can reach 3389. Replace the range below with YOUR\n"
+    "# management network, and confirm it contains the address you are\n"
+    "# connected from before running it — this can end your own RDP session:\n"
+    "# Set-NetFirewallRule -Group '@FirewallAPI.dll,-28752' -RemoteAddress 10.0.0.0/8"
+)
+
 
 def run() -> list[CheckResult]:
     """Return network exposure checks.
@@ -125,20 +149,15 @@ def _check_listening_ports() -> list[CheckResult]:
         elif port == 3389:
             # The finding is "RDP exposed; ensure NLA" — so the command must enforce
             # NLA and scope access, NOT blindly block 3389 (which would sever the
-            # operator's own RDP session mid-audit).
+            # operator's own RDP session mid-audit). See _CMD_RDP_EXPOSED for why
+            # the scoping step ships commented and without a default scope.
             remediation = (
                 "RDP is exposed. Require Network Level Authentication and restrict who "
                 "can reach 3389 (firewall scope or a VPN / RD gateway) rather than "
-                "blocking it outright."
+                "blocking it outright. If the RDP settings are managed by Group Policy, "
+                "change them in the GPO — a local registry edit is reverted on refresh."
             )
-            command = (
-                "# Require Network Level Authentication for RDP:\n"
-                "Set-ItemProperty -Path "
-                "'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' "
-                "-Name 'UserAuthentication' -Value 1\n"
-                "# Restrict RDP to the local subnet (adjust the scope as needed):\n"
-                "Set-NetFirewallRule -DisplayGroup 'Remote Desktop' -RemoteAddress LocalSubnet"
-            )
+            command = _CMD_RDP_EXPOSED
         else:
             remediation = (
                 f"Stop the service behind port {port} ({service}) and block the port in Windows Firewall."
