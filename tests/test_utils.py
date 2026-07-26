@@ -545,7 +545,7 @@ class TestGetWmiObject:
 
 class TestIsAdmin:
     def test_returns_false_on_non_windows(self):
-        with patch.object(sys, "platform", "linux"):
+        with patch.object(utils.sys, "platform", "linux"):
             assert utils.is_admin() is False
 
     def test_returns_false_on_darwin(self):
@@ -581,7 +581,7 @@ class TestIsAdmin:
 
 class TestRequireWindows:
     def test_raises_on_linux(self):
-        with patch.object(sys, "platform", "linux"):
+        with patch.object(utils.sys, "platform", "linux"):
             with pytest.raises(ApotropeError, match="requires Windows"):
                 utils.require_windows()
 
@@ -720,7 +720,7 @@ class TestReadPasswordPolicy:
 
 class TestQueryUserModals:
     def test_raises_off_windows(self):
-        with patch.object(sys, "platform", "linux"):
+        with patch.object(utils.sys, "platform", "linux"):
             with pytest.raises(ApotropeError, match="Windows-only"):
                 utils._query_user_modals(0, utils._UserModals0)
 
@@ -728,8 +728,8 @@ class TestQueryUserModals:
         netapi32 = MagicMock()
         netapi32.NetUserModalsGet.return_value = 5  # ERROR_ACCESS_DENIED
         with (
-            patch.object(sys, "platform", "win32"),
-            patch("ctypes.WinDLL", return_value=netapi32),
+            patch.object(utils.sys, "platform", "win32"),
+            patch("apotrope.utils.ctypes.WinDLL", return_value=netapi32, create=True),
         ):
             with pytest.raises(ApotropeError, match="status 5"):
                 utils._query_user_modals(0, utils._UserModals0)
@@ -749,8 +749,8 @@ class TestQueryUserModals:
         netapi32 = MagicMock()
         netapi32.NetUserModalsGet.side_effect = _get
         with (
-            patch.object(sys, "platform", "win32"),
-            patch("ctypes.WinDLL", return_value=netapi32),
+            patch.object(utils.sys, "platform", "win32"),
+            patch("apotrope.utils.ctypes.WinDLL", return_value=netapi32, create=True),
         ):
             out = utils._query_user_modals(3, utils._UserModals3)
 
