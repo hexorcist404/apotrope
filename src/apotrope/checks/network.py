@@ -222,7 +222,7 @@ def _check_llmnr() -> list[CheckResult]:
             remediation="Disable LLMNR to block Responder-style name-resolution poisoning.",
             command=(
                 "$key = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient'\n"
-                "New-Item -Path $key -Force | Out-Null\n"
+                "if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }\n"
                 "Set-ItemProperty -Path $key -Name 'EnableMulticast' -Value 0"
             ),
         )]

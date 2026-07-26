@@ -176,9 +176,41 @@ _ANGLE_PLACEHOLDER = re.compile(r"(?<!\?)<[A-Za-z_][\w -]*>")
 # Destructive / unattended-impact commands that must never ship as copy-paste:
 # a TPM clear can invalidate BitLocker protectors; a bare Restart-Computer can
 # reboot the machine the moment the block is pasted. Reboots belong in comments.
+#
+# IGNORECASE is load-bearing, not tidiness: PowerShell resolves cmdlet names
+# case-insensitively, so `restart-computer -Force` runs exactly as
+# `Restart-Computer -Force` does while slipping past a case-sensitive rule.
 _DESTRUCTIVE = re.compile(
-    r"\b(Clear-Tpm|Restart-Computer|Stop-Computer)\b|-AllowClear\b|-AllowPhysicalPresence\b"
+    r"""
+    \b(?:
+        Clear-Tpm                    # wipes the TPM; invalidates BitLocker protectors
+      | Restart-Computer             # immediate unattended reboot
+      | Stop-Computer                # immediate unattended shutdown
+      | Disable-BitLocker            # decrypts the volume
+      | Clear-Disk | Format-Volume   # destroys a volume
+      | Remove-Partition
+      | Reset-ComputerMachinePassword
+    )\b
+  | -AllowClear\b | -AllowPhysicalPresence\b
+  | \bshutdown(?:\.exe)?\b[^\n]*\s[/-][rsg]\b   # shutdown /r, /s, /g
+  | \bInstall-WindowsUpdate\b[^\n]*-AutoReboot\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
 )
+
+# `New-Item -Force` on the REGISTRY provider replaces an existing key: it deletes
+# every value and subkey beneath it. That is harmless for a key we know is
+# absent and destructive for a shared policy container — ...\Policies\Explorer
+# carries NoRecentDocsHistory, NoActiveDesktop and friends alongside the value
+# being set. `Set-ItemProperty -Force` cannot create a missing key, so the
+# New-Item is legitimate; it just has to be guarded by a Test-Path.
+#
+# Filesystem New-Item is NOT flagged — there `-Force` creates parents and
+# overwrites a file, which is the documented, expected behaviour. The registry
+# gate below keys off the hive reference in the surrounding command.
+_NEW_ITEM_FORCE = re.compile(r"\bNew-Item\b[^\n]*?-Force\b", re.IGNORECASE)
+_TEST_PATH_GUARD = re.compile(r"^\s*if\s*\(\s*-not\s*\(\s*Test-Path\b", re.IGNORECASE)
+_REGISTRY_HIVE = re.compile(r"\b(?:HKLM|HKCU|HKCR|HKU|HKCC)\s*:|Registry::|\bHKEY_", re.IGNORECASE)
 # -DisplayGroup selects an EXISTING firewall rule by its resolved MUI string
 # ('Remote Desktop' is @FirewallAPI.dll,-28752 rendered in the display
 # language), so it matches nothing on non-English Windows and the cmdlet
@@ -238,10 +270,21 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
         if _DESTRUCTIVE.search(active):
             violations.append(Violation(
                 cmd.module, cmd.line, "destructive-command",
-                "destructive/unattended command (TPM clear or bare reboot) must be a "
-                "commented manual step, not copy-paste",
+                "destructive/unattended command (TPM clear, reboot, shutdown, volume "
+                "or BitLocker teardown) must be a commented manual step, not copy-paste",
                 text,
             ))
+        if _REGISTRY_HIVE.search(active):
+            for line in _uncommented_lines(text):
+                if _NEW_ITEM_FORCE.search(line) and not _TEST_PATH_GUARD.match(line):
+                    violations.append(Violation(
+                        cmd.module, cmd.line, "unguarded-new-item-force",
+                        "New-Item -Force on a registry key REPLACES it, deleting every "
+                        "value and subkey under it. Guard the create with "
+                        "`if (-not (Test-Path <key>)) { New-Item ... }`",
+                        text,
+                    ))
+                    break
         if _LOCALIZED_FW_SELECTOR.search(active):
             violations.append(Violation(
                 cmd.module, cmd.line, "localized-firewall-selector",
