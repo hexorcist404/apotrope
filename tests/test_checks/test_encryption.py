@@ -207,3 +207,25 @@ class TestEncryptionFixes:
                "EncryptionMethod": "XtsAes256", "EncryptionPercentage": "100"}
         r = self._run(vol)[0]
         assert r.status == Status.PASS
+
+    def test_remediation_hands_the_operator_the_recovery_key(self):
+        # Enabling BitLocker without showing the recovery password leaves the
+        # operator one firmware update away from an unopenable disk: the cmdlets
+        # print the protector types, not the 48-digit key, and the recovery
+        # prompt cannot read it back.
+        vol = _vol("D:", "FixedDataVolume", "FullyDecrypted", protection=0, pct=0)
+        r = self._run(vol)[0]
+        assert "-RecoveryPasswordProtector" in r.command
+        active = "\n".join(
+            ln for ln in r.command.splitlines() if not ln.lstrip().startswith("#")
+        )
+        assert "RecoveryPassword" in active.replace("-RecoveryPasswordProtector", "")
+        assert "SAVE THIS BEFORE YOU REBOOT" in r.command
+
+    def test_os_drive_remediation_hands_over_the_key_too(self):
+        vol = _vol("C:", "OperatingSystem", "FullyDecrypted", protection=0, pct=0)
+        r = self._run(vol)[0]
+        active = "\n".join(
+            ln for ln in r.command.splitlines() if not ln.lstrip().startswith("#")
+        )
+        assert "Format-List KeyProtectorId, RecoveryPassword" in active
