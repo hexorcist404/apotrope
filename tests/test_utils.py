@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from apotrope.exceptions import ApotropeError
+from apotrope.exceptions import ApotropeError, PowerShellUnavailableError
 from apotrope import utils
 
 
@@ -48,7 +48,8 @@ class TestRunPowershell:
             assert "-NoProfile" in args
             assert "-ExecutionPolicy" in args
             assert "Bypass" in args
-            assert "Get-Date" in args
+            # The command rides in the last argument (behind the UTF-8 preamble).
+            assert any("Get-Date" in a for a in args)
 
     def test_nonzero_exit_raises_apotrope_error(self):
         with patch(
@@ -110,6 +111,11 @@ class TestRunPowershell:
             assert kwargs["timeout"] == 5
 
     def test_psmodulepath_stripped_from_child_env(self):
+        # Only asserts the platform-independent half of _child_env's contract.
+        # PATH is deliberately NOT asserted here: on Windows it is pinned to the
+        # kernel-reported system directory, so an equality check against the
+        # inherited value passes on Linux and fails on the Windows matrix legs.
+        # Both branches are pinned explicitly in the platform-specific tests below.
         polluted = {
             "PSModulePath": r"C:\Program Files\PowerShell\7\Modules",
             "PATH": r"C:\Windows\System32",
@@ -120,7 +126,208 @@ class TestRunPowershell:
                 _, kwargs = mock_run.call_args
         env = kwargs["env"]
         assert not any(k.lower() == "psmodulepath" for k in env)
-        assert env["PATH"] == r"C:\Windows\System32"
+
+    def test_child_env_pins_systemroot_and_path_on_windows(self):
+        """A trustworthy binary handed an attacker-supplied %SystemRoot% is not safe."""
+        hostile = {"SystemRoot": r"C:\Evil", "windir": r"C:\Evil", "PATH": r"C:\Evil"}
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch("apotrope.utils._system_windows_directory", return_value=r"C:\Windows"),
+            patch.dict("apotrope.utils.os.environ", hostile, clear=True),
+        ):
+            env = utils._child_env()
+        assert env["SystemRoot"] == r"C:\Windows"
+        assert env["windir"] == r"C:\Windows"
+        assert "Evil" not in env["PATH"]
+        assert env["PATH"].startswith("C:\\Windows\\System32")
+
+    def test_child_env_left_alone_off_windows(self):
+        with (
+            patch.object(utils.sys, "platform", "linux"),
+            patch.dict("apotrope.utils.os.environ", {"PATH": "/usr/bin"}, clear=True),
+        ):
+            assert utils._child_env()["PATH"] == "/usr/bin"
+
+    def test_child_env_degrades_when_windows_dir_unreadable(self):
+        """Don't mask the real failure with a second one — _ps_executable reports it."""
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch(
+                "apotrope.utils._system_windows_directory",
+                side_effect=ApotropeError("nope"),
+            ),
+            patch.dict("apotrope.utils.os.environ", {"PATH": r"C:\X"}, clear=True),
+        ):
+            assert utils._child_env()["PATH"] == r"C:\X"
+
+
+class TestPowershellExecutable:
+    """powershell.exe is resolved to a trusted absolute path (no PATH/CWD hijack)."""
+
+    def test_resolves_system32_path_on_windows(self):
+        def _isfile(p):
+            return "System32" in p and p.endswith("powershell.exe")
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch("apotrope.utils._system_windows_directory", return_value=r"C:\FakeWin"),
+            patch("apotrope.utils.os.path.isfile", side_effect=_isfile),
+        ):
+            path = utils._powershell_path()
+        assert "System32" in path
+        assert path.endswith("powershell.exe")
+
+    def test_prefers_sysnative_when_present(self):
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch("apotrope.utils._system_windows_directory", return_value=r"C:\FakeWin"),
+            patch("apotrope.utils.os.path.isfile", side_effect=lambda p: "Sysnative" in p),
+        ):
+            assert "Sysnative" in utils._powershell_path()
+
+    def test_fails_closed_when_binary_missing_on_windows(self):
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch("apotrope.utils._system_windows_directory", return_value=r"C:\FakeWin"),
+            patch("apotrope.utils.os.path.isfile", return_value=False),
+        ):
+            with pytest.raises(ApotropeError, match="Trusted powershell.exe not found"):
+                utils._powershell_path()
+
+    def test_windows_directory_comes_from_win32_not_the_environment(self):
+        """%SystemRoot% is attacker-controllable; it must not steer resolution."""
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch.dict("apotrope.utils.os.environ", {"SystemRoot": r"C:\Evil"}),
+            patch("apotrope.utils._system_windows_directory", return_value=r"C:\FakeWin"),
+            patch("apotrope.utils.os.path.isfile", return_value=True),
+        ):
+            path = utils._powershell_path()
+        assert path.startswith(r"C:\FakeWin")
+        assert "Evil" not in path
+
+    def test_bare_name_off_windows(self):
+        with patch.object(utils.sys, "platform", "linux"):
+            assert utils._powershell_path() == "powershell.exe"
+
+
+class TestSystemWindowsDirectory:
+    """GetSystemWindowsDirectoryW must be called correctly and fail closed.
+
+    A mishandled return value yields an empty buffer, hence the *relative* path
+    ``System32\\...\\powershell.exe`` — which os.path.isfile then resolves
+    against the CWD, reinstating the hijack the helper exists to prevent.
+    """
+
+    @staticmethod
+    def _windll(path: str | None):
+        """kernel32 stub faithful to the documented GetSystemWindowsDirectoryW contract.
+
+        Copies *path* and returns its length when it fits; otherwise copies
+        nothing and returns the required size *including* the null terminator.
+        Pass ``path=None`` to model outright API failure (returns 0).
+        """
+        calls = []
+
+        def _fn(buf, size):
+            calls.append((buf, size))
+            if path is None:
+                return 0
+            if len(path) + 1 > size:
+                return len(path) + 1      # required size, nothing copied
+            buf.value = path
+            return len(path)
+
+        windll = MagicMock()
+        windll.GetSystemWindowsDirectoryW = _fn
+        return windll, calls
+
+    def _run(self, windll):
+        with (
+            patch.object(utils.sys, "platform", "win32"),
+            patch("apotrope.utils.ctypes.WinDLL", return_value=windll, create=True),
+        ):
+            return utils._system_windows_directory()
+
+    def test_returns_the_reported_directory(self):
+        windll, _ = self._windll(r"C:\Windows")
+        assert self._run(windll) == r"C:\Windows"
+
+    def test_buffer_size_is_passed_in_wchars_not_bytes(self):
+        """uSize is TCHARs; sizeof() would claim double and risk a heap overflow."""
+        windll, calls = self._windll(r"C:\Windows")
+        self._run(windll)
+        _, size = calls[0]
+        assert size == utils._MAX_PATH        # 260, not 520
+
+    def test_raises_when_api_returns_zero(self):
+        windll, _ = self._windll(None)
+        with pytest.raises(ApotropeError, match="GetSystemWindowsDirectoryW failed"):
+            self._run(windll)
+
+    def test_retries_once_when_buffer_too_small(self):
+        long_path = "C:\\" + "W" * 300        # longer than MAX_PATH
+        windll, calls = self._windll(long_path)
+        assert self._run(windll) == long_path
+        assert len(calls) == 2
+        assert calls[1][1] == len(long_path) + 1   # resized to the size asked for
+
+    def test_raises_on_a_relative_path(self):
+        """An empty/relative result would build a CWD-relative powershell path."""
+        windll, _ = self._windll("Windows")
+        with pytest.raises(ApotropeError, match="relative path"):
+            self._run(windll)
+
+
+class TestPowerShellResolutionCache:
+    """Resolution is lazy and cached; failure must not silently fail open."""
+
+    def test_resolution_is_lazy_and_cached(self):
+        with patch("apotrope.utils._powershell_path", return_value="ps.exe") as resolve:
+            utils._ps_executable()
+            utils._ps_executable()
+        resolve.assert_called_once()
+
+    def test_failure_is_cached_not_retried(self):
+        boom = ApotropeError("no powershell")
+        with patch("apotrope.utils._powershell_path", side_effect=boom) as resolve:
+            for _ in range(3):
+                with pytest.raises(PowerShellUnavailableError):
+                    utils._ps_executable()
+        resolve.assert_called_once()
+
+    def test_read_registry_reraises_rather_than_returning_none(self):
+        """None would read as 'value not set' and produce a verdict from no data."""
+        with patch(
+            "apotrope.utils.run_powershell",
+            side_effect=PowerShellUnavailableError("no powershell"),
+        ):
+            with pytest.raises(PowerShellUnavailableError):
+                utils.read_registry("HKLM", "SOFTWARE\\X", "Y")
+
+    def test_get_wmi_object_reraises_rather_than_returning_empty(self):
+        with patch(
+            "apotrope.utils.run_powershell",
+            side_effect=PowerShellUnavailableError("no powershell"),
+        ):
+            with pytest.raises(PowerShellUnavailableError):
+                utils.get_wmi_object("Win32_Service")
+
+    def test_ordinary_failures_still_degrade(self):
+        """A per-query failure is not a total one — the old behaviour stands."""
+        with patch("apotrope.utils.run_powershell", side_effect=ApotropeError("denied")):
+            assert utils.read_registry("HKLM", "SOFTWARE\\X", "Y") is None
+            assert utils.get_wmi_object("Win32_Service") == []
+
+
+class TestSubprocessDecoding:
+    def test_decodes_utf8_and_forces_ps_utf8_output(self):
+        with patch("apotrope.utils.subprocess.run", return_value=_mock_ps("ok")) as mock_run:
+            utils.run_powershell("Get-Thing")
+        _, kwargs = mock_run.call_args
+        assert kwargs["encoding"] == "utf-8"
+        assert kwargs["errors"] == "replace"
+        # PS is told to emit UTF-8 so the decode above is correct for non-ASCII.
+        assert "OutputEncoding" in mock_run.call_args[0][0][-1]
 
 
 # ---------------------------------------------------------------------------

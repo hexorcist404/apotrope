@@ -171,6 +171,12 @@ def collect_commands() -> list[Command]:
 _CIM_METHOD = re.compile(r"\)\s*\.\s*[A-Za-z_]\w*\s*\(")
 # angle-bracket placeholder, but NOT a regex named group `(?<name>...)`
 _ANGLE_PLACEHOLDER = re.compile(r"(?<!\?)<[A-Za-z_][\w -]*>")
+# Destructive / unattended-impact commands that must never ship as copy-paste:
+# a TPM clear can invalidate BitLocker protectors; a bare Restart-Computer can
+# reboot the machine the moment the block is pasted. Reboots belong in comments.
+_DESTRUCTIVE = re.compile(
+    r"\b(Clear-Tpm|Restart-Computer|Stop-Computer)\b|-AllowClear\b|-AllowPhysicalPresence\b"
+)
 
 
 def _uncommented_lines(text: str) -> list[str]:
@@ -206,6 +212,13 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
             violations.append(Violation(
                 cmd.module, cmd.line, "angle-bracket-placeholder",
                 "<...> placeholder is parsed as a redirection operator by PowerShell",
+                text,
+            ))
+        if _DESTRUCTIVE.search(active):
+            violations.append(Violation(
+                cmd.module, cmd.line, "destructive-command",
+                "destructive/unattended command (TPM clear or bare reboot) must be a "
+                "commented manual step, not copy-paste",
                 text,
             ))
     return violations

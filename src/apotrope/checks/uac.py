@@ -111,7 +111,9 @@ def _check_uac_enabled(data: dict) -> list[CheckResult]:
         command=(
             "" if enabled else
             f"Set-ItemProperty -Path '{_REG_KEY}' -Name 'EnableLUA' -Value 1\n"
-            "Restart-Computer"
+            # Reboot required for the change to take effect — kept as a manual
+            # step so pasting the block cannot restart the machine unattended.
+            "# Reboot required for UAC to take effect:\n# Restart-Computer"
         ),
     )]
 

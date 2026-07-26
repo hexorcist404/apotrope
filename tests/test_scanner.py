@@ -584,3 +584,38 @@ class TestApplyCisReferences:
         result.cis_reference = "CIS 1.2.3"
         Scanner._apply_cis_references([result])
         assert result.cis_reference == "CIS 1.2.3"
+
+
+# ---------------------------------------------------------------------------
+# PowerShell unavailable must not discard the report
+# ---------------------------------------------------------------------------
+
+class TestPowerShellUnavailable:
+    """_detect_product_type runs *after* every module, outside any handler.
+
+    get_wmi_object re-raises PowerShellUnavailableError rather than degrading to
+    [], because for a check an empty result reads as "none found". Scanner.run
+    must therefore swallow it here: letting it escape would unwind to
+    cli.main()'s handler and throw away a report whose modules already ran.
+    """
+
+    def test_scan_completes_when_powershell_unavailable(self):
+        from apotrope.exceptions import PowerShellUnavailableError
+
+        scanner = Scanner()
+        mod = _make_module()
+        with patch(
+            "apotrope.scanner.get_wmi_object",
+            side_effect=PowerShellUnavailableError("no powershell"),
+        ):
+            report = scanner.run(modules=[mod])      # must not raise
+        assert len(report.results) == 1
+
+    def test_detect_product_type_returns_none_when_unavailable(self):
+        from apotrope.exceptions import PowerShellUnavailableError
+
+        with patch(
+            "apotrope.scanner.get_wmi_object",
+            side_effect=PowerShellUnavailableError("no powershell"),
+        ):
+            assert Scanner._detect_product_type() is None

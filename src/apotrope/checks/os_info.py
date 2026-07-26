@@ -315,7 +315,9 @@ def _check_uptime() -> list[CheckResult]:
             description=f"Warns when uptime exceeds {_UPTIME_WARN_DAYS} days (suggests pending patch reboots).",
             details=f"System has been running for {days} days without a reboot.",
             remediation="Schedule a reboot to apply deferred updates.",
-            command="Restart-Computer",
+            # Reboot is a manual, maintenance-window action — never a copy-paste
+            # command that could restart the machine unattended.
+            command="# Reboot during a maintenance window to apply deferred updates:\n# Restart-Computer",
         )]
 
     return [CheckResult(
@@ -444,12 +446,16 @@ def _check_tpm() -> list[CheckResult]:
         details=f"TPM present. Ready: {ready}. Firmware version: {version}.",
         remediation=(
             "" if ready else
-            "Initialize the TPM and take ownership so it is ready for use."
+            "Initialize the TPM and take ownership so it is ready for use. Follow "
+            "Windows Security / your device vendor's guidance and ensure any "
+            "BitLocker recovery key is escrowed first — do not clear the TPM."
         ),
         command=(
             "" if ready else
-            "Get-Tpm\n"
-            "Initialize-Tpm -AllowClear -AllowPhysicalPresence"
+            # Read-only diagnostics only. A TPM clear (Initialize-Tpm -AllowClear /
+            # Clear-Tpm) can invalidate BitLocker protectors and force recovery, so
+            # it must never be a copy-paste command.
+            "Get-Tpm"
         ),
     )]
 

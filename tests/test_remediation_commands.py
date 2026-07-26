@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
-from command_audit import collect_commands, lint_commands  # noqa: E402
+from command_audit import Command, collect_commands, lint_commands  # noqa: E402
 
 
 def test_command_inventory_is_populated() -> None:
@@ -48,3 +48,19 @@ def test_no_broken_remediation_commands() -> None:
         raise AssertionError(
             f"{len(violations)} remediation command(s) match a runtime-failure pattern:\n{report}"
         )
+
+
+def test_destructive_command_rule_flags_tpm_clear_and_bare_reboot() -> None:
+    planted = [
+        Command("fake.py", 1, "Get-Tpm\nInitialize-Tpm -AllowClear -AllowPhysicalPresence"),
+        Command("fake.py", 2, "Restart-Computer"),
+        Command("fake.py", 3, "Clear-Tpm"),
+    ]
+    destructive = [v for v in lint_commands(planted) if v.rule == "destructive-command"]
+    assert len(destructive) == 3
+
+
+def test_commented_reboot_is_not_flagged_destructive() -> None:
+    # A reboot kept as a comment is safe — the lint only inspects active lines.
+    ok = [Command("fake.py", 1, "Set-ItemProperty -Path X -Name Y -Value 1\n# Restart-Computer")]
+    assert not [v for v in lint_commands(ok) if v.rule == "destructive-command"]
