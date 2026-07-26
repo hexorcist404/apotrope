@@ -15,7 +15,7 @@ import logging
 
 from apotrope.exceptions import ApotropeError
 from apotrope.models import CheckResult, Severity, Status
-from apotrope.utils import run_powershell, run_powershell_json
+from apotrope.utils import read_password_policy, run_powershell, run_powershell_json
 
 log = logging.getLogger(__name__)
 
@@ -243,11 +243,18 @@ def _check_admin_count() -> list[CheckResult]:
 
 
 def _check_password_policy() -> list[CheckResult]:
-    """Check local password policy via secedit (locale-neutral INF keys)."""
+    """Check local password policy, preferring secedit and falling back to Win32.
+
+    ``secedit /export`` is the primary source because it is the only one that
+    carries all three controls. It requires elevation, so the non-elevated run —
+    the documented default — falls back to :func:`read_password_policy`, which
+    reads the same values from the local SAM through ``NetUserModalsGet`` and is
+    readable by a standard user.
+    """
     try:
         inf_text = run_powershell(_PS_SECEDIT)
-    except ApotropeError as exc:
-        return _password_policy_unavailable(exc)
+    except ApotropeError as secedit_exc:
+        return _password_policy_without_secedit(secedit_exc)
 
     policy = _parse_secedit_inf(inf_text)
     return [
@@ -257,8 +264,53 @@ def _check_password_policy() -> list[CheckResult]:
     ]
 
 
-def _password_policy_unavailable(exc: ApotropeError) -> list[CheckResult]:
-    """Degrade a failed secedit export into one ERROR *per* password-policy control.
+def _password_policy_without_secedit(secedit_exc: ApotropeError) -> list[CheckResult]:
+    """Evaluate what can still be measured without the security-policy export.
+
+    ``NetUserModalsGet`` returns minimum length and account lockout as integers
+    from the local SAM, unprivileged and locale-neutral — so those two controls
+    are evaluated normally rather than degraded, and a weak policy is still
+    reported as a FAIL on a non-elevated scan.
+
+    Complexity has no equivalent at any ``USER_MODALS_INFO`` level: it is an LSA
+    policy setting, and the only readable carriers of it are the security-policy
+    export (Administrators-only) and the local GPO template, which reflects only
+    locally-configured policy and would silently miss a domain GPO. Guessing it
+    from either would be the confidently-wrong verdict this module exists to
+    avoid, so it is reported as unmeasurable instead.
+    """
+    try:
+        policy = read_password_policy()
+    except ApotropeError as modals_exc:
+        return _password_policy_unavailable(secedit_exc, modals_exc)
+
+    log.info(
+        "secedit unavailable (%s) — password length and lockout read via "
+        "NetUserModalsGet instead", secedit_exc,
+    )
+    return [
+        _eval_min_length(policy),
+        _eval_lockout(policy),
+        _complexity_requires_elevation(),
+    ]
+
+
+def _complexity_requires_elevation() -> CheckResult:
+    """Report password complexity as unmeasurable, with the reason."""
+    return _error(
+        _PW_COMPLEXITY,
+        "Password complexity could not be read. It is an LSA policy setting with "
+        "no unprivileged equivalent, and the security-policy export that carries "
+        "it requires administrator privileges. Minimum length and account lockout "
+        "were evaluated normally.",
+        remediation="Re-run Apotrope as Administrator to evaluate password complexity.",
+    )
+
+
+def _password_policy_unavailable(
+    secedit_exc: ApotropeError, modals_exc: ApotropeError
+) -> list[CheckResult]:
+    """Degrade into one ERROR *per* control when *both* policy sources fail.
 
     These three ``check_name`` strings key ``cis_map.py``, ``--compare``, and
     ``profile.disabled_checks``, so collapsing the failure into a single
@@ -267,19 +319,18 @@ def _password_policy_unavailable(exc: ApotropeError) -> list[CheckResult]:
     Account Lockout or Complexity row at all, and a baseline diff read the
     disappearance as lost coverage on both sides.
 
-    The overwhelmingly common cause is elevation, not a broken machine — secedit
-    exports from ``%windir%\\security\\database\\secedit.sdb``, which is ACL'd to
-    SYSTEM and Administrators only, so the documented non-elevated invocation
-    always lands here. Say that in ``details`` instead of surfacing a bare
-    stderr, and point the remediation at re-running elevated.
+    Reaching here now means the machine genuinely is not answering. Lack of
+    elevation on its own no longer lands here — that is what the
+    ``NetUserModalsGet`` fallback handles — so both underlying errors are
+    reported rather than blaming a cause we have not established.
     """
     detail = (
-        f"Could not export the local security policy ({exc}) — password policy "
-        "was not evaluated. secedit reads a database readable only by SYSTEM and "
-        "Administrators, so a scan run without elevation always reports this."
+        "Could not read the local password policy. The security-policy export "
+        f"failed ({secedit_exc}) and the Win32 fallback also failed "
+        f"({modals_exc}), so none of the three controls could be evaluated."
     )
     return [
-        _error(name, detail, remediation="Re-run Apotrope as Administrator to evaluate password policy.")
+        _error(name, detail, remediation="Run with --log-level DEBUG for more detail.")
         for name in _PW_POLICY_CHECKS
     ]
 

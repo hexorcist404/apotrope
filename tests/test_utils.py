@@ -643,3 +643,119 @@ class TestGetWmiObjectScalarJson:
     def test_scalar_json_returns_empty_list(self):
         with patch("apotrope.utils.run_powershell", return_value="42"):
             assert utils.get_wmi_object("Win32_Weird") == []
+
+
+# ---------------------------------------------------------------------------
+# read_password_policy / NetUserModalsGet
+# ---------------------------------------------------------------------------
+
+class TestUserModalsStructs:
+    """Field widths are load-bearing and fail silently if wrong.
+
+    ``NetUserModalsGet`` returns success regardless of how the caller declares
+    the struct, so a too-wide field is not an error — it is plausible-looking
+    garbage. (Declaring the two durations as 64-bit produced a lockout duration
+    of 7,730,941,134,600 during development, which would have rendered as a
+    perfectly straight-faced finding.) These sizes pin the layout.
+    """
+
+    def test_modals0_layout(self):
+        import ctypes
+        assert ctypes.sizeof(utils._UserModals0) == 5 * 4
+        assert [n for n, _ in utils._UserModals0._fields_][0] == "min_passwd_len"
+
+    def test_modals3_layout(self):
+        import ctypes
+        assert ctypes.sizeof(utils._UserModals3) == 3 * 4
+        assert [n for n, _ in utils._UserModals3._fields_] == [
+            "lockout_duration", "lockout_observation_window", "lockout_threshold",
+        ]
+
+
+class TestReadPasswordPolicy:
+    def _query(self, *, min_len=8, hist=5, threshold=10, duration_s=1800, window_s=1800):
+        m0 = utils._UserModals0(
+            min_passwd_len=min_len, max_passwd_age=0, min_passwd_age=0,
+            force_logoff=0, password_hist_len=hist,
+        )
+        m3 = utils._UserModals3(
+            lockout_duration=duration_s,
+            lockout_observation_window=window_s,
+            lockout_threshold=threshold,
+        )
+        return lambda level, struct_type: m0 if level == 0 else m3
+
+    def _run(self, **kw):
+        with patch.object(utils, "_query_user_modals", self._query(**kw)):
+            return utils.read_password_policy()
+
+    def test_keys_match_the_secedit_inf_shape(self):
+        # The evaluators are shared with the secedit path, so the fallback must
+        # speak the same lowercase INF key names.
+        policy = self._run()
+        assert policy["minimumpasswordlength"] == "8"
+        assert policy["lockoutbadcount"] == "10"
+
+    def test_durations_convert_seconds_to_minutes(self):
+        # The API reports seconds; the INF (and therefore the evaluators and the
+        # rendered "Duration: N minute(s)") use minutes.
+        policy = self._run(duration_s=1800, window_s=900)
+        assert policy["lockoutduration"] == "30"
+        assert policy["resetlockoutcount"] == "15"
+
+    def test_forever_duration_renders_as_the_inf_sentinel(self):
+        # TIMEQ_FOREVER means "until an administrator unlocks". Dividing it by 60
+        # would report a 71-million-minute lockout as a real threshold.
+        policy = self._run(duration_s=0xFFFFFFFF)
+        assert policy["lockoutduration"] == "-1"
+
+    def test_complexity_is_never_synthesised(self):
+        # No USER_MODALS_INFO level carries PasswordComplexity. Emitting a key
+        # here would let the evaluator render a guess as a real verdict.
+        assert "passwordcomplexity" not in self._run()
+
+    def test_values_are_strings(self):
+        assert all(isinstance(v, str) for v in self._run().values())
+
+
+class TestQueryUserModals:
+    def test_raises_off_windows(self):
+        with patch.object(sys, "platform", "linux"):
+            with pytest.raises(ApotropeError, match="Windows-only"):
+                utils._query_user_modals(0, utils._UserModals0)
+
+    def test_non_zero_status_raises(self):
+        netapi32 = MagicMock()
+        netapi32.NetUserModalsGet.return_value = 5  # ERROR_ACCESS_DENIED
+        with (
+            patch.object(sys, "platform", "win32"),
+            patch("ctypes.WinDLL", return_value=netapi32),
+        ):
+            with pytest.raises(ApotropeError, match="status 5"):
+                utils._query_user_modals(0, utils._UserModals0)
+        netapi32.NetApiBufferFree.assert_not_called()
+
+    def test_success_path_copies_then_frees_the_api_buffer(self):
+        import ctypes
+        source = utils._UserModals3(
+            lockout_duration=1800, lockout_observation_window=1800, lockout_threshold=7,
+        )
+
+        def _get(_server, _level, bufptr):
+            # bufptr is byref(buf); ._obj reaches the c_void_p the caller passed.
+            bufptr._obj.value = ctypes.addressof(source)
+            return 0
+
+        netapi32 = MagicMock()
+        netapi32.NetUserModalsGet.side_effect = _get
+        with (
+            patch.object(sys, "platform", "win32"),
+            patch("ctypes.WinDLL", return_value=netapi32),
+        ):
+            out = utils._query_user_modals(3, utils._UserModals3)
+
+        assert out.lockout_threshold == 7
+        # The buffer is API-allocated; not freeing it leaks once per scan.
+        netapi32.NetApiBufferFree.assert_called_once()
+        # A copy, not a view into the freed buffer.
+        assert ctypes.addressof(out) != ctypes.addressof(source)
