@@ -23,6 +23,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `BackupToAAD-BitLockerKeyProtector` steps for domain- and Entra-joined hosts.
   A new `bitlocker-no-key-escrow` lint rule keeps it from regressing.
 
+- **Remediations that could cut the operator's own connection are now commented
+  manual steps.** Disabling RDP (`fDenyTSConnections=1`), tearing down the whole
+  Remote Desktop firewall group, and stopping or disabling WinRM all shipped as
+  *active* lines under a comment that merely said "if it is not required" — the
+  line below still ran when the block was pasted. On a headless host with no
+  console or out-of-band access that is unrecoverable; inside a PSSession the
+  shell dies mid-block, so whether the remaining lines ran is indeterminate. The
+  WinRM block additionally ran *both* halves of an either/or: it stopped the
+  service and then tried to configure it, which fails. Basic-auth hardening is
+  now the active step and the teardown is commented, matching the treatment
+  `network.py` already used for port-3389 scoping.
+
+- **The NetBIOS remediation no longer hides its own failure.** It piped
+  `Invoke-CimMethod` to `Out-Null`. WMI reports failure through a `ReturnValue`,
+  not a PowerShell error, so `-ErrorAction` and `$?` never see it —
+  `SetTcpipNetbios` returns 1 for "succeeded, REBOOT REQUIRED" as routinely as 0.
+  The operator got a clean prompt, never rebooted, NBT-NS kept answering, and
+  Apotrope reported the host remediated while Responder-style relay still
+  worked. The result is now captured and each outcome reported per adapter.
+
+- **The unquoted-`ImagePath` remediation no longer writes.** It overwrote a
+  boot-critical registry value with `-Force` and no backup, driven by a
+  heuristic that cannot be correct in general — an unquoted path is ambiguous by
+  definition, so which token is the executable is not decidable from the string.
+  It also read the value with `Get-ItemProperty`, which *expands* a
+  `REG_EXPAND_SZ`, so `%SystemRoot%\...` came back as `C:\WINDOWS\...` and
+  writing it back baked the resolved path in permanently — the opposite of what
+  the block's own comment promised. It now reads with
+  `DoNotExpandEnvironmentNames`, prints the current and proposed values, and
+  ships the write commented behind a backup step.
+
 - **Removed two machine-damaging remediations from copy-paste output.** The "TPM
   present but not ready" finding shipped `Initialize-Tpm -AllowClear
   -AllowPhysicalPresence`, where `-AllowClear` can wipe the TPM, invalidate

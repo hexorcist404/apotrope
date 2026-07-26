@@ -74,12 +74,22 @@ def run() -> list[CheckResult]:
 # DisplayGroup is the resolved MUI string ("Remotedesktop" on de-DE), so it
 # matches nothing on non-English Windows and the cmdlet no-ops with a
 # non-terminating error.
+# Both lines ship commented. Disabling RDP drops the session of an operator who
+# is connected over it and blocks reconnection, so this cannot be an active
+# copy-paste line: on a headless host with no console or out-of-band access it is
+# unrecoverable. The firewall line is worse than it looks — -Group flips every
+# rule in a shared container, including rules another product added, and records
+# no prior per-rule state, so `Enable-NetFirewallRule -Group` is not a valid undo.
 _CMD_DISABLE_RDP = (
-    "# Disable Remote Desktop (skip this if RDP is intentionally in use)\n"
-    "Set-ItemProperty -Path "
+    "# Disable Remote Desktop ONLY if it is not required. Both lines below will\n"
+    "# end an RDP session you are currently connected over, and the second also\n"
+    "# disables every firewall rule in the Remote Desktop group — including any\n"
+    "# a third party added — with no record of their previous state. Confirm you\n"
+    "# have console or out-of-band access before uncommenting either.\n"
+    "# Set-ItemProperty -Path "
     "'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' "
     "-Name 'fDenyTSConnections' -Value 1\n"
-    "Disable-NetFirewallRule -Group '@FirewallAPI.dll,-28752'"
+    "# Disable-NetFirewallRule -Group '@FirewallAPI.dll,-28752'"
 )
 
 _CMD_REQUIRE_NLA = (
@@ -155,8 +165,10 @@ def _check_rdp_enabled(data: dict) -> tuple[list[CheckResult], bool]:
             ),
             remediation="Verify the RDP state and disable it if it is not required.",
             command=(
-                "# Disable Remote Desktop if it is not required:\n"
-                "Set-ItemProperty -Path "
+                "# Disable Remote Desktop ONLY if it is not required. This ends an\n"
+                "# RDP session you are currently connected over and blocks\n"
+                "# reconnection; confirm console or out-of-band access first.\n"
+                "# Set-ItemProperty -Path "
                 "'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server' "
                 "-Name 'fDenyTSConnections' -Value 1"
             ),

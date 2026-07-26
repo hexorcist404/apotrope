@@ -277,3 +277,100 @@ class TestBitLockerKeyEscrowRule:
             if v.rule == "bitlocker-no-key-escrow"
         ]
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
+class TestRemoteAccessLockoutRule:
+    """Commands that can cut the wire the operator is standing on.
+
+    A comment saying "skip this if RDP is in use" does not help: the line below
+    it still runs when the block is pasted. On a headless host with no console
+    or out-of-band access the result is unrecoverable, and inside a PSSession
+    the shell dies mid-block so whether later lines ran is indeterminate.
+    """
+
+    def _fired(self, text):
+        return [
+            v for v in lint_commands([Command("fake.py", 1, text)])
+            if v.rule == "remote-access-lockout"
+        ]
+
+    def test_active_rdp_disable_is_flagged(self) -> None:
+        assert self._fired("Set-ItemProperty -Name 'fDenyTSConnections' -Value 1")
+
+    def test_commented_rdp_disable_is_not_flagged(self) -> None:
+        assert not self._fired("# Set-ItemProperty -Name 'fDenyTSConnections' -Value 1")
+
+    def test_group_wide_firewall_teardown_is_flagged(self) -> None:
+        # -Group flips every rule in a shared container, including rules another
+        # product added, and records no prior state — so there is no valid undo.
+        assert self._fired("Disable-NetFirewallRule -Group '@FirewallAPI.dll,-28752'")
+
+    def test_session_transport_teardown_is_flagged(self) -> None:
+        for spelling in (
+            "Stop-Service WinRM",
+            "Set-Service TermService -StartupType Disabled",
+            "Disable-PSRemoting -Force",
+        ):
+            assert self._fired(spelling), spelling
+
+    def test_re_enabling_access_is_not_flagged(self) -> None:
+        # Restoring access is the opposite of a lockout.
+        assert not self._fired("Set-ItemProperty -Name 'fDenyTSConnections' -Value 0")
+
+    def test_leaf_targeted_and_unrelated_services_are_not_flagged(self) -> None:
+        for safe in (
+            "Disable-NetFirewallRule -Name 'RemoteDesktop-In-TCP'",  # one rule, undoable
+            "Stop-Service Spooler",                                   # not a transport
+            "Restart-Service W32Time",
+        ):
+            assert not self._fired(safe), safe
+
+    def test_no_shipped_command_actively_locks_the_operator_out(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "remote-access-lockout"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
+class TestDiscardedCimReturnValueRule:
+    """WMI reports failure in a return value, not an exception.
+
+    `-ErrorAction` and `$?` never see it, so piping to Out-Null leaves the
+    operator a clean prompt whether the call worked on every adapter, some, or
+    none. SetTcpipNetbios returns 1 for "succeeded, REBOOT REQUIRED" as often as
+    0 — the common outcome is a host reported fixed that is not.
+    """
+
+    def _fired(self, text):
+        return [
+            v for v in lint_commands([Command("fake.py", 1, text)])
+            if v.rule == "discarded-cim-returnvalue"
+        ]
+
+    def test_piping_to_out_null_is_flagged(self) -> None:
+        assert self._fired("Invoke-CimMethod -MethodName SetTcpipNetbios | Out-Null")
+
+    def test_voiding_is_flagged(self) -> None:
+        assert self._fired("$null = Invoke-CimMethod -MethodName X")
+        assert self._fired("[void](Invoke-CimMethod -MethodName X)")
+
+    def test_capturing_and_testing_is_not_flagged(self) -> None:
+        assert not self._fired(
+            "$r = Invoke-CimMethod -MethodName X\nif ($r.ReturnValue -ne 0) { throw }"
+        )
+
+    def test_new_item_piped_to_out_null_is_not_flagged(self) -> None:
+        # New-Item raises on failure, so Out-Null discards nothing diagnostic.
+        # Flagging it would fire on every guarded registry create in the tree.
+        assert not self._fired(
+            r"if (-not (Test-Path 'HKLM:\SOFTWARE\X')) "
+            r"{ New-Item -Path 'HKLM:\SOFTWARE\X' -Force | Out-Null }"
+        )
+
+    def test_no_shipped_command_discards_a_returnvalue(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "discarded-cim-returnvalue"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]

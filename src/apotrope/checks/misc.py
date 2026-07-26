@@ -228,11 +228,15 @@ def _check_winrm() -> list[CheckResult]:
         ),
         command=(
             "" if not running else
-            "# If remote management is not required, stop and disable WinRM:\n"
-            "Stop-Service WinRM\n"
-            "Set-Service WinRM -StartupType Disabled\n"
-            "# If WinRM is required, disable Basic authentication instead:\n"
-            "Set-Item WSMan:\\localhost\\Service\\Auth\\Basic -Value $false"
+            "# Disable Basic authentication (safe to run while connected):\n"
+            "Set-Item WSMan:\\localhost\\Service\\Auth\\Basic -Value $false\n"
+            "\n"
+            "# If remote management is genuinely not required, tear WinRM down\n"
+            "# instead. This is commented deliberately: pasted inside a PSSession\n"
+            "# or Invoke-Command it kills the service hosting your own shell\n"
+            "# mid-block, so whether the remaining lines ran is indeterminate.\n"
+            "# Stop-Service WinRM\n"
+            "# Set-Service WinRM -StartupType Disabled"
         ),
     )]
 

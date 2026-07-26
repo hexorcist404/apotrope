@@ -60,10 +60,26 @@ _RISKY_PORTS: dict[int, tuple[str, Status, Severity, str]] = {
 # inert CIM objects with no callable methods, so SetTcpipNetbios must be invoked via
 # Invoke-CimMethod — the legacy Get-WmiObject "().SetTcpipNetbios(2)" form fails with
 # "does not contain a method named 'SetTcpipNetbios'".
+#
+# The ReturnValue must be reported, not discarded. WMI signals failure through a
+# uint32 ReturnValue rather than a PowerShell error, so -ErrorAction and $? see
+# nothing and `| Out-Null` swallows the only signal there is. SetTcpipNetbios
+# returns 1 for "succeeded, REBOOT REQUIRED" as routinely as 0 — piping to
+# Out-Null means the operator sees a clean prompt, never reboots, NBT-NS keeps
+# answering, and Apotrope reports the host remediated on a machine where
+# Responder-style relay still works.
 _CMD_NETBIOS_DISABLE = (
     "Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' | "
-    "ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios "
-    "-Arguments @{ TcpipNetbiosOptions = 2 } | Out-Null }"
+    "ForEach-Object {\n"
+    "    $r = Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios "
+    "-Arguments @{ TcpipNetbiosOptions = 2 }\n"
+    "    switch ($r.ReturnValue) {\n"
+    "        0 { \"$($_.Description): NetBIOS disabled\" }\n"
+    "        1 { Write-Warning \"$($_.Description): disabled, REBOOT REQUIRED\" }\n"
+    "        default { Write-Warning "
+    "\"$($_.Description): failed, ReturnValue=$($r.ReturnValue)\" }\n"
+    "    }\n"
+    "}"
 )
 
 # Port 3389. Two deliberate choices here:
