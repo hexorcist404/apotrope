@@ -50,6 +50,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Password policy is evaluated on non-elevated scans again.** `secedit /export`
+  reads a database ACL'd to SYSTEM and Administrators, so the documented
+  run-without-admin invocation could not read password policy and reported all
+  three controls as ERROR. ERROR is score-neutral, so a machine with a minimum
+  password length of 0 lost a HIGH FAIL and scored *higher* for being
+  unmeasurable — biased so that weak machines were the ones told they were fine.
+  Minimum length and account lockout now come from `NetUserModalsGet`, which a
+  standard user can read and which returns integers rather than the localized
+  text `net accounts` prints, so it does not reintroduce the locale dependence
+  that moving to `secedit` removed. Measured on a Windows 11 host: a non-elevated
+  scan went from 87/B back to 77/C, matching the elevated result. Password
+  complexity is an LSA setting with no unprivileged equivalent and is still
+  reported as requiring elevation rather than guessed.
+
 - **Security principals are identified by SID, not by localized display name.**
   The built-in Administrator/Guest are matched on RID suffix (`-500`/`-501`) and
   the Administrators group by `S-1-5-32-544`, so a renamed account or a
