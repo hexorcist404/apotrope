@@ -25,8 +25,14 @@ classifiers = [
 dependencies = [
     # Upper-bounded for the same reason the dev tools are pinned: an unbounded
     # floor lets a future major change behaviour under a released artifact.
-    "rich>=13.7,<15",
-    "jinja2>=3.1,<4",
+    #
+    # Floors sit at the highest advisory-patched version, not merely at the
+    # oldest release with the API we use. A range that *permits* a vulnerable
+    # build is one a constrained or offline resolve can actually pick, and it is
+    # what Dependabot alerts against — declaring >=3.1 while every 3.1.x below
+    # 3.1.6 carries an advisory is a floor that documents nothing.
+    "rich>=13.7,<15",       # no known advisories
+    "jinja2>=3.1.6,<4",     # 3.1.6 patches the most recent jinja2 advisory
 ]
 
 [project.urls]
@@ -39,7 +45,10 @@ Issues = "https://github.com/hexorcist404/apotrope/issues"
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
-    "pillow>=12.0",  # test_brand_assets.py uses Image.get_flattened_data (12+)
+    # 12.0 is where Image.get_flattened_data (used by test_brand_assets.py)
+    # arrives; 12.3.0 is where the most recent pillow advisory is patched, and
+    # the floor tracks the advisory rather than the API for the reason above.
+    "pillow>=12.3",
     "build>=1.0",
     "twine>=5.0",
     # EXACT pins, not floors. `ruff>=0.6` resolved to 0.16.0, whose default rule
