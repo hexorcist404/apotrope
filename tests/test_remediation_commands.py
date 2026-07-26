@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
-from command_audit import Command, collect_commands, lint_commands  # noqa: E402
+from command_audit import Command, collect_commands, lint_commands
 
 
 def test_command_inventory_is_populated() -> None:

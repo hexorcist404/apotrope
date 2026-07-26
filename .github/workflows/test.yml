@@ -4,7 +4,17 @@ on:
   push:
     branches: ["main", "feat/**", "fix/**"]
   pull_request:
-    branches: ["main"]
+    # No branch filter: a stacked PR (base = another fix/** branch, as when
+    # these PRs are chained) produced no pull_request-triggered run at all, so
+    # it was never checked against its merge preview and offered no check
+    # context a branch-protection rule could require.
+
+# One run per ref. Without this the push and pull_request triggers both fire on
+# every push to an open PR branch, duplicating a 4-leg matrix (two of them
+# Windows) and leaving superseded runs to finish.
+concurrency:
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -29,6 +39,12 @@ jobs:
 
       - name: Install package and dev dependencies
         run: pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check src tests tools
+
+      - name: Type-check (mypy)
+        run: mypy src/apotrope tools
 
       - name: Run tests with coverage
         # Branch coverage is enabled in pyproject.toml ([tool.coverage.run]).
@@ -65,6 +81,9 @@ jobs:
 
       - name: Verify exe --dry-run
         run: .\dist\apotrope.exe --dry-run --no-color
+
+      - name: Verify remediation commands (PowerShell parse + cmdlet resolution)
+        run: python tools/verify_commands.py
 
       - name: Upload exe artifact
         uses: actions/upload-artifact@v4

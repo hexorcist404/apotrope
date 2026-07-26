@@ -68,6 +68,13 @@ jobs:
       - name: Smoke-test exe (--dry-run)
         run: .\dist\apotrope.exe --dry-run --no-color
 
+      - name: Verify remediation commands (PowerShell parse + cmdlet resolution)
+        # tools/verify_commands.py's own docstring says to run this on a real
+        # Windows box before tagging a release — Linux CI cannot parse
+        # PowerShell. This is that box: the exe built here is what hands users
+        # copy-paste remediation, and the tag path ran none of this before.
+        run: python tools/verify_commands.py
+
       - name: Check exe version matches tag
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash

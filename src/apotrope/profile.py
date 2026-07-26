@@ -109,8 +109,8 @@ def load_profile(path: str | None = None) -> Profile:
 
     try:
         return _parse_toml(resolved)
-    except Exception as exc:
-        log.warning("Could not parse profile %s: %s — using defaults", resolved, exc)
+    except Exception:
+        log.exception("Could not parse profile %s — using defaults", resolved)
         return Profile()
 
 

@@ -150,7 +150,7 @@ def _check_unquoted_paths() -> list[CheckResult]:
 
     names = [str(i.get("Name") or "Unknown") for i in items]
     paths = [str(i.get("PathName") or "") for i in items]
-    detail_lines = "; ".join(f"{n}: {p}" for n, p in zip(names, paths))
+    detail_lines = "; ".join(f"{n}: {p}" for n, p in zip(names, paths, strict=True))
 
     return [CheckResult(
         category=CATEGORY,

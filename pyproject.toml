@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "apotrope"
 version = "0.1.12"
 description = "A portable Windows security posture auditor"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [{ name = "Apotrope Contributors" }]
 keywords = ["windows", "security", "audit", "posture", "hardening"]
@@ -15,7 +16,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
@@ -23,8 +23,10 @@ classifiers = [
     "Topic :: System :: Systems Administration",
 ]
 dependencies = [
-    "rich>=13.7",
-    "jinja2>=3.1",
+    # Upper-bounded for the same reason the dev tools are pinned: an unbounded
+    # floor lets a future major change behaviour under a released artifact.
+    "rich>=13.7,<15",
+    "jinja2>=3.1,<4",
 ]
 
 [project.urls]
@@ -40,6 +42,14 @@ dev = [
     "pillow>=12.0",  # test_brand_assets.py uses Image.get_flattened_data (12+)
     "build>=1.0",
     "twine>=5.0",
+    # EXACT pins, not floors. `ruff>=0.6` resolved to 0.16.0, whose default rule
+    # set grew from 59 rules to 413 and turned this gate red with no code
+    # change. A required gate must not have its rule set chosen by whatever pip
+    # resolves that morning. Bump either pin in its own PR that absorbs the
+    # resulting delta. mypy is pinned to the 1.x this tree was verified against;
+    # `mypy>=1.11` now resolves to 2.x, which has never run here.
+    "ruff==0.16.0",
+    "mypy==1.19.1",
 ]
 
 [project.scripts]
@@ -54,6 +64,70 @@ apotrope = ["templates/*.j2", "templates/*.png"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+markers = [
+    "allow_subprocess: test may reach the real subprocess boundary (opt out of the hermeticity guard)",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120        # only meaningful because E501 is selected below
+
+[tool.ruff.lint]
+# `select` REPLACES ruff's default rule set (`extend-select` would merge with
+# it). That is what stops this gate moving under us: ruff 0.16.0 grew its
+# default set from 59 rules to 413, which turned a green branch red with no
+# code change. The rule set is now the repo's decision.
+#
+# `select` alone is not sufficient, though — most entries below are family
+# PREFIXES, and a prefix silently absorbs any rule ruff later promotes out of
+# preview. The exact `ruff==0.16.0` pin in the dev extra is what holds the
+# count steady; bump it in a dedicated PR that absorbs the delta.
+#
+# Every family here was measured against this tree. The expensive ones are
+# selected by exact code, and must NOT be "tidied" into prefixes:
+#   "S"   -> 1398 (S101 alone is 1379: every pytest assert)
+#   "PL"  ->  264      "D" -> 1055      "PTH" -> 46      "RUF" -> 43
+select = [
+    "E4", "E7", "E9",     # pycodestyle errors (ruff's pre-0.16 default core)
+    "E501",               # line-too-long, at the line-length above
+    "F",                  # pyflakes (ruff's pre-0.16 default core)
+    "W",                  # pycodestyle warnings
+    "B",                  # flake8-bugbear
+    "BLE",                # blind-except — see below
+    "C4", "A", "DTZ",     # comprehensions / builtin shadowing / naive datetimes
+    "G",                  # logging format
+    "PIE",                # flake8-pie
+    "PLE", "PLW",         # pylint error+warning — NEVER bare "PL"
+    "S110",               # try-except-pass — NEVER bare "S"
+    "RUF059", "RUF100",   # NEVER bare "RUF"
+]
+# BLE is deliberately ON despite CLAUDE.md requiring that check modules never
+# raise. The two do not conflict: BLE001 objects to swallowing an exception
+# without recording a traceback, not to catching Exception. scanner._run_module's
+# handler — the one that implements that contract — does not trip it, because it
+# already passes exc_info. So the rule pushes toward the architecture, not away.
+
+[tool.mypy]
+python_version = "3.12"
+check_untyped_defs = true
+warn_return_any = true
+no_implicit_optional = true
+strict_equality = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+# NOT set — `warn_unreachable`: 3 errors on ubuntu and 0 on windows, because
+# this package is full of `if sys.platform != "win32": return` guards and mypy
+# resolves sys.platform against the host. It would make the matrix permanently
+# and confusingly red. `warn_unused_ignores` is likewise off: its verdict
+# depends on which optional third-party stubs happen to resolve.
+
+[[tool.mypy.overrides]]
+# reporter.py has ~20 unannotated nested Rich helpers. Annotating them is a real
+# refactor, not part of a CI-hardening change; without this override
+# disallow_untyped_defs costs 20 extra annotations in that one file.
+module = "apotrope.reporter"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
 
 [tool.coverage.run]
 source = ["src/apotrope"]
