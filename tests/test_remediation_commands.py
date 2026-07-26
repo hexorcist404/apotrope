@@ -206,3 +206,74 @@ class TestUnguardedNewItemForceRule:
             if v.rule == "unguarded-new-item-force"
         ]
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
+class TestBitLockerKeyEscrowRule:
+    """A recovery password the operator never sees is worse than no advice.
+
+    Enable-BitLocker / Add-BitLockerKeyProtector return a volume object whose
+    default table renders the protector TYPES; the 48-digit password lives in
+    .KeyProtector[].RecoveryPassword and is never printed. The operator gets a
+    success-looking table, keeps no copy, and the only surviving copy sits in
+    volume metadata that the recovery prompt cannot read. One firmware update
+    later, the disk is gone.
+    """
+
+    _CREATE = "Enable-BitLocker -MountPoint 'C:' -RecoveryPasswordProtector"
+
+    def _fired(self, text):
+        return [
+            v for v in lint_commands([Command("fake.py", 1, text)])
+            if v.rule == "bitlocker-no-key-escrow"
+        ]
+
+    def test_creating_without_surfacing_is_flagged(self) -> None:
+        assert self._fired(self._CREATE)
+
+    def test_protector_flag_alone_does_not_count_as_surfacing(self) -> None:
+        # -RecoveryPasswordProtector contains the substring "RecoveryPassword".
+        # If the rule matched that, every command would self-satisfy and the
+        # rule would be permanently inert.
+        assert self._fired(self._CREATE + "\nWrite-Host done")
+
+    def test_readback_satisfies_it(self) -> None:
+        assert not self._fired(
+            self._CREATE
+            + "\n$rp = (Get-BitLockerVolume -MountPoint 'C:').KeyProtector | "
+              "Where-Object KeyProtectorType -eq 'RecoveryPassword'"
+              "\n$rp | Format-List KeyProtectorId, RecoveryPassword"
+        )
+
+    def test_ad_escrow_satisfies_it(self) -> None:
+        assert not self._fired(
+            self._CREATE + "\nBackup-BitLockerKeyProtector -MountPoint 'C:' -KeyProtectorId $id"
+        )
+
+    def test_entra_escrow_satisfies_it(self) -> None:
+        assert not self._fired(
+            self._CREATE + "\nBackupToAAD-BitLockerKeyProtector -MountPoint 'C:' -KeyProtectorId $id"
+        )
+
+    def test_commented_readback_does_not_satisfy_it(self) -> None:
+        # A commented escrow line is an inert manual step; it does not put the
+        # key in the operator's hands.
+        assert self._fired(
+            self._CREATE + "\n# Backup-BitLockerKeyProtector -MountPoint 'C:'"
+        )
+
+    def test_commands_without_a_recovery_protector_are_untouched(self) -> None:
+        for safe in (
+            "Enable-BitLocker -MountPoint 'C:' -TpmProtector",
+            "Get-BitLockerVolume",
+            "Set-NetFirewallProfile -Profile Domain -Enabled True",
+        ):
+            assert not self._fired(safe), safe
+
+    def test_every_shipped_bitlocker_command_surfaces_the_key(self) -> None:
+        # The real inventory — this is the assertion that would have caught the
+        # shipped commands before an operator lost a volume.
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "bitlocker-no-key-escrow"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]

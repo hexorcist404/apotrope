@@ -9,6 +9,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **The BitLocker remediation now hands the operator the recovery password.**
+  Both commands created a recovery-password protector and never showed the
+  48-digit key. `Enable-BitLocker` and `Add-BitLockerKeyProtector` return a
+  volume object whose default table renders the protector *types*; the password
+  lives in `.KeyProtector[].RecoveryPassword` and was never printed. So the
+  operator pasted an elevated block, saw a success-looking table, and kept no
+  copy — while the only surviving copy sat in volume metadata that the recovery
+  prompt cannot read. Any later TPM change (firmware update, board swap,
+  boot-order change) would have stranded them at a recovery screen they could
+  not pass. Both commands now read the password back before the operator can
+  reboot, and carry commented `Backup-BitLockerKeyProtector` /
+  `BackupToAAD-BitLockerKeyProtector` steps for domain- and Entra-joined hosts.
+  A new `bitlocker-no-key-escrow` lint rule keeps it from regressing.
+
 - **Removed two machine-damaging remediations from copy-paste output.** The "TPM
   present but not ready" finding shipped `Initialize-Tpm -AllowClear
   -AllowPhysicalPresence`, where `-AllowClear` can wipe the TPM, invalidate

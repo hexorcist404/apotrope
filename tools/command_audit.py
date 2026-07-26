@@ -209,6 +209,25 @@ _DESTRUCTIVE = re.compile(
 # overwrites a file, which is the documented, expected behaviour. The registry
 # gate below keys off the hive reference in the surrounding command.
 _NEW_ITEM_FORCE = re.compile(r"\bNew-Item\b[^\n]*?-Force\b", re.IGNORECASE)
+
+# A BitLocker recovery password the operator never sees is worse than no
+# encryption advice at all. Enable-BitLocker / Add-BitLockerKeyProtector return a
+# BitLockerVolume whose default table renders the protector *types* — the 48-digit
+# password lives in .KeyProtector[].RecoveryPassword and is never printed. So the
+# operator gets a success-looking table, holds no copy, and the only surviving
+# copy is in the volume's own metadata, which is unreachable from the recovery
+# prompt. Any later TPM change strands them there.
+#
+# Creating the protector therefore obliges the command to also read it back or
+# escrow it. Both are accepted: printing the password, or backing it up to AD DS
+# / Entra ID.
+_CREATES_RECOVERY_PASSWORD = re.compile(r"-RecoveryPasswordProtector\b", re.IGNORECASE)
+_SURFACES_RECOVERY_PASSWORD = re.compile(
+    r"\bRecoveryPassword\b(?!Protector)"          # reads the property back
+    r"|\bBackup(?:ToAAD)?-BitLockerKeyProtector\b"  # escrows to AD DS / Entra ID
+    r"|\bmanage-bde\b[^\n]*-protectors\b",
+    re.IGNORECASE,
+)
 _TEST_PATH_GUARD = re.compile(r"^\s*if\s*\(\s*-not\s*\(\s*Test-Path\b", re.IGNORECASE)
 _REGISTRY_HIVE = re.compile(r"\b(?:HKLM|HKCU|HKCR|HKU|HKCC)\s*:|Registry::|\bHKEY_", re.IGNORECASE)
 # -DisplayGroup selects an EXISTING firewall rule by its resolved MUI string
@@ -272,6 +291,19 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 cmd.module, cmd.line, "destructive-command",
                 "destructive/unattended command (TPM clear, reboot, shutdown, volume "
                 "or BitLocker teardown) must be a commented manual step, not copy-paste",
+                text,
+            ))
+        if (
+            _CREATES_RECOVERY_PASSWORD.search(active)
+            and not _SURFACES_RECOVERY_PASSWORD.search(active)
+        ):
+            violations.append(Violation(
+                cmd.module, cmd.line, "bitlocker-no-key-escrow",
+                "creates a BitLocker recovery password the operator never sees. The "
+                "cmdlets print the protector types, not the 48-digit password, and it "
+                "cannot be read back from the recovery prompt. Read it back "
+                "(.KeyProtector | Where-Object KeyProtectorType -eq 'RecoveryPassword') "
+                "or escrow it (Backup-BitLockerKeyProtector / BackupToAAD-...)",
                 text,
             ))
         if _REGISTRY_HIVE.search(active):
