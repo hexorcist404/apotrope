@@ -107,3 +107,102 @@ class TestUnresolvedExpressionRule:
         bad = [v for v in lint_commands(collect_commands())
                if v.rule == "unresolved-expression"]
         assert not bad, bad
+
+
+class TestDestructiveRuleIsCaseInsensitive:
+    """PowerShell resolves cmdlet names case-insensitively; the rule must too.
+
+    `restart-computer -Force` reboots exactly as `Restart-Computer -Force` does.
+    A case-sensitive denylist reads as protection while catching only the
+    spelling its author happened to use.
+    """
+
+    def test_lowercase_reboot_is_flagged(self) -> None:
+        planted = [Command("fake.py", 1, "restart-computer -Force")]
+        assert [v for v in lint_commands(planted) if v.rule == "destructive-command"]
+
+    def test_mixed_case_tpm_clear_is_flagged(self) -> None:
+        planted = [Command("fake.py", 1, "clear-TPM")]
+        assert [v for v in lint_commands(planted) if v.rule == "destructive-command"]
+
+
+class TestDestructiveRuleCoversMoreThanReboots:
+    """The denylist covers the whole class, not just the two forms that shipped."""
+
+    def test_shutdown_exe_is_flagged(self) -> None:
+        for spelling in ("shutdown /r /t 0", "shutdown.exe -s -t 0", "shutdown /g"):
+            planted = [Command("fake.py", 1, spelling)]
+            assert [v for v in lint_commands(planted) if v.rule == "destructive-command"], spelling
+
+    def test_volume_and_bitlocker_teardown_is_flagged(self) -> None:
+        for spelling in (
+            "Disable-BitLocker -MountPoint 'C:'",
+            "Format-Volume -DriveLetter D",
+            "Clear-Disk -Number 1",
+            "Remove-Partition -DiskNumber 1 -PartitionNumber 2",
+        ):
+            planted = [Command("fake.py", 1, spelling)]
+            assert [v for v in lint_commands(planted) if v.rule == "destructive-command"], spelling
+
+    def test_autoreboot_update_is_flagged(self) -> None:
+        planted = [Command(
+            "fake.py", 1,
+            "Install-Module PSWindowsUpdate -Force\nInstall-WindowsUpdate -AutoReboot",
+        )]
+        assert [v for v in lint_commands(planted) if v.rule == "destructive-command"]
+
+    def test_ordinary_commands_are_not_flagged(self) -> None:
+        # A rule that fires on safe commands gets silenced and then protects nothing.
+        for safe in (
+            "Set-NetFirewallProfile -Profile Domain -Enabled True",
+            "Restart-Service -Name W32Time",           # a service, not the computer
+            "Get-Tpm",
+            "net accounts /minpwlen:14",
+            "Update-MpSignature",
+        ):
+            planted = [Command("fake.py", 1, safe)]
+            assert not [
+                v for v in lint_commands(planted) if v.rule == "destructive-command"
+            ], safe
+
+
+class TestUnguardedNewItemForceRule:
+    """`New-Item -Force` on the registry provider REPLACES the key.
+
+    It deletes every value and subkey underneath. On a shared policy container
+    that means destroying unrelated policy the operator never asked to touch.
+    """
+
+    _REG = r"$key = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Foo'" + "\n"
+
+    def test_unguarded_registry_new_item_is_flagged(self) -> None:
+        planted = [Command("fake.py", 1, self._REG + "New-Item -Path $key -Force | Out-Null")]
+        assert [v for v in lint_commands(planted) if v.rule == "unguarded-new-item-force"]
+
+    def test_test_path_guard_clears_it(self) -> None:
+        planted = [Command(
+            "fake.py", 1,
+            self._REG + "if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }",
+        )]
+        assert not [v for v in lint_commands(planted) if v.rule == "unguarded-new-item-force"]
+
+    def test_commented_new_item_is_not_flagged(self) -> None:
+        planted = [Command("fake.py", 1, self._REG + "# New-Item -Path $key -Force")]
+        assert not [v for v in lint_commands(planted) if v.rule == "unguarded-new-item-force"]
+
+    def test_filesystem_new_item_is_not_flagged(self) -> None:
+        # On the filesystem provider -Force creates parents; that is the
+        # documented behaviour and not destructive of unrelated state.
+        planted = [Command(
+            "fake.py", 1, r'New-Item -Path "$env:TEMP\apotrope" -ItemType Directory -Force',
+        )]
+        assert not [v for v in lint_commands(planted) if v.rule == "unguarded-new-item-force"]
+
+    def test_every_shipped_registry_create_is_guarded(self) -> None:
+        # The real inventory, not a planted case: this is what would have caught
+        # the AutoPlay block before it shipped.
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "unguarded-new-item-force"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
