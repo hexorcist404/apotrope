@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 
+import pytest
 
 from apotrope.profile import Profile, load_profile
 
@@ -39,10 +40,11 @@ class TestLoadProfileNoFile:
         profile = load_profile()
         assert isinstance(profile, Profile)
 
-    def test_returns_default_when_explicit_missing(self):
-        """Explicit non-existent path → default profile, no exception."""
-        profile = load_profile("/nonexistent/apotrope.toml")
-        assert isinstance(profile, Profile)
+    def test_explicit_missing_raises(self):
+        """An explicitly requested path that doesn't exist fails closed."""
+        from apotrope.exceptions import ProfileError
+        with pytest.raises(ProfileError):
+            load_profile("/nonexistent/apotrope.toml")
 
 
 # ---------------------------------------------------------------------------
@@ -103,13 +105,23 @@ class TestLoadProfileFromToml:
         finally:
             os.unlink(path)
 
-    def test_invalid_toml_returns_default(self):
+    def test_explicit_invalid_toml_raises(self):
+        from apotrope.exceptions import ProfileError
         path = _write_toml("this is {{{{ not valid toml")
         try:
-            p = load_profile(path)
-            assert isinstance(p, Profile)  # graceful fallback
+            with pytest.raises(ProfileError):
+                load_profile(path)
         finally:
             os.unlink(path)
+
+    def test_autodetected_invalid_toml_returns_default(self, tmp_path, monkeypatch):
+        # An auto-discovered (not explicitly requested) apotrope.toml that fails
+        # to parse still falls back to defaults rather than failing the scan.
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "apotrope.toml").write_text("{{{ not valid", encoding="utf-8")
+        p = load_profile()
+        assert isinstance(p, Profile)
+        assert p.name == "default"
 
     def test_invalid_threshold_value_ignored(self):
         toml = '[thresholds]\nmax_update_age_warn = "not_a_number"\n'
@@ -168,11 +180,16 @@ class TestTomlLibraryFallback:
             with pytest.raises(ImportError, match="tomli"):
                 _parse_toml(path)
 
-    def test_load_profile_falls_back_to_defaults_without_toml_library(self, tmp_path):
+    def test_autodetected_profile_falls_back_to_defaults_without_toml_library(
+        self, tmp_path, monkeypatch
+    ):
         import sys
         from unittest.mock import patch
 
-        path = self._write_toml(tmp_path)
+        # An auto-discovered profile with no TOML library available degrades to
+        # the default profile (an explicitly requested one would fail closed).
+        (tmp_path / "apotrope.toml").write_text('[profile]\nname = "fb"\n', encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
         with patch.dict(sys.modules, {"tomllib": None, "tomli": None}):
-            profile = load_profile(str(path))
+            profile = load_profile()
         assert profile.name == "default"

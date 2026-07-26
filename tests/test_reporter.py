@@ -1071,3 +1071,34 @@ class TestPrintTerminal:
         out = self._output(self._boxed_report(), capsys, monkeypatch, columns=70)
         assert "┌" not in out
         assert "Public Firewall" in out  # content still there, un-boxed
+
+
+class TestGenerateReportSuccessSignal:
+    """generate_* report methods report whether the file was actually written."""
+
+    def test_html_returns_true_on_success(self, tmp_path):
+        ok = Reporter().generate_html_report(_make_report(), str(tmp_path / "r.html"))
+        assert ok is True
+        assert (tmp_path / "r.html").exists()
+
+    def test_html_returns_false_on_oserror(self):
+        with patch("pathlib.Path.write_text", side_effect=OSError("disk full")):
+            assert Reporter().generate_html_report(_make_report(), "x.html") is False
+
+    def test_html_returns_false_without_jinja(self):
+        import sys
+        with patch.dict(sys.modules, {"jinja2": None}):
+            assert Reporter().generate_html_report(_make_report(), "x.html") is False
+
+    def test_json_returns_true_on_success(self, tmp_path):
+        ok = Reporter().generate_json_report(_make_report(), str(tmp_path / "r.json"))
+        assert ok is True
+        assert (tmp_path / "r.json").exists()
+
+    def test_json_returns_false_on_oserror(self):
+        with patch("pathlib.Path.write_text", side_effect=OSError("disk full")):
+            assert Reporter().generate_json_report(_make_report(), "x.json") is False
+
+    def test_exec_returns_false_on_oserror(self):
+        with patch("pathlib.Path.write_text", side_effect=OSError("disk full")):
+            assert Reporter().generate_executive_report(_make_report(), "x.html") is False

@@ -193,6 +193,77 @@ class TestErroredChecks:
 
         assert compare_reports(baseline, current).score_delta_reliable is True
 
+
+class TestBaselineIntegrity:
+    """A baseline that recorded no real assessment must not look authoritative.
+
+    An all-ERROR or empty scan still scores 100 (scoring.py ignores ERROR), and
+    ``apotrope --json`` writes one on exactly that path. Diffing against it
+    manufactures regressions, so the diff flags it — it never rejects it, since
+    errored controls are routine on real hosts.
+    """
+
+    def test_empty_baseline_marks_delta_unreliable(self):
+        baseline = _make_report([], score=100)
+        current = _make_report([], score=90)
+        diff = compare_reports(baseline, current)
+        assert diff.baseline_evaluated_count == 0
+        assert diff.score_delta_reliable is False
+
+    def test_all_error_baseline_marks_delta_unreliable(self):
+        """The poisoned-baseline case: score 100, zero evaluated, all ERROR."""
+        baseline = _make_report([_make_result("Firewall", Status.ERROR)], score=100)
+        current = _make_report([_make_result("Firewall", Status.FAIL)], score=90)
+        diff = compare_reports(baseline, current)
+        assert diff.baseline_error_count == 1
+        assert diff.baseline_evaluated_count == 0
+        assert diff.score_delta_reliable is False
+
+    def test_partially_errored_baseline_marks_delta_unreliable(self):
+        baseline = _make_report(
+            [_make_result("Firewall", Status.PASS), _make_result("SMB", Status.ERROR)],
+            score=100,
+        )
+        current = _make_report(
+            [_make_result("Firewall", Status.PASS), _make_result("SMB", Status.PASS)],
+            score=100,
+        )
+        diff = compare_reports(baseline, current)
+        assert diff.baseline_error_count == 1
+        assert diff.score_delta_reliable is False
+
+    def test_healthy_baseline_reports_its_counts(self):
+        baseline = _make_report([_make_result("Firewall", Status.FAIL)], score=90)
+        current = _make_report([_make_result("Firewall", Status.PASS)], score=100)
+        diff = compare_reports(baseline, current)
+        assert diff.baseline_evaluated_count == 1
+        assert diff.baseline_error_count == 0
+        assert diff.score_delta_reliable is True
+
+    def test_compare_never_raises_on_a_bad_baseline(self):
+        """compare_reports is a pure diff — flagging must not become rejecting."""
+        baseline = _make_report([_make_result("X", Status.ERROR)], score=100)
+        current = _make_report([_make_result("X", Status.PASS)], score=100)
+        compare_reports(baseline, current)   # must not raise
+
+
+class TestSaveBaseline:
+    """save_baseline must report whether the file was actually written."""
+
+    def test_returns_true_when_written(self, tmp_path):
+        from apotrope.compare import save_baseline
+        target = tmp_path / "base.json"
+        assert save_baseline(_make_report([]), str(target)) is True
+        assert target.exists()
+
+    def test_returns_false_when_write_fails(self, caplog):
+        """A failed write must not be logged as a success."""
+        from unittest.mock import patch
+        from apotrope.compare import save_baseline
+        with patch("apotrope.reporter.Reporter.generate_json_report", return_value=False):
+            assert save_baseline(_make_report([]), "/x/base.json") is False
+        assert "Baseline saved" not in caplog.text
+
     def test_fail_to_error_is_errored_not_resolved(self):
         """A FAIL check that ERRORs in the current scan cannot be confirmed
         remediated. It must be reported as errored, never resolved."""
@@ -249,6 +320,21 @@ class TestBaselineSerialization:
         loaded = self._roundtrip([])
         assert loaded.hostname == "PC"
 
+    def test_cis_version_and_caveat_preserved(self):
+        # --json serialises cis_version/cis_caveat; load_baseline must restore them.
+        report = _make_report([])
+        report.cis_version = "v4.0.0"
+        report.cis_caveat = "Server 2022 best-effort mapping"
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+            path = f.name
+        try:
+            save_baseline(report, path)
+            loaded = load_baseline(path)
+        finally:
+            os.unlink(path)
+        assert loaded.cis_version == "v4.0.0"
+        assert loaded.cis_caveat == "Server 2022 best-effort mapping"
+
     def test_score_preserved(self):
         loaded = self._roundtrip([], score=73)
         assert loaded.score == 73
@@ -280,7 +366,9 @@ class TestBaselineSerialization:
             load_baseline("/nonexistent/path/baseline.json")
 
     def test_load_invalid_json_raises(self):
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+        with tempfile.NamedTemporaryFile(
+            suffix=".json", delete=False, mode="w", encoding="utf-8"
+        ) as f:
             f.write("not json {{")
             path = f.name
         try:
@@ -290,7 +378,9 @@ class TestBaselineSerialization:
             os.unlink(path)
 
     def test_load_malformed_report_raises(self):
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+        with tempfile.NamedTemporaryFile(
+            suffix=".json", delete=False, mode="w", encoding="utf-8"
+        ) as f:
             json.dump({"hostname": "X"}, f)  # missing required fields
             path = f.name
         try:
@@ -304,7 +394,9 @@ class TestBaselineTimestampParsing:
     """load_baseline must convert offset timestamps to UTC, not relabel them (finding #7)."""
 
     def _load_with_timestamp(self, ts_string: str) -> AuditReport:
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+        with tempfile.NamedTemporaryFile(
+            suffix=".json", delete=False, mode="w", encoding="utf-8"
+        ) as f:
             json.dump({"hostname": "PC", "scan_timestamp": ts_string}, f)
             path = f.name
         try:
@@ -338,9 +430,12 @@ class TestOneSidedGoodResults:
         assert diff.new_findings == []
         assert diff.unchanged_count == 1
 
-    def test_baseline_only_pass_counts_as_unchanged(self):
+    def test_baseline_only_pass_is_missing_control(self):
+        # A control present in the baseline but absent now is coverage lost —
+        # surfaced as a missing control (not counted as unchanged/remediated).
         baseline = _make_report([_make_result("Old Pass", Status.PASS)])
         current = _make_report([])
         diff = compare_reports(baseline, current)
         assert diff.resolved_findings == []
-        assert diff.unchanged_count == 1
+        assert len(diff.missing_findings) == 1
+        assert diff.unchanged_count == 0

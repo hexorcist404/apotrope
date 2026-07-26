@@ -39,6 +39,8 @@ import dataclasses
 import logging
 from pathlib import Path
 
+from apotrope.exceptions import ProfileError
+
 log = logging.getLogger(__name__)
 
 _SEARCH_PATHS = [
@@ -74,21 +76,32 @@ def load_profile(path: str | None = None) -> Profile:
         path: Explicit path to a TOML file, or ``None`` to auto-discover.
 
     Returns:
-        A :class:`Profile` instance.  Never raises — parsing errors are
-        logged as warnings and a default Profile is returned.
-    """
-    resolved: Path | None = None
+        A :class:`Profile` instance.
 
+    Raises:
+        ProfileError: If an *explicitly* requested *path* is missing or cannot be
+            parsed. An auto-discovered ``apotrope.toml`` never raises — a parse
+            error there is logged and a default Profile is returned.
+    """
+    # The explicit and auto-discovered paths are disjoint — the block below always
+    # returns or raises — so they use separate names. Sharing one name gave it two
+    # incompatible types (Path here, Path | None below) for no benefit.
     if path is not None:
-        resolved = Path(path)
-        if not resolved.exists():
-            log.warning("Profile file not found: %s — using defaults", path)
-            return Profile()
-    else:
-        for candidate in _SEARCH_PATHS:
-            if candidate.exists():
-                resolved = candidate
-                break
+        explicit = Path(path)
+        if not explicit.exists():
+            raise ProfileError(f"Profile file not found: {path}")
+        try:
+            return _parse_toml(explicit)
+        except ProfileError:
+            raise
+        except Exception as exc:
+            raise ProfileError(f"Could not parse profile {path}: {exc}") from exc
+
+    resolved: Path | None = None
+    for candidate in _SEARCH_PATHS:
+        if candidate.exists():
+            resolved = candidate
+            break
 
     if resolved is None:
         log.debug("No apotrope.toml found — using default profile")

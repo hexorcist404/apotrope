@@ -6,7 +6,8 @@ Exit codes:
     0  Assessment completed and scored >= 70 (passing posture)
     1  Assessment completed and scored <  70 (failing posture)
     2  Result not trustworthy: invalid arguments, a fatal scan error,
-       zero controls evaluated, or one or more checks errored
+       zero controls evaluated, one or more checks errored, or a requested
+       output file could not be written
 """
 
 from __future__ import annotations
@@ -144,23 +145,93 @@ def _exec_href(html_path: str, exec_path: str) -> str:
 
 def _validate_output_paths(
     parser: argparse.ArgumentParser,
-    html_path: str | None,
-    exec_path: str | None,
+    args: argparse.Namespace,
 ) -> None:
-    """Reject technical and executive reports that resolve to one file."""
-    if not html_path or not exec_path:
-        return
+    """Reject colliding or unwritable output paths *before* the scan runs.
+
+    Every requested output (``--html`` / ``--exec-report`` / ``--json`` /
+    ``--baseline``) must resolve to a distinct file, and each target must be
+    writable — checked up front so a bad path fails fast with a clear message
+    (exit 2) instead of a late traceback after a full scan.
+
+    Writability is established by *probing*, not by :func:`os.access`. On
+    Windows ``os.access(dir, W_OK)`` reflects only the legacy read-only
+    attribute and never the DACL, so it both passes directories that cannot be
+    written and — for an existing file under a non-writable parent — fails ones
+    that can. The probe performs the same operation the report writer will.
+    """
+    import os
+    import tempfile
     from pathlib import Path
 
-    if Path(html_path).resolve() == Path(exec_path).resolve():
+    named = [
+        (flag, path) for flag, path in (
+            ("--html", args.html),
+            ("--exec-report", args.exec_report),
+            ("--json", args.json),
+            ("--baseline", args.baseline),
+        ) if path
+    ]
+
+    # Preserve the original, specific message for the html/exec pair.
+    if args.html and args.exec_report and (
+        Path(args.html).resolve() == Path(args.exec_report).resolve()
+    ):
         parser.error("--html and --exec-report must use different files")
+
+    seen: dict[Path, str] = {}
+    for flag, path in named:
+        resolved = Path(path).resolve()
+        if resolved in seen:
+            parser.error(f"{seen[resolved]} and {flag} must use different files")
+        seen[resolved] = flag
+
+    for flag, path in named:
+        target = Path(path).resolve()
+
+        # 1. The parent must exist and be a directory. Keep the word "writable"
+        #    in this message — callers and tests grep for it.
+        if not target.parent.is_dir():
+            parser.error(
+                f"cannot write {flag} to {path}: {target.parent} is not a writable directory"
+            )
+
+        # 2. Reject a directory target before probing: opening a directory
+        #    raises IsADirectoryError on POSIX but PermissionError on Windows,
+        #    so the probe alone would report it inconsistently.
+        if target.is_dir():
+            parser.error(f"cannot write {flag} to {path}: it is a directory")
+
+        # 3. Existing target: prove we can write *the file*. O_WRONLY without
+        #    O_CREAT never creates, so losing the exists() race cannot leave a
+        #    stray 0-byte report behind for a downstream "upload if present".
+        try:
+            fd = os.open(target, os.O_WRONLY)
+        except FileNotFoundError:
+            pass  # absent — fall through to the directory probe below
+        except OSError as exc:
+            parser.error(f"cannot write {flag} to {path}: {exc.strerror or exc}")
+        else:
+            os.close(fd)
+            continue
+
+        # 4. Absent target: prove we can create in the parent. An anonymous
+        #    self-deleting file needs the same permission the real write does.
+        try:
+            with tempfile.TemporaryFile(dir=target.parent):
+                pass
+        except OSError as exc:
+            parser.error(
+                f"cannot write {flag} to {path}: "
+                f"{target.parent} is not a writable directory ({exc.strerror or exc})"
+            )
 
 
 def main() -> None:
     """Parse arguments, run the audit, and produce output."""
     parser = build_parser()
     args = parser.parse_args()
-    _validate_output_paths(parser, args.html, args.exec_report)
+    _validate_output_paths(parser, args)
 
     logging.basicConfig(
         level=getattr(logging, args.log_level),
@@ -171,6 +242,7 @@ def main() -> None:
     from apotrope.scanner import Scanner, known_categories
     from apotrope.reporter import Reporter
     from apotrope.profile import load_profile
+    from apotrope.exceptions import ProfileError
     from apotrope.utils import is_admin
 
     categories: list[str] | None = None
@@ -187,8 +259,13 @@ def main() -> None:
             )
         categories = requested
 
-    # Load optional profile (auto-detects apotrope.toml if --profile not given)
-    profile = load_profile(getattr(args, "profile", None))
+    # Load optional profile (auto-detects apotrope.toml if --profile not given).
+    # An explicitly requested profile that is missing/unparseable fails closed.
+    try:
+        profile = load_profile(getattr(args, "profile", None))
+    except ProfileError as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        sys.exit(2)
 
     admin    = is_admin()
     scanner  = Scanner(categories=categories, is_admin=admin, profile=profile)
@@ -232,30 +309,54 @@ def main() -> None:
         print(f"\n[FATAL] Scan could not complete: {exc}", file=sys.stderr)
         sys.exit(2)
 
+    # Is this assessment trustworthy enough to act on? Computed once and reused
+    # by both the baseline gate below and the exit gate at the end, so the two
+    # can never drift apart. ``bool(...)`` rather than ``> 0`` deliberately:
+    # evaluated_count is a non-negative int for a real AuditReport, and the
+    # bool form also behaves for the MagicMock reports the CLI tests drive.
+    trustworthy = bool(report.evaluated_count) and not report.error_count
+
     # Save outputs. The executive report is generated first so the technical
-    # report's header link is only rendered once the target actually exists
-    # (generation is a no-op when Jinja2 or the template is unavailable).
-    if args.exec_report:
+    # report's header link is only rendered once it was actually written.
+    #
+    # Each flag carries a tri-state: None means "not requested" (or, for the
+    # baseline, "deliberately skipped"); False means the write genuinely
+    # failed. Only False feeds the exit code — conflating it with None would
+    # report every un-requested output as a failure.
+    exec_ok: bool | None = (
         reporter.generate_executive_report(report, args.exec_report)
+        if args.exec_report else None
+    )
 
+    html_ok: bool | None = None
     if args.html:
-        exec_href = None
-        if args.exec_report:
-            from pathlib import Path
-            if Path(args.exec_report).exists():
-                exec_href = _exec_href(args.html, args.exec_report)
-        reporter.generate_html_report(report, args.html, exec_href=exec_href)
+        exec_href = _exec_href(args.html, args.exec_report) if exec_ok else None
+        html_ok = reporter.generate_html_report(report, args.html, exec_href=exec_href)
 
-    if args.json:
-        reporter.generate_json_report(report, args.json)
+    json_ok: bool | None = (
+        reporter.generate_json_report(report, args.json) if args.json else None
+    )
 
+    # A baseline is INPUT to a later decision, not just a record of this run.
+    # Never overwrite a good one with a scan we are about to call untrustworthy
+    # — an exit code cannot un-truncate a file. Skipping is a policy decision,
+    # not a write failure, so baseline_ok stays None.
+    baseline_ok: bool | None = None
+    baseline_skipped = False
     if args.baseline:
-        from apotrope.compare import save_baseline
-        save_baseline(report, args.baseline)
+        if trustworthy:
+            from apotrope.compare import save_baseline
+            baseline_ok = save_baseline(report, args.baseline)
+        else:
+            baseline_skipped = True
 
-    # Terminal output
-    reporter.print_terminal(report, html_path=args.html, json_path=args.json,
-                            exec_path=args.exec_report)
+    # Terminal output — footer lists only the outputs actually written.
+    reporter.print_terminal(
+        report,
+        html_path=args.html if html_ok else None,
+        json_path=args.json if json_ok else None,
+        exec_path=args.exec_report if exec_ok else None,
+    )
 
     # Comparison diff display
     if baseline is not None:
@@ -263,12 +364,33 @@ def main() -> None:
         diff = compare_reports(baseline, report)
         reporter.print_comparison(diff)
 
+    # Report on requested outputs that could not be written. ``is False`` and
+    # not ``not ok`` — None means "not requested / skipped", and `not None` is
+    # True, which would flag every absent output as a failure.
+    output_failures = [
+        flag for flag, ok in (
+            ("--exec-report", exec_ok),
+            ("--html", html_ok),
+            ("--json", json_ok),
+            ("--baseline", baseline_ok),
+        ) if ok is False
+    ]
+    for flag in output_failures:
+        print(f"[ERROR] could not write {flag}", file=sys.stderr)
+    if baseline_skipped:
+        print(
+            "[WARN] --baseline not written: the scan was not trustworthy "
+            "(zero controls evaluated, or one or more checks errored)",
+            file=sys.stderr,
+        )
+
     # Exit codes:
-    #   2  result cannot be trusted: zero controls evaluated, or >=1 ERROR
+    #   2  result cannot be trusted: zero controls evaluated, >=1 ERROR, or a
+    #      requested output file could not be written
     #   1  complete assessment, failing score (< 70)
     #   0  complete assessment, passing score (>= 70)
     # ERROR never changes the score (scoring.py) — it only affects the exit code.
-    if report.evaluated_count == 0 or report.error_count:
+    if not trustworthy or output_failures:
         sys.exit(2)
     if report.score < 70:
         sys.exit(1)

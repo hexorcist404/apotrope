@@ -210,10 +210,12 @@ class Scanner:
                 log.error("Failed to import %s: %s", full_name, exc)
                 continue
 
-            # Category filter
+            # Category filter (case-insensitive on both sides — a library caller
+            # may pass mixed-case categories that the CLI would have lowercased).
             if self.categories is not None:
                 module_category = getattr(module, "CATEGORY", name).lower()
-                if module_category not in self.categories:
+                wanted = {c.lower() for c in self.categories}
+                if module_category not in wanted:
                     log.debug("Skipping %s (category %r not in filter)", full_name, module_category)
                     continue
 
@@ -288,11 +290,20 @@ class Scanner:
             )]
         finally:
             # Undo any per-scan threshold override so it cannot leak into a later scan.
-            if configured and callable(getattr(module, "reset", None)):
-                try:
-                    module.reset()
-                except Exception as exc:
-                    log.warning("reset() on %s failed: %s", module.__name__, exc)
+            if configured:
+                reset_fn = getattr(module, "reset", None)
+                if callable(reset_fn):
+                    try:
+                        reset_fn()
+                    except Exception as exc:
+                        log.warning("reset() on %s failed: %s", module.__name__, exc)
+                else:
+                    # configure() applied thresholds but there is no reset() to undo
+                    # them — warn loudly, since they will leak into the next scan.
+                    log.warning(
+                        "%s has configure() but no reset() — profile thresholds may leak",
+                        module.__name__,
+                    )
 
         # A module must return at least one CheckResult (CLAUDE.md contract). An
         # empty list or a non-CheckResult element would otherwise flow silently

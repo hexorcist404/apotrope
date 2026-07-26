@@ -59,6 +59,10 @@ class ScanDiff:
         worsened_findings: Checks that were PASS/INFO in baseline but are now FAIL/WARN.
         unchanged_bad:     Checks that were FAIL/WARN in both scans.
         unchanged_count:   Total number of checks with the same status in both scans.
+        baseline_evaluated_count: PASS+FAIL+WARN controls in the *baseline*. Zero means
+                           the baseline recorded no real assessment, so any delta against
+                           it is meaningless — surfaced rather than rejected.
+        baseline_error_count: ERRORed controls in the *baseline*, for the same reason.
     """
 
     baseline_score: int
@@ -72,6 +76,8 @@ class ScanDiff:
     missing_findings: list[CheckResult] = dataclasses.field(default_factory=list)
     errored_findings: list[CheckResult] = dataclasses.field(default_factory=list)
     score_delta_reliable: bool = True
+    baseline_evaluated_count: int = 0
+    baseline_error_count: int = 0
 
 
 def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
@@ -112,14 +118,12 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
             else:
                 unchanged_count += 1
         elif c is None and b is not None:
-            # Only in baseline: this check did not run in the current scan.
-            # A bad check vanishing is NOT remediation — it can be a narrower
-            # --category set, a disabled/admin-gated check, an import failure,
-            # or a rename. Bucket it as coverage lost, never as resolved.
-            if b.status in _BAD:
-                missing_findings.append(b)
-            else:
-                unchanged_count += 1
+            # Present in baseline, absent from the current scan: coverage was lost
+            # for this control, whatever its prior status. A vanished PASS is still
+            # a control we can no longer confirm (narrower --category, a disabled /
+            # admin-gated check, an import failure, or a rename), so surface every
+            # absent baseline control as a missing control — never as remediation.
+            missing_findings.append(b)
         else:
             assert b is not None and c is not None
             b_bad = b.status in _BAD
@@ -142,7 +146,22 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
 
     score_delta = current.score - baseline.score
     current_has_error = any(result.status == Status.ERROR for result in current.results)
-    score_delta_reliable = not missing_findings and not current_has_error
+    # The baseline itself may be untrustworthy: an all-ERROR or empty scan still
+    # scores 100 (scoring.py ignores ERROR), and `apotrope --json` writes one on
+    # exactly that path. Diffing against it silently manufactures regressions, so
+    # flag it here. Flag, never reject — compare_reports is a pure diff, and
+    # errored controls are routine on real hosts (a missing cmdlet on Server Core).
+    baseline_evaluated_count = baseline.evaluated_count
+    baseline_error_count = baseline.error_count
+    # A score delta is only reliable when the two scans covered the exact same set
+    # of controls (no missing baseline controls AND no current-only additions),
+    # nothing errored in the current run, and the baseline was itself trustworthy.
+    score_delta_reliable = (
+        (set(base_map) == set(curr_map))
+        and not current_has_error
+        and bool(baseline_evaluated_count)
+        and not baseline_error_count
+    )
 
     return ScanDiff(
         baseline_score=baseline.score,
@@ -156,19 +175,29 @@ def compare_reports(baseline: AuditReport, current: AuditReport) -> ScanDiff:
         worsened_findings=worsened_findings,
         unchanged_bad=unchanged_bad,
         unchanged_count=unchanged_count,
+        baseline_evaluated_count=baseline_evaluated_count,
+        baseline_error_count=baseline_error_count,
     )
 
 
-def save_baseline(report: AuditReport, path: str) -> None:
+def save_baseline(report: AuditReport, path: str) -> bool:
     """Serialise *report* to JSON at *path* for use as a future baseline.
 
     Args:
         report: A completed AuditReport from scanner.run().
         path:   Destination file path.
+
+    Returns:
+        ``True`` only if the file was written. Reporting success for a write
+        that failed would let the caller exit 0 having produced no baseline.
     """
     from apotrope.reporter import Reporter
-    Reporter().generate_json_report(report, path)
-    log.info("Baseline saved to %s", path)
+    ok = Reporter().generate_json_report(report, path)
+    if ok:
+        log.info("Baseline saved to %s", path)
+    else:
+        log.error("Could not write baseline to %s", path)
+    return ok
 
 
 def load_baseline(path: str) -> AuditReport:
@@ -220,6 +249,8 @@ def load_baseline(path: str) -> AuditReport:
             results=results,
             score=int(data.get("score", 0)),
             is_admin=bool(data.get("is_admin", False)),
+            cis_version=data.get("cis_version", ""),
+            cis_caveat=data.get("cis_caveat", ""),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"Malformed baseline JSON in {path!r}: {exc}") from exc

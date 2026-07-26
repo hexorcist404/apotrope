@@ -726,12 +726,15 @@ class TestMakeConsole:
         assert console.no_color is True
 
     def test_color_enabled_by_default(self):
-        assert Reporter()._make_console().no_color is False
+        # Neutralise NO_COLOR so the "color allowed" path is tested deterministically.
+        with mock.patch.dict("os.environ", {"NO_COLOR": ""}):
+            assert Reporter()._make_console().no_color is False
 
 
 class TestMakeConsoleModern:
     def test_truecolor_forced_on_real_terminal(self):
-        with mock.patch("rich.console.Console.is_terminal",
+        with mock.patch.dict("os.environ", {"NO_COLOR": ""}), \
+             mock.patch("rich.console.Console.is_terminal",
                         new_callable=mock.PropertyMock, return_value=True), \
              mock.patch("apotrope.reporter._modernize_windows_console") as modernize:
             console = Reporter(no_color=False)._make_console()
@@ -740,11 +743,22 @@ class TestMakeConsoleModern:
         modernize.assert_called_once()
 
     def test_not_a_terminal_skips_truecolor_and_modernize(self):
-        with mock.patch("rich.console.Console.is_terminal",
+        with mock.patch.dict("os.environ", {"NO_COLOR": ""}), \
+             mock.patch("rich.console.Console.is_terminal",
                         new_callable=mock.PropertyMock, return_value=False), \
              mock.patch("apotrope.reporter._modernize_windows_console") as modernize:
             console = Reporter(no_color=False)._make_console()
         assert console.no_color is False
+        modernize.assert_not_called()
+
+    def test_no_color_env_var_respected(self):
+        # NO_COLOR in the environment must disable color even without --no-color.
+        with mock.patch.dict("os.environ", {"NO_COLOR": "1"}), \
+             mock.patch("rich.console.Console.is_terminal",
+                        new_callable=mock.PropertyMock, return_value=True), \
+             mock.patch("apotrope.reporter._modernize_windows_console") as modernize:
+            console = Reporter(no_color=False)._make_console()
+        assert console.no_color is True
         modernize.assert_not_called()
 
     def test_no_color_skips_truecolor_and_modernize(self):
@@ -836,3 +850,31 @@ class TestGlyphHelpers:
         assert _grade_hex(59) == _grade_hex(0)     # red band
         assert _grade_hex(80) != _grade_hex(79)
         assert _grade_hex(60) != _grade_hex(59)
+
+
+class TestPrintComparisonSafety:
+    def test_markup_in_baseline_check_name_not_interpreted(self):
+        from apotrope.models import CheckResult, Status, Severity
+        # A baseline-derived check name with Rich markup must render literally.
+        evil = CheckResult("Cat", "[bold]evil[/bold]", Status.FAIL, Severity.HIGH, "d", "x")
+        out = _render(Reporter(), "print_comparison", _diff(new=[evil]))
+        assert "[bold]evil[/bold]" in out
+
+
+class TestExecVerdict:
+    def test_verdict_excludes_info_from_all_passed(self):
+        from datetime import datetime, timezone
+        from apotrope.models import AuditReport, CheckResult, Status, Severity
+        report = AuditReport(
+            hostname="PC", os_version="Win11",
+            scan_timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            scan_duration=1.0,
+            results=[
+                CheckResult("C", "P1", Status.PASS, Severity.LOW, "d", "ok"),
+                CheckResult("C", "P2", Status.PASS, Severity.LOW, "d", "ok"),
+                CheckResult("C", "I1", Status.INFO, Severity.INFO, "d", "note"),
+            ],
+            score=100,
+        )
+        verdict = Reporter()._build_exec_verdict(report)
+        assert "All 2 evaluated controls passed" in verdict

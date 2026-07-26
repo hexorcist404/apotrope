@@ -251,26 +251,41 @@ Options:
                        Assessment) to PATH — print-first, for decision makers
   --json PATH          Save a JSON report to PATH
   --baseline FILE      Save current scan as a JSON baseline for future comparisons
+                       (skipped, with a warning, if the scan was not trustworthy —
+                       see Exit codes — so a good baseline is never overwritten
+                       by a scan you would not act on)
   --compare  FILE      Compare current scan against a saved baseline
-  --profile  FILE      Load a custom check profile from a TOML file
+  --profile  FILE      Load a custom check profile from a TOML file. A profile
+                       requested explicitly here must exist and parse, or Apotrope
+                       exits 2; an auto-discovered apotrope.toml still warns and
+                       falls back to defaults
   --category CATS      Comma-separated list of categories to audit
                        (e.g. firewall,encryption,patching)
   --dry-run            List check modules that would run without executing them
   --verbose            Show detail for every check, including PASSes
-  --no-color           Disable Rich color output (for CI / log files)
+  --no-color           Disable Rich color output (for CI / log files). The
+                       NO_COLOR environment variable is honored too
   --log-level LEVEL    Logging verbosity: DEBUG, INFO, WARNING (default), ERROR
   --version            Show version and exit
   -h, --help           Show this help message and exit
 
 Exit codes:
-  0  Score >= 70 (passing)
-  1  Score < 70 (failing)
-  2  Fatal scan error
+  0  Assessment completed and scored >= 70 (passing posture)
+  1  Assessment completed and scored <  70 (failing posture)
+  2  Result not trustworthy — invalid arguments, a fatal scan error, zero
+     controls evaluated, one or more checks errored, or a requested output
+     file could not be written
 ```
 
-> **Note:** `--html` and `--exec-report` must point to **different files**. If both
-> resolve to the same path, Apotrope exits with an argument error before scanning,
-> so the technical report can't silently overwrite the executive one.
+Exit 2 means "do not act on this result", not simply "the tool crashed". A scan
+where checks errored is not a passing scan reported as failing — it is a scan
+whose score is not a measurement, so it is never scored as one and never written
+to a baseline.
+
+> **Note:** `--html`, `--exec-report`, `--json` and `--baseline` must each point to a
+> **different, writable** file. Collisions and unwritable targets are both rejected
+> with an argument error *before* the scan runs, so one report can't silently
+> overwrite another and a long scan doesn't fail at the last step.
 
 ### Examples
 
@@ -294,7 +309,8 @@ apotrope --category firewall,patching
 # Show pass/fail details for every check
 apotrope --verbose
 
-# Silent mode for scripts (exits 0 if score>=70, 1 if score<70, 2 on error)
+# Silent mode for scripts (0 if score>=70, 1 if score<70, 2 if the result
+# is not trustworthy — treat 2 as "don't gate on this run", not as "failed")
 apotrope --no-color --log-level ERROR
 echo Exit code: %ERRORLEVEL%
 
