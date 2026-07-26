@@ -177,6 +177,25 @@ _ANGLE_PLACEHOLDER = re.compile(r"(?<!\?)<[A-Za-z_][\w -]*>")
 _DESTRUCTIVE = re.compile(
     r"\b(Clear-Tpm|Restart-Computer|Stop-Computer)\b|-AllowClear\b|-AllowPhysicalPresence\b"
 )
+# -DisplayGroup selects an EXISTING firewall rule by its resolved MUI string
+# ('Remote Desktop' is @FirewallAPI.dll,-28752 rendered in the display
+# language), so it matches nothing on non-English Windows and the cmdlet
+# no-ops with a non-terminating error — the worst outcome for a copy-paste
+# block, since the earlier lines did run and the operator sees no failure.
+# Select by the locale-neutral -Group indirect resource string instead.
+#
+# -DisplayName is deliberately NOT flagged: on New-NetFirewallRule it *names*
+# the rule being created (and is mandatory — see firewall-rule-no-displayname),
+# and it is also the correct way to manage a rule Apotrope itself created.
+_LOCALIZED_FW_SELECTOR = re.compile(
+    r"\b(?:Get|Set|Enable|Disable|Remove|Copy|Rename|Show)-NetFirewallRule\b"
+    r"[^\n|]*?\s-DisplayGroup\b"
+)
+# A literal "{expr}" in collected text is always an extraction failure, never a
+# real command: _resolve could not statically resolve the expression, so the
+# lint rules below (and tools/verify_commands.py) are inspecting a placeholder
+# rather than the command that actually ships.
+_UNRESOLVED_EXPR = re.compile(r"\{expr\}")
 
 
 def _uncommented_lines(text: str) -> list[str]:
@@ -219,6 +238,24 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 cmd.module, cmd.line, "destructive-command",
                 "destructive/unattended command (TPM clear or bare reboot) must be a "
                 "commented manual step, not copy-paste",
+                text,
+            ))
+        if _LOCALIZED_FW_SELECTOR.search(active):
+            violations.append(Violation(
+                cmd.module, cmd.line, "localized-firewall-selector",
+                "-DisplayGroup selects an existing firewall rule by its localized MUI "
+                "string — it matches nothing on non-English Windows and silently no-ops; "
+                "use -Group '@FirewallAPI.dll,-NNNNN' or a stable -Name rule ID",
+                text,
+            ))
+        # Checked against the raw text, not `active`: an extraction failure in a
+        # commented line is still an extraction failure.
+        if _UNRESOLVED_EXPR.search(text):
+            violations.append(Violation(
+                cmd.module, cmd.line, "unresolved-expression",
+                "command text contains the literal '{expr}' — the AST extractor could "
+                "not resolve this expression, so the real command is unlinted. Keep any "
+                "conditional as `A if cond else B` at the root of the command= value",
                 text,
             ))
     return violations

@@ -413,6 +413,7 @@ scan time.
 | Firewall       | Firewall — Domain Profile Enabled      | Checks whether Windows Firewall is enabled for domain networks                     |
 | Firewall       | Firewall — Private Default Inbound Action | Checks that the Private profile does not explicitly allow all inbound connections |
 | Firewall       | Firewall — Private Profile Enabled     | Checks whether Windows Firewall is enabled for private networks                    |
+| Firewall       | Firewall — Profiles Present            | Verifies all three profiles were reported — a missing one is an ERROR, not a silent gap |
 | Firewall       | Firewall — Public Default Inbound Action | Checks that the Public profile does not explicitly allow all inbound connections  |
 | Firewall       | Firewall — Public Profile Enabled      | Checks whether Windows Firewall is enabled for public networks                     |
 | Hardening      | Audit Policy                           | Checks that key subcategories (Logon, Lockout, etc.) log success/failure events    |

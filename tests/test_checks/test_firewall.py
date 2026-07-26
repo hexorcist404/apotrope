@@ -98,7 +98,11 @@ class TestFirewallRunHappyPath:
         with patch("apotrope.checks.firewall.run_powershell_json",
                    return_value=_PROFILE_GOOD):
             results = firewall.run()
-        assert len(results) == 2
+        # Two results for the Domain profile, plus a "Profiles Present" ERROR
+        # because Private/Public were not reported (can't silently vanish).
+        assert len(results) == 3
+        assert any(r.status == Status.ERROR and "Profiles Present" in r.check_name
+                   for r in results)
 
 
 # ---------------------------------------------------------------------------
@@ -179,3 +183,23 @@ class TestParseActionFallback:
 
     def test_unintable_object_does_not_raise(self):
         assert firewall._parse_action(object()).startswith("Unknown(")
+
+
+class TestFirewallFailClosed:
+    def test_unknown_inbound_action_is_warn(self):
+        profiles = [
+            {"Name": "Domain", "Enabled": True, "DefaultInboundAction": 99, "DefaultOutboundAction": 2},
+            {"Name": "Private", "Enabled": True, "DefaultInboundAction": 4, "DefaultOutboundAction": 2},
+            {"Name": "Public", "Enabled": True, "DefaultInboundAction": 4, "DefaultOutboundAction": 2},
+        ]
+        with patch("apotrope.checks.firewall.run_powershell_json", return_value=profiles):
+            results = firewall.run()
+        inbound = next(r for r in results if "Domain Default Inbound" in r.check_name)
+        assert inbound.status == Status.WARN
+
+    def test_empty_profiles_returns_error_not_empty(self):
+        # The whole Firewall category must not silently vanish on an empty result.
+        with patch("apotrope.checks.firewall.run_powershell_json", return_value=[]):
+            results = firewall.run()
+        assert results
+        assert any(r.status == Status.ERROR for r in results)

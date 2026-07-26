@@ -27,6 +27,34 @@ _PS_BITLOCKER = (
 # ProtectionStatus values from Get-BitLockerVolume
 _PROTECTION_ON = 1
 
+# PowerShell 5.1 serialises these enums as integers; PowerShell 7 as strings.
+_VOLUME_TYPE_NAMES = {0: "OperatingSystem", 1: "FixedData", 2: "Removable"}
+_VOLUME_STATUS_NAMES = {
+    0: "FullyDecrypted", 1: "FullyEncrypted", 2: "EncryptionInProgress",
+    3: "DecryptionInProgress", 4: "EncryptionPaused", 5: "DecryptionPaused",
+}
+
+
+def _enum_name(raw: object, table: dict[int, str]) -> str:
+    """Map a PS 5.1 integer enum to its name; pass a PS 7 string enum through."""
+    if isinstance(raw, bool) or raw is None:
+        return "Unknown"
+    if isinstance(raw, int):
+        return table.get(raw, str(raw))
+    return str(raw)
+
+
+def _coerce_int(raw: object) -> int:
+    """Best-effort int from an int or numeric string; None/unparseable -> 0."""
+    if isinstance(raw, bool):
+        return int(raw)
+    if isinstance(raw, int):
+        return raw
+    try:
+        return int(str(raw).split(".")[0])
+    except (TypeError, ValueError):
+        return 0
+
 
 def run() -> list[CheckResult]:
     """Return BitLocker encryption status checks.
@@ -90,18 +118,19 @@ def run() -> list[CheckResult]:
 def _check_volume(vol: dict) -> list[CheckResult]:
     """Evaluate a single BitLocker volume dict and return a CheckResult."""
     mount = str(vol.get("MountPoint", "?:"))
-    vol_type = str(vol.get("VolumeType") or "Unknown")
-    vol_status = str(vol.get("VolumeStatus") or "Unknown")
-    protection = int(vol.get("ProtectionStatus") or 0)
+    vol_type = _enum_name(vol.get("VolumeType"), _VOLUME_TYPE_NAMES)
+    vol_status = _enum_name(vol.get("VolumeStatus"), _VOLUME_STATUS_NAMES)
     method = str(vol.get("EncryptionMethod") or "None")
-    pct = int(vol.get("EncryptionPercentage") or 0)
+    pct = _coerce_int(vol.get("EncryptionPercentage"))
 
     # Identify OS drive by VolumeType; fall back to drive letter heuristic
     is_os = "OperatingSystem" in vol_type or mount.upper().startswith("C:")
-    is_protected = protection == _PROTECTION_ON
+    # ProtectionStatus is 1/On when protectors are active — accept PS5 int and PS7 string.
+    is_protected = str(vol.get("ProtectionStatus")).lower() in ("1", "on")
+    is_full = pct >= 100 or vol_status.replace(" ", "").lower() == "fullyencrypted"
     severity = Severity.HIGH if is_os else Severity.MEDIUM
 
-    if is_protected:
+    if is_protected and is_full:
         return [CheckResult(
             category=CATEGORY,
             check_name=f"BitLocker — {mount}",
@@ -114,6 +143,24 @@ def _check_volume(vol: dict) -> list[CheckResult]:
                 f"Encrypted: {pct}% | Protection: On"
             ),
             remediation="",
+        )]
+
+    if is_protected and not is_full:
+        # Protection is on but encryption has not finished — the drive is not yet
+        # fully protected, so this is not a PASS.
+        return [CheckResult(
+            category=CATEGORY,
+            check_name=f"BitLocker — {mount}",
+            status=Status.WARN,
+            severity=severity,
+            description=f"Checks BitLocker encryption status for drive {mount}.",
+            details=(
+                f"Drive: {mount} | Type: {vol_type} | "
+                f"Status: {vol_status} | Method: {method} | "
+                f"Encrypted: {pct}% | Protection: On (encryption in progress — "
+                "not yet fully protected)"
+            ),
+            remediation="Leave BitLocker encryption running until the drive reports 100%.",
         )]
 
     return [CheckResult(

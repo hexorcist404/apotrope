@@ -159,6 +159,23 @@ def _check_admin_behavior(data: dict) -> list[CheckResult]:
             ),
         )]
 
+    if level not in _ADMIN_BEHAVIOR:
+        # Only known, explicitly-safe values (1–5, all of which prompt) PASS.
+        # An unrecognized value is not proof of a secure config — report INFO
+        # rather than silently passing whatever is set.
+        return [CheckResult(
+            category=CATEGORY,
+            check_name="UAC Admin Consent Behavior",
+            status=Status.INFO,
+            severity=Severity.HIGH,
+            description="Checks the UAC consent prompt behavior for administrator accounts.",
+            details=(
+                f"ConsentPromptBehaviorAdmin = {level}: unrecognized value. "
+                "Verify this is an intended UAC configuration."
+            ),
+            remediation="",
+        )]
+
     return [CheckResult(
         category=CATEGORY,
         check_name="UAC Admin Consent Behavior",

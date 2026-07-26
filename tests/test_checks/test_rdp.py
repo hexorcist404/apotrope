@@ -43,10 +43,58 @@ class TestCheckRdpEnabled:
         results, _ = rdp._check_rdp_enabled(_data(deny=0))
         assert "fDenyTSConnections" in results[0].command
 
-    def test_key_absent_treated_as_disabled(self):
+    def test_both_keys_absent_is_warn_not_pass(self):
+        # Fail-closed: with neither the Terminal Server value nor the policy
+        # override readable, do NOT assume RDP is disabled.
         results, enabled = rdp._check_rdp_enabled({})
-        assert results[0].status == Status.PASS
+        assert results[0].status == Status.WARN
         assert enabled is False
+
+    def test_policy_override_enables_rdp(self):
+        # The GPO key overrides the Terminal Server value.
+        results, enabled = rdp._check_rdp_enabled(
+            {"fDenyTSConnections": 1, "PolicyDenyTSConnections": 0}
+        )
+        assert enabled is True
+        # A local Set-ItemProperty is reverted at the next policy refresh, so
+        # the verdict source must decide the remediation: point at the GPO and
+        # hand over no command that cannot work.
+        assert results[0].command == ""
+        assert "Group Policy" in results[0].remediation
+        assert "gpresult" in results[0].remediation
+
+    def test_non_policy_enabled_rdp_still_has_a_command(self):
+        results, enabled = rdp._check_rdp_enabled({"fDenyTSConnections": 0})
+        assert enabled is True
+        assert "fDenyTSConnections" in results[0].command
+
+    def test_policy_nla_override_fails(self):
+        r = rdp._check_rdp_nla({"UserAuthentication": 1, "PolicyUserAuthentication": 0})[0]
+        assert r.status == Status.FAIL
+        assert r.command == ""
+        assert "Group Policy" in r.remediation
+        assert "Network Level Authentication" in r.remediation
+
+    def test_non_policy_nla_fail_still_has_a_command(self):
+        r = rdp._check_rdp_nla({"UserAuthentication": 0})[0]
+        assert r.status == Status.FAIL
+        assert "UserAuthentication" in r.command
+
+    def test_unreadable_nla_still_has_a_command(self):
+        """Neither source readable -> policy_managed is False by construction."""
+        r = rdp._check_rdp_nla({})[0]
+        assert r.status == Status.WARN
+        assert "UserAuthentication" in r.command
+
+
+class TestLocaleNeutralFirewallSelector:
+    """-DisplayGroup is a localized MUI string and matches nothing on de-DE/ja-JP."""
+
+    def test_disable_uses_group_id_not_displaygroup(self):
+        results, _ = rdp._check_rdp_enabled({"fDenyTSConnections": 0})
+        cmd = results[0].command
+        assert "@FirewallAPI.dll,-28752" in cmd
+        assert "-DisplayGroup" not in cmd
 
     def test_returns_tuple(self):
         result = rdp._check_rdp_enabled(_data())

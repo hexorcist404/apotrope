@@ -206,3 +206,66 @@ class TestIpv6ErrorFallback:
             r = network._check_ipv6()[0]
         assert r.status == Status.INFO
         assert "not active" in r.details
+
+
+class TestNetworkFixes:
+    def _ports(self, conns):
+        with patch("apotrope.checks.network.run_powershell_json", return_value=conns):
+            return network._check_listening_ports()
+
+    def _netbios(self, value):
+        with patch("apotrope.checks.network.run_powershell_json", return_value=value):
+            return network._check_netbios()
+
+    def test_process_lookup_casts_to_int(self):
+        # Int32 (Get-Process.Id) vs UInt32 (OwningProcess) mismatch made every
+        # port resolve to "Unknown" until the lookup key is cast to [int].
+        assert "[int]$_.OwningProcess" in network._PS_TCP_LISTEN
+
+    def test_single_dhcp_netbios_scalar_zero_is_warn(self):
+        # A lone DHCP adapter serialises as the bare scalar 0 and must not be dropped.
+        r = self._netbios(0)[0]
+        assert r.status == Status.WARN
+        assert r.severity == Severity.LOW
+
+    def test_single_disabled_netbios_scalar_two_is_pass(self):
+        r = self._netbios(2)[0]
+        assert r.status == Status.PASS
+
+    def test_rdp_port_command_enforces_nla_not_block(self):
+        results = self._ports([_conn(3389)])
+        r = next(r for r in results if "3389" in r.check_name)
+        assert "Action Block" not in r.command
+        assert "UserAuthentication" in r.command
+
+
+class TestRdpPortRemediationSafety:
+    """The port-3389 remediation must not lock the operator out of their own box."""
+
+    @staticmethod
+    def _rdp_command():
+        from apotrope.checks import network
+        return network._CMD_RDP_EXPOSED
+
+    @staticmethod
+    def _active_lines(cmd):
+        return [ln for ln in cmd.splitlines() if not ln.lstrip().startswith("#")]
+
+    def test_localsubnet_is_not_shipped_at_all(self):
+        # Making the selector locale-neutral is exactly what makes an active
+        # scoping line dangerous: it now matches everywhere, so a LocalSubnet
+        # default would cut off any operator on another subnet.
+        assert "LocalSubnet" not in self._rdp_command()
+
+    def test_scoping_line_is_commented_out(self):
+        active = "\n".join(self._active_lines(self._rdp_command()))
+        assert "Set-NetFirewallRule" not in active
+
+    def test_nla_line_is_active(self):
+        active = "\n".join(self._active_lines(self._rdp_command()))
+        assert "UserAuthentication" in active
+
+    def test_uses_locale_neutral_group_id(self):
+        cmd = self._rdp_command()
+        assert "@FirewallAPI.dll,-28752" in cmd
+        assert "-DisplayGroup" not in cmd

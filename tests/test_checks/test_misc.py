@@ -133,12 +133,15 @@ class TestCheckAuditPolicy:
             return misc._check_audit_policy()
 
     def test_all_audited_is_pass(self):
-        entries = [
-            self._entry("Logon", "Success and Failure"),
-            self._entry("Credential Validation", "Failure"),
-        ]
+        # PASS requires ALL expected subcategories present and auditing.
+        entries = [self._entry(name) for name in misc._EXPECTED_AUDIT]
         r = self._run(entries)[0]
         assert r.status == Status.PASS
+
+    def test_partial_subset_is_warn(self):
+        # A nonempty subset that omits expected subcategories must not PASS.
+        r = self._run([self._entry("Logon")])[0]
+        assert r.status == Status.WARN
 
     def test_no_auditing_entry_is_warn(self):
         entries = [
@@ -149,9 +152,11 @@ class TestCheckAuditPolicy:
         assert r.status == Status.WARN
         assert "Logon" in r.details
 
-    def test_empty_list_is_warn(self):
+    def test_empty_list_is_info_not_warn(self):
+        # Non-admin / localized auditpol returns nothing; that is "could not
+        # assess" (INFO), not a scored WARN penalising a healthy machine.
         r = self._run([])[0]
-        assert r.status == Status.WARN
+        assert r.status == Status.INFO
 
     def test_warn_has_remediation(self):
         r = self._run([self._entry("Logon", "No Auditing")])[0]
@@ -280,3 +285,41 @@ class TestScreenLockPayloadShapes:
             r = misc._check_screen_lock()[0]
         assert r.status == Status.WARN
         assert "0 or unset" in r.details
+
+
+class TestMiscFixes:
+    def test_autoplay_command_creates_key(self):
+        # Set-ItemProperty -Force does not create a missing key; the command must
+        # New-Item it first (the NOTSET finding fires when the key is absent).
+        with patch("apotrope.checks.misc.run_powershell", return_value="NOTSET"):
+            r = misc._check_autoplay()[0]
+        assert "New-Item" in r.command
+
+    def test_autoplay_new_item_is_guarded_by_test_path(self):
+        # `New-Item -Force` on the registry provider REPLACES an existing key,
+        # deleting the unrelated Explorer policies that share it. Assert the
+        # guard wraps the New-Item rather than merely appearing somewhere in the
+        # block — an unguarded create on a later line would still be destructive.
+        with patch("apotrope.checks.misc.run_powershell", return_value="NOTSET"):
+            r = misc._check_autoplay()[0]
+        guard = r.command.splitlines()[0]
+        assert guard.startswith("if (-not (Test-Path ")
+        assert "New-Item" in guard
+        assert "New-Item" not in "\n".join(r.command.splitlines()[1:])
+
+    def test_autoplay_remediation_guarded_on_every_branch(self):
+        # 158 -> "partially disabled" WARN; 0 and an unparseable value -> the
+        # AutoPlay-enabled branch. Both read a value back, so the key provably
+        # exists — precisely the case an unguarded New-Item -Force would wipe.
+        for output in ("158", "0", "notanint"):
+            with patch("apotrope.checks.misc.run_powershell", return_value=output):
+                r = misc._check_autoplay()[0]
+            assert "Test-Path" in r.command, f"unguarded New-Item for output {output!r}"
+
+    def test_machine_inactivity_policy_is_pass(self):
+        # A machine-wide inactivity lock counts even without a per-user screensaver.
+        with patch("apotrope.checks.misc.run_powershell_json",
+                   return_value={"Active": "0", "Secure": "0", "Timeout": 0,
+                                 "MachineInactivity": 600}):
+            r = misc._check_screen_lock()[0]
+        assert r.status == Status.PASS

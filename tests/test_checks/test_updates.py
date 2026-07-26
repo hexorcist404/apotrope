@@ -251,3 +251,8 @@ class TestNowHelper:
     def test_now_returns_utc_aware_datetime(self):
         now = updates._now()
         assert now.tzinfo is timezone.utc
+
+
+def test_pending_query_excludes_hidden_updates():
+    # Admin-hidden updates must not be counted as pending (false FAIL otherwise).
+    assert "IsHidden=0" in updates._PS_PENDING

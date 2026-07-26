@@ -207,7 +207,7 @@ def _check_psv2() -> list[CheckResult]:
             ),
         )]
 
-    if state in ("disabled", "unavailable"):
+    if state == "disabled":
         return [CheckResult(
             category=CATEGORY,
             check_name="PowerShell v2",
@@ -217,6 +217,9 @@ def _check_psv2() -> list[CheckResult]:
             details="PowerShell v2 is not installed or disabled.",
             remediation="",
         )]
+    # 'UNAVAILABLE' is the query-failure sentinel (e.g. Get-WindowsOptionalFeature
+    # needs elevation) — NOT proof v2 is absent. Fall through to the INFO branch
+    # below rather than claiming a secure state we could not confirm.
 
     # State could not be determined (e.g. non-Windows or missing module)
     return [CheckResult(
