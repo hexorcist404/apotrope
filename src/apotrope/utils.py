@@ -446,6 +446,127 @@ def get_wmi_object(
 
 
 # ---------------------------------------------------------------------------
+# Local password policy (netapi32)
+# ---------------------------------------------------------------------------
+
+# NetUserModalsGet reads the local SAM's password policy. It is the API that
+# `net accounts` itself wraps, and it matters here for two reasons:
+#
+#   * it is readable by a **standard user**, where `secedit /export` is not —
+#     secedit reads %windir%\security\database\secedit.sdb, which is ACL'd to
+#     SYSTEM and Administrators only, so the documented non-elevated invocation
+#     can never use it; and
+#   * it returns **integers**, not the localized text `net accounts` prints, so
+#     it survives non-English Windows — which is the whole reason the check
+#     stopped parsing `net accounts` in the first place.
+#
+# It does NOT expose PasswordComplexity; that is an LSA policy setting with no
+# field in any USER_MODALS_INFO level. Callers must not synthesise one.
+
+
+class _UserModals0(ctypes.Structure):
+    """``USER_MODALS_INFO_0`` — password length, ages, and history depth."""
+
+    _fields_ = (
+        ("min_passwd_len", ctypes.c_uint32),
+        ("max_passwd_age", ctypes.c_uint32),
+        ("min_passwd_age", ctypes.c_uint32),
+        ("force_logoff", ctypes.c_uint32),
+        ("password_hist_len", ctypes.c_uint32),
+    )
+
+
+class _UserModals3(ctypes.Structure):
+    """``USER_MODALS_INFO_3`` — account lockout.
+
+    All three fields are ``DWORD``. Declaring the two durations wider does not
+    fail: the call still returns success and the struct is simply misread, so
+    the error surfaces as plausible-looking garbage rather than an exception.
+    Both durations are in **seconds**; the secedit INF expresses them in
+    minutes, which is why :func:`read_password_policy` converts.
+    """
+
+    _fields_ = (
+        ("lockout_duration", ctypes.c_uint32),
+        ("lockout_observation_window", ctypes.c_uint32),
+        ("lockout_threshold", ctypes.c_uint32),
+    )
+
+
+# TIMEQ_FOREVER: "never expires" / "until an administrator unlocks". The secedit
+# INF spells the same thing -1, and the evaluators read INF conventions.
+_TIMEQ_FOREVER = 0xFFFFFFFF
+
+
+def _query_user_modals(level: int, struct_type: type[ctypes.Structure]) -> ctypes.Structure:
+    """Call ``NetUserModalsGet`` for *level* and return a copy of the struct.
+
+    The buffer is always released with ``NetApiBufferFree``; the copy is taken
+    first so the returned object does not point into freed memory.
+
+    Raises:
+        ApotropeError: Off Windows, or when the call returns a non-zero status.
+    """
+    if sys.platform != "win32":
+        raise ApotropeError("NetUserModalsGet is Windows-only")
+    netapi32 = ctypes.WinDLL("netapi32", use_last_error=True)
+    get_modals = netapi32.NetUserModalsGet
+    # servername NULL = this machine. bufptr is an out-param the API allocates.
+    get_modals.argtypes = (ctypes.c_wchar_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_void_p))
+    get_modals.restype = ctypes.c_uint32
+    free_buffer = netapi32.NetApiBufferFree
+    free_buffer.argtypes = (ctypes.c_void_p,)
+    free_buffer.restype = ctypes.c_uint32
+
+    buf = ctypes.c_void_p()
+    status = get_modals(None, level, ctypes.byref(buf))
+    if status != 0:
+        raise ApotropeError(
+            f"NetUserModalsGet(level={level}) failed with status {status}"
+        )
+    try:
+        # copy(): the struct lives in the API-allocated buffer freed below.
+        return struct_type.from_buffer_copy(
+            ctypes.cast(buf, ctypes.POINTER(struct_type)).contents
+        )
+    finally:
+        free_buffer(buf)
+
+
+def read_password_policy() -> dict[str, str]:
+    """Read the local password policy, keyed like a parsed secedit INF.
+
+    Returns the same lowercase ``key -> str`` shape that a ``secedit /export``
+    INF parses to, so a caller can feed either source to the same evaluators.
+    Durations are converted from the API's seconds to the INF's minutes.
+
+    ``PasswordComplexity`` is deliberately absent — see the module comment
+    above. A caller must report that control as unmeasurable rather than
+    inferring a value.
+
+    Raises:
+        ApotropeError: Off Windows, or when either query fails.
+    """
+    modals0 = cast("_UserModals0", _query_user_modals(0, _UserModals0))
+    modals3 = cast("_UserModals3", _query_user_modals(3, _UserModals3))
+
+    def _minutes(seconds: int) -> str:
+        # The INF writes -1 for "forever"; preserve that rather than emitting a
+        # 71-million-minute duration that would read as a real threshold.
+        if seconds == _TIMEQ_FOREVER:
+            return "-1"
+        return str(seconds // 60)
+
+    return {
+        "minimumpasswordlength": str(modals0.min_passwd_len),
+        "passwordhistorysize": str(modals0.password_hist_len),
+        "lockoutbadcount": str(modals3.lockout_threshold),
+        "lockoutduration": _minutes(modals3.lockout_duration),
+        "resetlockoutcount": _minutes(modals3.lockout_observation_window),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Platform / privilege helpers
 # ---------------------------------------------------------------------------
 

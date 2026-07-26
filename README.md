@@ -405,64 +405,64 @@ scan time.
 
 ## Checks Performed
 
-| Category       | Check                                  | Description                                                                        |
-|----------------|----------------------------------------|------------------------------------------------------------------------------------|
-| Access Control | UAC Admin Consent Behavior             | Checks the UAC consent prompt behavior for administrator accounts                  |
-| Access Control | UAC Enabled                            | Checks whether User Account Control (UAC) is enabled                               |
-| Access Control | UAC Secure Desktop                     | Checks whether UAC prompts are shown on the isolated secure desktop                |
-| Access Control | UAC Standard User Behavior             | Checks the UAC consent prompt behavior for standard user accounts                  |
-| Accounts       | Built-in Administrator Account         | Checks whether the built-in Administrator account is enabled or renamed            |
-| Accounts       | Guest Account                          | Checks whether the built-in Guest account is disabled                              |
-| Accounts       | Local Administrators                   | Counts members of the local Administrators group (warns if > 2)                    |
-| Accounts       | Password Policy — Account Lockout      | Checks whether account lockout is configured to deter brute-force attacks          |
-| Accounts       | Password Policy — Complexity           | Checks whether password complexity requirements are enforced                       |
-| Accounts       | Password Policy — Minimum Length       | Checks minimum password length (fail < 8 chars, warn < 12 chars)                  |
-| Antivirus      | Defender Real-Time Protection          | Checks whether Windows Defender real-time protection is active                     |
-| Antivirus      | Defender Signature Age                 | Checks whether virus definitions are less than 7 days old                          |
-| Antivirus      | Defender Tamper Protection             | Checks whether Tamper Protection prevents unauthorised Defender changes             |
-| Antivirus      | Registered AV Products                 | Lists antivirus products registered with Windows Security Center                   |
-| Encryption     | BitLocker — {drive} *                  | BitLocker encryption and protection status per fixed drive (one result per drive)  |
-| File Sharing   | SMB Encryption *                       | Checks whether SMB encryption (EncryptData) is enforced                            |
-| File Sharing   | SMB Signing Required *                 | Checks that SMB message signing is required (mitigates NTLM relay attacks)         |
-| File Sharing   | SMBv1 Disabled *                       | Checks that SMBv1 is disabled (mitigates EternalBlue/WannaCry/NotPetya)           |
-| Firewall       | Firewall — Domain Default Inbound Action | Checks that the Domain profile does not explicitly allow all inbound connections  |
-| Firewall       | Firewall — Domain Profile Enabled      | Checks whether Windows Firewall is enabled for domain networks                     |
-| Firewall       | Firewall — Private Default Inbound Action | Checks that the Private profile does not explicitly allow all inbound connections |
-| Firewall       | Firewall — Private Profile Enabled     | Checks whether Windows Firewall is enabled for private networks                    |
-| Firewall       | Firewall — Profiles Present            | Verifies all three profiles were reported — a missing one is an ERROR, not a silent gap |
-| Firewall       | Firewall — Public Default Inbound Action | Checks that the Public profile does not explicitly allow all inbound connections  |
-| Firewall       | Firewall — Public Profile Enabled      | Checks whether Windows Firewall is enabled for public networks                     |
-| Hardening      | Audit Policy                           | Checks that key subcategories (Logon, Lockout, etc.) log success/failure events    |
-| Hardening      | AutoPlay Disabled                      | Checks whether AutoPlay is disabled for all drive types                            |
-| Hardening      | Screen Lock Timeout                    | Checks that the screen automatically locks within 15 minutes of inactivity         |
-| Hardening      | Speculative Execution Mitigations      | Checks whether Spectre/Meltdown mitigations have been explicitly disabled          |
-| Hardening      | WinRM Status                           | Checks whether the Windows Remote Management (WinRM) service is running            |
-| Network        | IPv6 Status                            | Reports whether IPv6 is active on any network adapter (informational)              |
-| Network        | LLMNR Disabled                         | Checks whether LLMNR is disabled (susceptible to poisoning/Responder attacks)      |
-| Network        | Listening Port — {port}/{service}      | Flags known-dangerous listening ports: FTP (21), Telnet (23), TFTP (69), RDP (3389) |
-| Network        | Listening Ports — Summary              | Enumerates all TCP ports currently in LISTEN state (informational)                 |
-| Network        | NetBIOS over TCP/IP                    | Checks whether NetBIOS over TCP/IP is disabled on all network adapters             |
-| Patching       | Last Windows Update                    | Checks when the most recent update was installed (warn > 30 days, fail > 60 days) |
-| Patching       | Pending Windows Updates                | Counts Windows Updates that are available but not yet installed                    |
-| Patching       | Windows Update Service                 | Checks whether the Windows Update (wuauserv) service is running                   |
-| Persistence    | Scheduled Tasks                        | Enumerates non-Microsoft scheduled tasks (potential persistence points)            |
-| Persistence    | Startup Programs                       | Enumerates programs configured to run at startup (registry Run keys + folders)    |
-| PowerShell     | PowerShell Constrained Language Mode   | Checks whether PowerShell Constrained Language Mode is active                      |
-| PowerShell     | PowerShell Execution Policy            | Checks the LocalMachine execution policy (warns on Unrestricted/Bypass)            |
-| PowerShell     | PowerShell Module Logging              | Checks whether PowerShell module pipeline logging is enabled                       |
-| PowerShell     | PowerShell Script Block Logging        | Checks whether Script Block Logging is enabled (critical for forensics/IR)         |
-| PowerShell     | PowerShell v2                          | Checks whether PowerShell v2 is installed (downgrade attack vector)                |
-| Remote Access  | RDP Enabled                            | Checks whether Remote Desktop Protocol is enabled                                  |
-| Remote Access  | RDP Network Level Authentication †     | Checks whether NLA is required for RDP connections                                 |
-| Remote Access  | RDP Port †                             | Reports the RDP listening port (informational)                                     |
-| Services       | Risky Services / Risky Service — {name} | Flags known-dangerous services if running: Remote Registry, Telnet, SNMP          |
-| Services       | Unquoted Service Paths                 | Detects services with unquoted executable paths containing spaces (privilege-escalation vector) |
-| System         | Domain Membership                      | Reports whether the machine is domain-joined or in a workgroup (informational)     |
-| System         | OS End-of-Support Status               | Checks whether the installed Windows build is still supported by Microsoft         |
-| System         | OS Version                             | Reports the installed Windows version and build number (informational)             |
-| System         | Secure Boot                            | Checks whether UEFI Secure Boot is enabled                                         |
-| System         | System Uptime                          | Checks system uptime (warns if > 30 days, suggesting pending patch reboots)        |
-| System         | TPM Status                             | Checks whether a TPM chip is present and functional                                |
+| Category       | Check                                     | Description                                                                                     |
+|----------------|-------------------------------------------|-------------------------------------------------------------------------------------------------|
+| Access Control | UAC Admin Consent Behavior                | Checks the UAC consent prompt behavior for administrator accounts                               |
+| Access Control | UAC Enabled                               | Checks whether User Account Control (UAC) is enabled                                            |
+| Access Control | UAC Secure Desktop                        | Checks whether UAC prompts are shown on the isolated secure desktop                             |
+| Access Control | UAC Standard User Behavior                | Checks the UAC consent prompt behavior for standard user accounts                               |
+| Accounts       | Built-in Administrator Account            | Checks whether the built-in Administrator account is enabled or renamed                         |
+| Accounts       | Guest Account                             | Checks whether the built-in Guest account is disabled                                           |
+| Accounts       | Local Administrators                      | Counts members of the local Administrators group (warns if > 2)                                 |
+| Accounts       | Password Policy — Account Lockout         | Checks whether account lockout is configured to deter brute-force attacks                       |
+| Accounts       | Password Policy — Complexity \*           | Checks whether password complexity requirements are enforced                                    |
+| Accounts       | Password Policy — Minimum Length          | Checks minimum password length (fail < 8 chars, warn < 12 chars)                                |
+| Antivirus      | Defender Real-Time Protection             | Checks whether Windows Defender real-time protection is active                                  |
+| Antivirus      | Defender Signature Age                    | Checks whether virus definitions are less than 7 days old                                       |
+| Antivirus      | Defender Tamper Protection                | Checks whether Tamper Protection prevents unauthorised Defender changes                         |
+| Antivirus      | Registered AV Products                    | Lists antivirus products registered with Windows Security Center                                |
+| Encryption     | BitLocker — {drive} *                     | BitLocker encryption and protection status per fixed drive (one result per drive)               |
+| File Sharing   | SMB Encryption *                          | Checks whether SMB encryption (EncryptData) is enforced                                         |
+| File Sharing   | SMB Signing Required *                    | Checks that SMB message signing is required (mitigates NTLM relay attacks)                      |
+| File Sharing   | SMBv1 Disabled *                          | Checks that SMBv1 is disabled (mitigates EternalBlue/WannaCry/NotPetya)                         |
+| Firewall       | Firewall — Domain Default Inbound Action  | Checks that the Domain profile does not explicitly allow all inbound connections                |
+| Firewall       | Firewall — Domain Profile Enabled         | Checks whether Windows Firewall is enabled for domain networks                                  |
+| Firewall       | Firewall — Private Default Inbound Action | Checks that the Private profile does not explicitly allow all inbound connections               |
+| Firewall       | Firewall — Private Profile Enabled        | Checks whether Windows Firewall is enabled for private networks                                 |
+| Firewall       | Firewall — Profiles Present               | Verifies all three profiles were reported — a missing one is an ERROR                           |
+| Firewall       | Firewall — Public Default Inbound Action  | Checks that the Public profile does not explicitly allow all inbound connections                |
+| Firewall       | Firewall — Public Profile Enabled         | Checks whether Windows Firewall is enabled for public networks                                  |
+| Hardening      | Audit Policy                              | Checks that key subcategories (Logon, Lockout, etc.) log success/failure events                 |
+| Hardening      | AutoPlay Disabled                         | Checks whether AutoPlay is disabled for all drive types                                         |
+| Hardening      | Screen Lock Timeout                       | Checks that the screen automatically locks within 15 minutes of inactivity                      |
+| Hardening      | Speculative Execution Mitigations         | Checks whether Spectre/Meltdown mitigations have been explicitly disabled                       |
+| Hardening      | WinRM Status                              | Checks whether the Windows Remote Management (WinRM) service is running                         |
+| Network        | IPv6 Status                               | Reports whether IPv6 is active on any network adapter (informational)                           |
+| Network        | LLMNR Disabled                            | Checks whether LLMNR is disabled (susceptible to poisoning/Responder attacks)                   |
+| Network        | Listening Port — {port}/{service}         | Flags known-dangerous listening ports: FTP (21), Telnet (23), TFTP (69), RDP (3389)             |
+| Network        | Listening Ports — Summary                 | Enumerates all TCP ports currently in LISTEN state (informational)                              |
+| Network        | NetBIOS over TCP/IP                       | Checks whether NetBIOS over TCP/IP is disabled on all network adapters                          |
+| Patching       | Last Windows Update                       | Checks when the most recent update was installed (warn > 30 days, fail > 60 days)               |
+| Patching       | Pending Windows Updates                   | Counts Windows Updates that are available but not yet installed                                 |
+| Patching       | Windows Update Service                    | Checks whether the Windows Update (wuauserv) service is running                                 |
+| Persistence    | Scheduled Tasks                           | Enumerates non-Microsoft scheduled tasks (potential persistence points)                         |
+| Persistence    | Startup Programs                          | Enumerates programs configured to run at startup (registry Run keys + folders)                  |
+| PowerShell     | PowerShell Constrained Language Mode      | Checks whether PowerShell Constrained Language Mode is active                                   |
+| PowerShell     | PowerShell Execution Policy               | Checks the LocalMachine execution policy (warns on Unrestricted/Bypass)                         |
+| PowerShell     | PowerShell Module Logging                 | Checks whether PowerShell module pipeline logging is enabled                                    |
+| PowerShell     | PowerShell Script Block Logging           | Checks whether Script Block Logging is enabled (critical for forensics/IR)                      |
+| PowerShell     | PowerShell v2                             | Checks whether PowerShell v2 is installed (downgrade attack vector)                             |
+| Remote Access  | RDP Enabled                               | Checks whether Remote Desktop Protocol is enabled                                               |
+| Remote Access  | RDP Network Level Authentication †        | Checks whether NLA is required for RDP connections                                              |
+| Remote Access  | RDP Port †                                | Reports the RDP listening port (informational)                                                  |
+| Services       | Risky Services / Risky Service — {name}   | Flags known-dangerous services if running: Remote Registry, Telnet, SNMP                        |
+| Services       | Unquoted Service Paths                    | Detects services with unquoted executable paths containing spaces (privilege-escalation vector) |
+| System         | Domain Membership                         | Reports whether the machine is domain-joined or in a workgroup (informational)                  |
+| System         | OS End-of-Support Status                  | Checks whether the installed Windows build is still supported by Microsoft                      |
+| System         | OS Version                                | Reports the installed Windows version and build number (informational)                          |
+| System         | Secure Boot                               | Checks whether UEFI Secure Boot is enabled                                                      |
+| System         | System Uptime                             | Checks system uptime (warns if > 30 days, suggesting pending patch reboots)                     |
+| System         | TPM Status                                | Checks whether a TPM chip is present and functional                                             |
 
 \* Requires **Administrator** privileges for full results.
 † Only emitted when RDP is enabled.

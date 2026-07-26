@@ -245,50 +245,101 @@ class TestCheckPasswordPolicy:
         r = self._by_name(self._run(self._inf(lockout="lots")), "Lockout")
         assert r.status == Status.ERROR
 
-    def test_secedit_error_returns_error(self):
-        with patch("apotrope.checks.accounts.run_powershell",
-                   side_effect=ApotropeError("secedit denied")):
-            results = accounts._check_password_policy()
-        assert any(r.status == Status.ERROR for r in results)
-
-    def test_secedit_failure_degrades_every_control_separately(self):
-        # A single collapsed "Password Policy" result DELETED three CIS-mapped
-        # rows from the report rather than degrading them — the operator saw no
-        # Minimum Length / Account Lockout / Complexity row at all. Each control
-        # must survive the failure under its own name.
-        with patch("apotrope.checks.accounts.run_powershell",
-                   side_effect=ApotropeError("secedit denied")):
-            results = accounts._check_password_policy()
-        assert [r.check_name for r in results] == list(accounts._PW_POLICY_CHECKS)
-        assert all(r.status == Status.ERROR for r in results)
-
-    def test_secedit_failure_names_stay_cis_mapped(self):
-        # These check_name strings key cis_map.py, --compare and
-        # profile.disabled_checks; a renamed result silently loses all three.
-        with patch("apotrope.checks.accounts.run_powershell",
-                   side_effect=ApotropeError("secedit denied")):
-            results = accounts._check_password_policy()
-        for r in results:
-            assert cis_map.lookup(r.check_name), f"{r.check_name!r} has no CIS reference"
-
-    def test_secedit_failure_points_at_elevation(self):
-        # secedit exports from a database readable only by SYSTEM and
-        # Administrators, so the documented non-elevated invocation always lands
-        # here. Say so — a bare stderr string is not actionable.
-        with patch("apotrope.checks.accounts.run_powershell",
-                   side_effect=ApotropeError("secedit denied")):
-            results = accounts._check_password_policy()
-        for r in results:
-            assert "Administrator" in r.remediation
-            assert "Administrators" in r.details
-
     def test_success_and_failure_paths_agree_on_names(self):
-        # If the two paths ever disagree, a --compare diff reads the mismatch as
-        # one control vanishing and another appearing.
+        # If any path ever disagrees, a --compare diff reads the mismatch as one
+        # control vanishing and another appearing.
         with patch("apotrope.checks.accounts.run_powershell",
                    return_value=self._inf()):
             ok = accounts._check_password_policy()
         assert [r.check_name for r in ok] == list(accounts._PW_POLICY_CHECKS)
+
+
+# ---------------------------------------------------------------------------
+# Non-elevated fallback: secedit needs admin, NetUserModalsGet does not
+# ---------------------------------------------------------------------------
+
+class TestPasswordPolicyWithoutSecedit:
+    """A non-elevated scan must still produce real verdicts, not three ERRORs.
+
+    ``secedit /export`` reads a database ACL'd to SYSTEM and Administrators, so
+    the documented default invocation cannot use it. Minimum length and lockout
+    come from ``NetUserModalsGet`` instead — unprivileged and locale-neutral.
+    """
+
+    _MODALS = {
+        "minimumpasswordlength": "0",
+        "passwordhistorysize": "0",
+        "lockoutbadcount": "10",
+        "lockoutduration": "30",
+        "resetlockoutcount": "30",
+    }
+
+    def _run(self, modals=None, modals_raises=None):
+        kw = {"side_effect": modals_raises} if modals_raises else {"return_value": modals}
+        with (
+            patch("apotrope.checks.accounts.run_powershell",
+                  side_effect=ApotropeError("secedit exited 1")),
+            patch("apotrope.checks.accounts.read_password_policy", **kw),
+        ):
+            return accounts._check_password_policy()
+
+    def _by(self, results, needle):
+        return next(r for r in results if needle in r.check_name)
+
+    def test_weak_length_is_still_a_fail_without_elevation(self):
+        # THE POINT OF THIS CHANGE. MinimumPasswordLength=0 is a HIGH FAIL worth
+        # -10. Reporting it as an unscored ERROR inflates the score on exactly
+        # the machines that deserve the deduction.
+        r = self._by(self._run(self._MODALS), "Minimum Length")
+        assert r.status == Status.FAIL
+        assert r.severity == Severity.HIGH
+
+    def test_lockout_is_evaluated_without_elevation(self):
+        r = self._by(self._run(self._MODALS), "Account Lockout")
+        assert r.status == Status.PASS
+        assert "10 attempt(s)" in r.details
+
+    def test_complexity_is_reported_unmeasurable_not_guessed(self):
+        # Complexity is an LSA setting with no USER_MODALS_INFO field. Inventing
+        # a value would be the confidently-wrong verdict this module avoids.
+        r = self._by(self._run(self._MODALS), "Complexity")
+        assert r.status == Status.ERROR
+        assert "Administrator" in r.remediation
+
+    def test_all_three_controls_still_reported_and_cis_mapped(self):
+        results = self._run(self._MODALS)
+        assert [r.check_name for r in results] == list(accounts._PW_POLICY_CHECKS)
+        for r in results:
+            assert cis_map.lookup(r.check_name), f"{r.check_name!r} lost its CIS reference"
+
+    def test_strong_policy_passes_without_elevation(self):
+        strong = {**self._MODALS, "minimumpasswordlength": "14"}
+        r = self._by(self._run(strong), "Minimum Length")
+        assert r.status == Status.PASS
+
+    def test_both_sources_failing_degrades_every_control(self):
+        # Lack of elevation no longer lands here; reaching it means the machine
+        # genuinely is not answering, so both causes are reported.
+        results = self._run(modals_raises=ApotropeError("netapi32 status 5"))
+        assert [r.check_name for r in results] == list(accounts._PW_POLICY_CHECKS)
+        assert all(r.status == Status.ERROR for r in results)
+        for r in results:
+            assert "secedit exited 1" in r.details
+            assert "netapi32 status 5" in r.details
+
+    def test_fallback_is_not_used_when_secedit_works(self):
+        # The fallback must never override the richer source.
+        inf = (
+            "[System Access]\nMinimumPasswordLength = 14\nLockoutBadCount = 5\n"
+            "LockoutDuration = 30\nPasswordComplexity = 1\n"
+        )
+        with (
+            patch("apotrope.checks.accounts.run_powershell", return_value=inf),
+            patch("apotrope.checks.accounts.read_password_policy") as modals,
+        ):
+            results = accounts._check_password_policy()
+        modals.assert_not_called()
+        assert next(r for r in results if "Complexity" in r.check_name).status == Status.PASS
 
 
 # ---------------------------------------------------------------------------
