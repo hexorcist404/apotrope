@@ -89,6 +89,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Dev/CI
 
+- **`requirements.txt` removed; `pyproject.toml` is the only dependency source.**
+  Nothing installed from it — every CI job, the release build and the publish
+  workflow all use `pip install -e ".[dev]"` — but GitHub's dependency graph read
+  it as a manifest, so it double-counted every package and filed alerts against
+  pins that determined nothing. It had also drifted: it pinned `pytest==9.0.3`
+  against a `>=8.0` floor and `markupsafe==2.1.5` against a resolve that produces
+  3.x, and it omitted `ruff` and `mypy` entirely, so it could not reproduce a CI
+  environment even if someone had installed from it.
+- **Dependency floors now sit at the highest advisory-patched version.** Those
+  stale pins were masking the fact that the declared ranges still permitted
+  vulnerable builds: `jinja2>=3.1` allowed every 3.1.x below 3.1.6, and
+  `pillow>=12.0` allowed the versions patched in 12.3.0. A range that permits a
+  vulnerable build is one a constrained or offline resolve can pick, and it is
+  what Dependabot alerts against. Now `jinja2>=3.1.6,<4` and `pillow>=12.3`;
+  `rich` has no known advisories and keeps its API-based floor.
 - `ruff` and `mypy` are now enforced CI gates, at exact pinned versions rather
   than floors, with a repo-owned rule set so upstream default churn cannot turn
   the build red without a code change.
