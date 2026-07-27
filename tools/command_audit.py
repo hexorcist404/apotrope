@@ -221,6 +221,42 @@ _NEW_ITEM_FORCE = re.compile(r"\bNew-Item\b[^\n]*?-Force\b", re.IGNORECASE)
 # Creating the protector therefore obliges the command to also read it back or
 # escrow it. Both are accepted: printing the password, or backing it up to AD DS
 # / Entra ID.
+# Commands that can sever the very connection the operator is running them over.
+# These belong in comments with an explicit warning, not as active copy-paste:
+# on a headless host with no console or out-of-band access the result is
+# unrecoverable, and pasted inside a PSSession the shell dies mid-block so
+# whether the following lines ran is indeterminate.
+#
+# Scoped to transports an operator plausibly arrives on. Leaf-targeted firewall
+# edits (-Name/-DisplayName), RemoteRegistry/SNMP teardown, and anything
+# RE-enabling access are all excluded by construction.
+_SESSION_TRANSPORT = r"WinRM|WinRS|TermService|UmRdpService|SessionEnv|sshd"
+_REMOTE_LOCKOUT = re.compile(
+    r"""
+    \bfDenyTSConnections\b[^\n]*-Value\s+1\b          # blocks RDP + drops the session
+  | \b(?:Disable|Remove)-NetFirewallRule\b[^\n]*-(?:Display)?Group\b   # group-wide teardown
+  | \bSet-NetFirewallRule\b[^\n]*-(?:Display)?Group\b[^\n]*-Enabled\s+\$?False\b
+  | \bStop-Service\b[^\n]*\b(?:""" + _SESSION_TRANSPORT + r""")\b
+  | \bSet-Service\b[^\n]*\b(?:""" + _SESSION_TRANSPORT + r""")\b[^\n]*
+        -StartupType\s+Disabled\b
+  | \bDisable-PSRemoting\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# WMI reports failure through a uint32 ReturnValue, not a PowerShell error, so
+# -ErrorAction and $? never see it. Discarding that value leaves the operator
+# with a clean prompt whether the call succeeded on every adapter, some, or none
+# — and SetTcpipNetbios returns 1 for "succeeded, REBOOT REQUIRED" as routinely
+# as 0, so the common outcome is a host that is reported fixed and is not.
+# New-Item/New-ItemProperty | Out-Null is deliberately NOT flagged: those raise
+# on failure, so nothing diagnostic is being thrown away.
+_DISCARDED_CIM_RETURN = re.compile(
+    r"\b(?:Invoke-CimMethod|Invoke-WmiMethod)\b[^\n|]*\|\s*Out-Null\b"
+    r"|(?:\$null\s*=|\[void\]\s*\(?)\s*(?:Invoke-CimMethod|Invoke-WmiMethod)\b",
+    re.IGNORECASE,
+)
+
 _CREATES_RECOVERY_PASSWORD = re.compile(r"-RecoveryPasswordProtector\b", re.IGNORECASE)
 _SURFACES_RECOVERY_PASSWORD = re.compile(
     r"\bRecoveryPassword\b(?!Protector)"          # reads the property back
@@ -291,6 +327,24 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 cmd.module, cmd.line, "destructive-command",
                 "destructive/unattended command (TPM clear, reboot, shutdown, volume "
                 "or BitLocker teardown) must be a commented manual step, not copy-paste",
+                text,
+            ))
+        if _REMOTE_LOCKOUT.search(active):
+            violations.append(Violation(
+                cmd.module, cmd.line, "remote-access-lockout",
+                "actively severs a remote-access path the operator may be connected "
+                "over (RDP, WinRM, SSH). Ship it as a commented manual step with an "
+                "explicit warning, as rdp.py and network.py do — pasted in a live "
+                "session this is unrecoverable on a headless host",
+                text,
+            ))
+        if _DISCARDED_CIM_RETURN.search(active):
+            violations.append(Violation(
+                cmd.module, cmd.line, "discarded-cim-returnvalue",
+                "discards a WMI method's ReturnValue. WMI signals failure through "
+                "ReturnValue, not a PowerShell error, so -ErrorAction and $? see "
+                "nothing and the operator gets a clean prompt whether it worked or "
+                "not. Capture the result and report a non-zero value",
                 text,
             ))
         if (
