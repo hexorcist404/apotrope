@@ -23,6 +23,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `BackupToAAD-BitLockerKeyProtector` steps for domain- and Entra-joined hosts.
   A new `bitlocker-no-key-escrow` lint rule keeps it from regressing.
 
+- **Account remediations no longer risk the operator's own access.** Disabling
+  the built-in Administrator shipped as an active line — and that finding fires
+  precisely when RID-500 is *enabled*, which on a standalone or freshly imaged
+  host is often because it is the account in use. It also renamed first, so the
+  account could not afterwards be found by name, and hardcoded `RenamedAdmin`,
+  which gives up the only thing renaming buys you. The rename now takes a name
+  the operator chooses, the block lists every administrator and whether each is
+  enabled, and the disable is commented behind that check. Likewise the
+  "too many administrators" remediation shipped an active
+  `Remove-LocalGroupMember` against a fabricated `CORP\svc_backup`; it is now
+  commented, preceded by `whoami`, and no longer presents an invented account as
+  though it were real.
+
+- **The Spectre/Meltdown remediation no longer hides a failed write.**
+  `-ErrorAction SilentlyContinue` on `Remove-ItemProperty` meant an ACL-protected
+  key — or a GPO Preference re-creating the values — produced output identical to
+  success. It now tests for each value, removes only what is present, reports
+  what it did, and lets a real failure surface.
+
 - **Remediations that could cut the operator's own connection are now commented
   manual steps.** Disabling RDP (`fDenyTSConnections=1`), tearing down the whole
   Remote Desktop firewall group, and stopping or disabling WinRM all shipped as

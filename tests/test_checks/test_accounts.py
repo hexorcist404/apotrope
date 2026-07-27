@@ -366,3 +366,66 @@ class TestRun:
             results = accounts.run()
         assert all(isinstance(r, CheckResult) for r in results)
         assert len(results) >= 6
+
+
+class TestAdminRemediationGuards:
+    """The account remediations must not cost the operator their own access.
+
+    No lint rule covers the rename+disable pairing: accounts.py's Guest branch
+    and the built-in-Administrator branch both reduce to a byte-identical
+    `Disable-LocalUser -SID '{sid}'` once the runtime SID becomes a placeholder,
+    so a rule keyed on Disable-LocalUser would fire on the (safe) Guest control.
+    These assertions cover it at the check level instead.
+    """
+
+    @staticmethod
+    def _active(command: str) -> str:
+        return "\n".join(
+            ln for ln in command.splitlines() if not ln.lstrip().startswith("#")
+        )
+
+    def _builtin_admin_fail(self):
+        # enabled + default name -> the FAIL branch that emits the rename/disable
+        with patch("apotrope.checks.accounts.run_powershell_json",
+                   return_value={"Name": "Administrator", "Enabled": True,
+                                 "SID": "S-1-5-21-1-2-3-500"}):
+            return accounts._check_builtin_admin()[0]
+
+    def test_disable_is_commented_not_active(self):
+        # This finding fires exactly when RID-500 is ENABLED — which on a
+        # standalone host is often because it is the account in use. Disabling it
+        # unprompted removes the operator's access and destroys break-glass.
+        r = self._builtin_admin_fail()
+        assert "Disable-LocalUser" in r.command
+        assert "Disable-LocalUser" not in self._active(r.command)
+
+    def test_rename_does_not_hardcode_a_predictable_name(self):
+        # A name every Apotrope user ends up with gives up the only thing
+        # renaming buys you. Checked against the ACTIVE lines: the comment
+        # naming RenamedAdmin as a *bad* example is exactly what we want kept.
+        r = self._builtin_admin_fail()
+        assert "RenamedAdmin" not in self._active(r.command)
+        assert "-NewName $newName" in self._active(r.command)
+
+    def test_operator_is_told_to_verify_another_admin_first(self):
+        r = self._builtin_admin_fail()
+        assert "Get-LocalGroupMember" in self._active(r.command)
+
+    def _admin_count_warn(self):
+        members = [{"Name": rf"MACHINE\Admin{n}"} for n in range(1, 4)]
+        with patch("apotrope.checks.accounts.run_powershell_json", return_value=members):
+            return accounts._check_admin_count()[0]
+
+    def test_admin_removal_is_commented(self):
+        r = self._admin_count_warn()
+        assert "Remove-LocalGroupMember" in r.command
+        assert "Remove-LocalGroupMember" not in self._active(r.command)
+
+    def test_no_fabricated_principal_is_presented_as_real(self):
+        # Shipping a made-up account name invites pasting it verbatim.
+        r = self._admin_count_warn()
+        assert "svc_backup" not in r.command
+
+    def test_operator_is_shown_who_they_are(self):
+        r = self._admin_count_warn()
+        assert "whoami" in self._active(r.command)

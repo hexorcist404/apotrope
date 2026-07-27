@@ -295,8 +295,24 @@ def _check_spectre() -> list[CheckResult]:
                 "registry keys that disable them."
             ),
             command=(
-                f"Remove-ItemProperty -Path '{_SPECTRE_KEY}' "
-                "-Name FeatureSettingsOverride,FeatureSettingsOverrideMask -ErrorAction SilentlyContinue"
+                # -ErrorAction SilentlyContinue on the *removal* was hiding the
+                # only signal there is: an ACL-protected key, or a GPO Preference
+                # re-creating the values, produced output identical to success.
+                # Only one of the two values is commonly present, which is
+                # presumably why it was silenced — so test for each instead, and
+                # let a genuine failure surface.
+                f"$k = '{_SPECTRE_KEY}'\n"
+                "foreach ($n in 'FeatureSettingsOverride','FeatureSettingsOverrideMask') {\n"
+                "    $present = (Get-ItemProperty -LiteralPath $k -Name $n "
+                "-ErrorAction SilentlyContinue).$n\n"
+                "    if ($null -ne $present) {\n"
+                "        Remove-ItemProperty -LiteralPath $k -Name $n\n"
+                "        Write-Host \"removed $n\"\n"
+                "    } else {\n"
+                "        Write-Host \"$n was not set\"\n"
+                "    }\n"
+                "}\n"
+                "# A reboot is required for the mitigations to take effect again."
             ),
         )]
 
