@@ -400,6 +400,7 @@
                 border-radius:2px; background:rgba(68,224,230,0.06); cursor:pointer; transition:all .12s; }
   .code .copy:hover { color:var(--void); background:var(--cyan); border-color:var(--cyan); }
   .code .copy.done { color:var(--void); background:var(--green); border-color:var(--green); }
+  .code .copy.failed { color:var(--void); background:var(--red); border-color:var(--red); }
   .code-cmd { font-family:var(--mono); font-size:12.5px; line-height:1.7;
               white-space:pre-wrap; word-break:break-word; padding:12px 14px; margin:0; }
   .code-cmd .cl-c { color:var(--muted); }                 /* # comment lines       */
@@ -771,17 +772,62 @@
     rows.forEach(function(r){ r.querySelector('.fbody').setAttribute('hidden',''); r.querySelector('.fhead').classList.remove('is-open'); });
   });
 
+  // Windows clipboard text is CRLF by convention. The HTML parser normalises
+  // CRLF to bare LF inside attribute values, so data-cmd reaches this script as
+  // LF-only no matter what the file on disk contains — and pasting LF-only text
+  // into a Windows console reorders it. Reproduced on Windows Terminal 1.24 with
+  // pwsh 7.6 / PSReadLine 2.4: a three-line block pasted as line 3, 2, 1, while
+  // the identical text normalised to CRLF pasted in the correct order. Notepad
+  // took either form correctly, so the clipboard content was never the problem —
+  // only its line endings.
+  function toCrlf(s){ return s.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n'); }
+
+  // Fallback for when navigator.clipboard is unavailable. These reports are
+  // built to be saved and emailed, so they are usually opened over file://,
+  // where the async clipboard API is not guaranteed to exist.
+  function legacyCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
   document.querySelectorAll('.code .copy').forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
       // Copy the RAW command from data-cmd. The rendered lines carry a
       // non-selectable "PS>" prompt that must never reach the clipboard.
       var box = btn.closest('.code');
-      var code = box ? (box.getAttribute('data-cmd') || '') : '';
-      if (navigator.clipboard) navigator.clipboard.writeText(code);
-      btn.classList.add('done');
-      var t = btn.textContent; btn.textContent = '✓ Copied';
-      setTimeout(function(){ btn.textContent = t; btn.classList.remove('done'); }, 1400);
+      var code = toCrlf(box ? (box.getAttribute('data-cmd') || '') : '');
+      var label = btn.textContent;
+
+      // Report the real outcome. Announcing success unconditionally makes a
+      // failed copy indistinguishable from a good one, and the operator then
+      // pastes whatever the clipboard held before.
+      function settle(ok){
+        btn.classList.add(ok ? 'done' : 'failed');
+        btn.textContent = ok ? '✓ Copied' : '⚠ Copy failed — select the text';
+        setTimeout(function(){
+          btn.textContent = label;
+          btn.classList.remove('done', 'failed');
+        }, ok ? 1400 : 2600);
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(
+          function(){ settle(true); },
+          function(){ settle(legacyCopy(code)); }
+        );
+      } else {
+        settle(legacyCopy(code));
+      }
     });
   });
 

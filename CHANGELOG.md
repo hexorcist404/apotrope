@@ -9,6 +9,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **The report's ⧉ Copy button now puts CRLF on the clipboard, and can report a
+  failed copy.** Multi-line remediation pasted into an elevated PowerShell window
+  executed **in reverse order** — last line first — which for the LLMNR command
+  meant the `$key` assignment ran last and the two lines depending on it failed.
+  The cause was the line endings: the HTML parser normalises CRLF to bare LF
+  inside attribute values, so `getAttribute('data-cmd')` handed the script
+  LF-only text no matter what the file contained, and Windows clipboard text is
+  conventionally CRLF. Confirmed by controlled A/B on Windows Terminal 1.24 with
+  pwsh 7.6 / PSReadLine 2.4: the same three lines pasted 3-2-1 as LF and 1-2-3 as
+  CRLF, while Notepad accepted either form correctly — so the clipboard content
+  was never wrong, only its line endings. The button also announced `✓ Copied`
+  unconditionally, with no fallback when `navigator.clipboard` is unavailable
+  (these reports are built to be emailed and opened over `file://`, where it is
+  not guaranteed) and no handler for a rejected write. It now falls back to
+  `execCommand` and shows a distinct failure state, so a failed copy can never
+  again be mistaken for a good one.
+
+
 - **The BitLocker remediation now hands the operator the recovery password.**
   Both commands created a recovery-password protector and never showed the
   48-digit key. `Enable-BitLocker` and `Add-BitLockerKeyProtector` return a
