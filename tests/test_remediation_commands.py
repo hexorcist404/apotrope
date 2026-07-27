@@ -374,3 +374,80 @@ class TestDiscardedCimReturnValueRule:
             if v.rule == "discarded-cim-returnvalue"
         ]
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
+class TestSilencedRegistryMutationRule:
+    """Silencing a write hides the only failure signal there is.
+
+    An ACL-protected key, or a GPO Preference re-creating the values, produces
+    output byte-identical to full success. Silencing a *read* is fine — a guard
+    is supposed to be quiet — so only mutating cmdlets are listed.
+    """
+
+    _K = r"$k = 'HKLM:\SYSTEM\CurrentControlSet\Control\X'" + "\n"
+
+    def _fired(self, text):
+        return [
+            v for v in lint_commands([Command("fake.py", 1, text)])
+            if v.rule == "silenced-registry-mutation"
+        ]
+
+    def test_silenced_removal_is_flagged(self) -> None:
+        assert self._fired(self._K + "Remove-ItemProperty -Path $k -Name Foo -ErrorAction SilentlyContinue")
+
+    def test_ignore_is_flagged_too(self) -> None:
+        # -Ignore is worse: it does not even populate $Error.
+        assert self._fired(self._K + "Set-ItemProperty -Path $k -Name Foo -Value 1 -EA Ignore")
+
+    def test_silenced_read_is_not_flagged(self) -> None:
+        assert not self._fired(
+            self._K + "$v = (Get-ItemProperty -Path $k -Name Foo -ErrorAction SilentlyContinue).Foo"
+        )
+
+    def test_unsilenced_mutation_is_not_flagged(self) -> None:
+        assert not self._fired(self._K + "Remove-ItemProperty -Path $k -Name Foo")
+
+    def test_commented_line_is_not_flagged(self) -> None:
+        assert not self._fired(
+            self._K + "# Remove-ItemProperty -Path $k -Name Foo -ErrorAction SilentlyContinue"
+        )
+
+    def test_no_shipped_command_silences_a_registry_write(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "silenced-registry-mutation"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
+class TestUnguardedAdminRemovalRule:
+    """Removing yourself from Administrators is not undoable from that shell."""
+
+    def _fired(self, text):
+        return [
+            v for v in lint_commands([Command("fake.py", 1, text)])
+            if v.rule == "unguarded-admin-removal"
+        ]
+
+    def test_active_removal_by_sid_is_flagged(self) -> None:
+        assert self._fired("Remove-LocalGroupMember -SID 'S-1-5-32-544' -Member 'X'")
+
+    def test_active_removal_by_group_name_is_flagged(self) -> None:
+        assert self._fired("Remove-LocalGroupMember -Group 'Administrators' -Member 'X'")
+
+    def test_commented_removal_is_not_flagged(self) -> None:
+        assert not self._fired("# Remove-LocalGroupMember -SID 'S-1-5-32-544' -Member 'X'")
+
+    def test_adding_and_other_groups_are_not_flagged(self) -> None:
+        for safe in (
+            "Add-LocalGroupMember -SID 'S-1-5-32-544' -Member 'X'",   # granting, not removing
+            "Remove-LocalGroupMember -Group 'Remote Desktop Users' -Member 'X'",
+        ):
+            assert not self._fired(safe), safe
+
+    def test_no_shipped_command_actively_removes_an_admin(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "unguarded-admin-removal"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]

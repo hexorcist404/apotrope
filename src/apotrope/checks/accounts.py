@@ -166,9 +166,29 @@ def _check_builtin_admin() -> list[CheckResult]:
         remediation = (
             "Rename the built-in Administrator account and disable it if it is not in active use."
         )
+        # The disable ships commented. This finding fires precisely when RID-500
+        # is *enabled* — which on a standalone or freshly imaged host is often
+        # because it is the account in use. Disabling it unprompted removes the
+        # operator's own access at next logon and destroys the break-glass
+        # account that exists for the case where every other credential fails.
+        # Renaming first compounds it: they cannot even find it by name after.
         command = (
-            f"Rename-LocalUser -SID '{sid}' -NewName 'RenamedAdmin'\n"
-            f"Disable-LocalUser -SID '{sid}'"
+            "# Pick your own name. A predictable one (RenamedAdmin, Admin1) gives\n"
+            "# up the only thing renaming buys you.\n"
+            f"$sid = '{sid}'\n"
+            "$newName = 'CHANGE-ME'\n"
+            "Rename-LocalUser -SID $sid -NewName $newName\n"
+            "\n"
+            "# Before disabling it, confirm another administrator can still get in.\n"
+            "# This is the break-glass account; on a standalone host it may be the\n"
+            "# one you are logged in with right now.\n"
+            "Get-LocalGroupMember -SID 'S-1-5-32-544' | ForEach-Object {\n"
+            "    $u = Get-LocalUser -SID $_.SID -ErrorAction SilentlyContinue\n"
+            "    [pscustomobject]@{ Name = $_.Name; "
+            "Enabled = if ($u) { $u.Enabled } else { 'n/a (domain or group)' } }\n"
+            "}\n"
+            "# Then, only if the list above shows another enabled administrator:\n"
+            "# Disable-LocalUser -SID $sid"
         )
     elif enabled:
         status, sev = Status.WARN, Severity.LOW
@@ -233,11 +253,15 @@ def _check_admin_count() -> list[CheckResult]:
         ),
         command=(
             "" if not over_threshold else
-            "# List current local administrators\n"
+            "# List current local administrators, and who you are:\n"
             "Get-LocalGroupMember -SID 'S-1-5-32-544'\n"
+            "whoami\n"
             "\n"
-            "# Remove a standing admin (replace with the account to remove)\n"
-            "Remove-LocalGroupMember -SID 'S-1-5-32-544' -Member 'CORP\\svc_backup'"
+            "# Then remove a standing admin. Commented deliberately: the name below\n"
+            "# is a placeholder, not an account on this machine, and pasting this\n"
+            "# with your OWN account substituted removes your administrative access\n"
+            "# at next logon. Check it against the list above first.\n"
+            "# Remove-LocalGroupMember -SID 'S-1-5-32-544' -Member 'DOMAIN\\the-account'"
         ),
     )]
 

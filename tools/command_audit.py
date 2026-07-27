@@ -257,6 +257,26 @@ _DISCARDED_CIM_RETURN = re.compile(
     re.IGNORECASE,
 )
 
+# Silencing errors on a registry cmdlet that MUTATES destroys the only signal the
+# operator gets: an ACL-protected key, or a GPO Preference re-creating the values,
+# produces output byte-identical to full success. Silencing a *read* is fine and
+# often correct — a guard is supposed to be quiet — so only mutations are listed.
+# -Ignore is strictly worse than SilentlyContinue: it does not even populate
+# $Error, so nothing survives for a later check to find.
+_SILENCED_REGISTRY_MUTATION = re.compile(
+    r"\b(?:Remove|Set|New|Rename|Clear)-Item(?:Property)?\b[^\n]*"
+    r"-(?:ErrorAction|EA)\s+(?:SilentlyContinue|Ignore|0)\b",
+    re.IGNORECASE,
+)
+
+# Removing someone from Administrators is not reversible from a shell you no
+# longer have. The operator substituting their own account into the example is
+# the expected mistake, not an exotic one, so this belongs behind a comment and
+# a "check who you are first" step.
+_ADMIN_GROUP_REMOVAL = re.compile(
+    r"\bRemove-LocalGroupMember\b[^\n]*(?:S-1-5-32-544|Administrators)", re.IGNORECASE
+)
+
 _CREATES_RECOVERY_PASSWORD = re.compile(r"-RecoveryPasswordProtector\b", re.IGNORECASE)
 _SURFACES_RECOVERY_PASSWORD = re.compile(
     r"\bRecoveryPassword\b(?!Protector)"          # reads the property back
@@ -360,7 +380,27 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 "or escrow it (Backup-BitLockerKeyProtector / BackupToAAD-...)",
                 text,
             ))
+        if _ADMIN_GROUP_REMOVAL.search(active):
+            violations.append(Violation(
+                cmd.module, cmd.line, "unguarded-admin-removal",
+                "actively removes a member of Administrators. The operator "
+                "substituting their own account is the expected mistake, and it is "
+                "not reversible from a shell they no longer have — ship it commented, "
+                "after a step that shows the current membership and `whoami`",
+                text,
+            ))
         if _REGISTRY_HIVE.search(active):
+            for line in _uncommented_lines(text):
+                if _SILENCED_REGISTRY_MUTATION.search(line):
+                    violations.append(Violation(
+                        cmd.module, cmd.line, "silenced-registry-mutation",
+                        "silences errors on a registry cmdlet that mutates state, so a "
+                        "denied or re-created value produces output identical to "
+                        "success. Silencing a read is fine; test the value and report "
+                        "instead of hiding the write's only failure signal",
+                        text,
+                    ))
+                    break
             for line in _uncommented_lines(text):
                 if _NEW_ITEM_FORCE.search(line) and not _TEST_PATH_GUARD.match(line):
                     violations.append(Violation(
