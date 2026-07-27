@@ -326,6 +326,39 @@ class TestGenerateHtmlReport:
             assert "PS&gt;" not in raw
             assert "<span" not in raw
 
+    def test_copy_handler_normalises_line_endings_to_crlf(self):
+        """The clipboard payload must carry CRLF, not bare LF.
+
+        The HTML parser normalises CRLF to LF inside attribute values, so
+        ``getAttribute('data-cmd')`` hands the script LF-only text regardless of
+        the file's own line endings. Pasting LF-only text into a Windows console
+        reorders it: reproduced on Windows Terminal 1.24 with pwsh 7.6 /
+        PSReadLine 2.4, where a three-line block pasted as line 3, 2, 1 while the
+        same text normalised to CRLF pasted correctly. Notepad accepted either
+        form in the right order, so the content was never wrong -- only the line
+        endings.
+        """
+        html = self._generate(_make_report())
+        assert "function toCrlf" in html, "the CRLF normaliser is gone"
+        # and it must actually be applied to the value that reaches the clipboard
+        assert "toCrlf(box ? (box.getAttribute('data-cmd')" in html, (
+            "data-cmd is being copied without CRLF normalisation"
+        )
+
+    def test_copy_handler_can_report_failure(self):
+        """A failed copy must not look identical to a successful one.
+
+        Announcing success unconditionally leaves the operator pasting whatever
+        the clipboard held before, with no signal that anything went wrong -- and
+        makes the next copy bug undiagnosable. These reports are built to be
+        saved and emailed, so they are usually opened over ``file://`` where the
+        async clipboard API is not guaranteed to exist.
+        """
+        html = self._generate(_make_report())
+        assert "Copy failed" in html, "no failure state on the copy button"
+        assert "document.execCommand('copy')" in html, "no fallback copy path"
+        assert ".code .copy.failed" in html, "no styling for the failure state"
+
     def test_share_warning_rendered_in_footer(self):
         """The footer warns that the report embeds machine-identifying detail."""
         html = self._generate(_make_report())
