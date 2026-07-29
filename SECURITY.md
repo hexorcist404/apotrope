@@ -14,8 +14,8 @@ If you find an Apotrope query that is *not* read-only, that is a reportable vuln
 
 | Version  | Supported          |
 | -------- | ------------------ |
-| 0.1.12   | :white_check_mark: |
-| < 0.1.12 | :x:                |
+| 0.2.0    | :white_check_mark: |
+| < 0.2.0  | :x:                |
 
 Only the latest release is actively supported with security updates.
 
