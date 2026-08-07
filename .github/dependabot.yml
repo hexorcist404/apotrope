@@ -1,0 +1,17 @@
+version: 2
+
+# Every workflow `uses:` is pinned to a commit SHA (enforced by
+# tests/test_workflow_security.py). Pinning stops a repointed upstream tag from
+# silently changing what CI runs — but it also stops upstream *fixes* arriving on
+# their own. This updater is the other half of that trade: it opens a PR per bump,
+# rewriting both the SHA and its trailing `# vX.Y.Z` comment, so updates become
+# visible and reviewed rather than silent and automatic.
+#
+# Deliberately no `pip` ecosystem entry. pyproject.toml pins ruff and mypy exactly,
+# with a written requirement that either bump land in its own PR that absorbs the
+# resulting rule-set delta — a weekly updater would fight that.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
