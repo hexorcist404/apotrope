@@ -16,16 +16,35 @@ updates:
     schedule:
       interval: "weekly"
 
-    # Ungrouped, the first run opened five separate PRs (#111-#115). Groups are
-    # evaluated in order and a dependency joins the FIRST group it matches, so the
-    # order below is load-bearing. Note these `update-types` use major/minor/patch,
-    # NOT the `version-update:semver-*` spelling the `ignore` option takes.
+    # A release cooldown applies on top of this schedule and is NOT configured here
+    # — run 31259463917 logged `Days since release : 2 (cooldown days 3)` and then
+    # `No update needed for actions/attest-build-provenance 4.1.1` while v4.2.2 was
+    # already published. So "Dependabot opened no PR" does not mean "nothing is
+    # available"; a release younger than the cooldown is held back deliberately.
+
+    # Ungrouped, the first run opened five separate PRs (#111-#115).
+    #
+    # How a dependency picks its group is worth stating precisely, because the two
+    # available sources disagree. GitHub's docs say a dependency "is included in the
+    # first group that it matches". The updater's own log says otherwise: in run
+    # 31259463917 it emitted `Checking specificity for actions/upload-artifact in
+    # group '<name>'` for ALL THREE groups, so matching plainly does not stop at the
+    # first hit, and the word it uses is specificity — most specific wins, explicit
+    # names over a `"*"` wildcard.
+    #
+    # This config is deliberately unambiguous under either rule: artifact-actions is
+    # both listed first AND the only group naming its members explicitly. Keep it
+    # that way rather than relying on whichever rule is actually in force. Reordering
+    # alone is safe; broadening artifact-actions to a wildcard is not.
+    #
+    # Note also that these `update-types` take major/minor/patch, NOT the
+    # `version-update:semver-*` spelling the `ignore` option takes.
     groups:
       # The artifact actions are a designed pair: upload's `archive` mode and
       # download's Content-Type-aware decompression shipped together. publish.yml
       # uploads `dist` in one job and downloads it in two others, so a PR that moves
-      # only one half proposes a combination nobody has run. First, so it claims them
-      # whatever the bump size.
+      # only one half proposes a combination nobody has run. No update-types filter,
+      # so this claims them whatever the bump size.
       artifact-actions:
         patterns:
           - "actions/upload-artifact"
