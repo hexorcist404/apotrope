@@ -15,3 +15,33 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
+    # Ungrouped, the first run opened five separate PRs (#111-#115). Groups are
+    # evaluated in order and a dependency joins the FIRST group it matches, so the
+    # order below is load-bearing. Note these `update-types` use major/minor/patch,
+    # NOT the `version-update:semver-*` spelling the `ignore` option takes.
+    groups:
+      # The artifact actions are a designed pair: upload's `archive` mode and
+      # download's Content-Type-aware decompression shipped together. publish.yml
+      # uploads `dist` in one job and downloads it in two others, so a PR that moves
+      # only one half proposes a combination nobody has run. First, so it claims them
+      # whatever the bump size.
+      artifact-actions:
+        patterns:
+          - "actions/upload-artifact"
+          - "actions/download-artifact"
+
+      # Routine bumps arrive as one PR rather than one per action.
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+      # Majors are grouped, deliberately NOT ignored. Ignoring them looks like the
+      # stable choice and is not: of the lines this repo pins, only actions/checkout
+      # still receives backported fixes on its old major (v4.4.0, 2026-07-20).
+      # setup-python v5 and both artifact actions' v4 lines have shipped nothing
+      # since early 2025, so ignoring majors would strand them permanently — the
+      # outcome SHA-pinning exists to prevent.
+      actions-major:
+        patterns: ["*"]
+        update-types: ["major"]
