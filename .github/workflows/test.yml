@@ -1,20 +1,41 @@
 name: Tests
 
 on:
+  # push is deliberately limited to main. It previously also listed feat/** and
+  # fix/**, which meant every push to a branch with an open PR matched BOTH
+  # triggers and ran the full 4-leg matrix (two legs Windows) plus build-exe
+  # twice — PR #110 ran as 31227373294 (push) and 31227375103 (pull_request) on
+  # the same commit. The concurrency block below cannot collapse those: a push
+  # event leaves github.event.pull_request.number null and falls through to
+  # github.ref, so the two events land in different groups by construction.
+  #
+  # The cost, stated plainly: pushing a feat/** or fix/** branch with NO pull
+  # request open now runs nothing. Open the PR as a draft (pull_request fires on
+  # drafts) or dispatch this workflow by hand.
   push:
-    branches: ["main", "feat/**", "fix/**"]
+    branches: ["main"]
   pull_request:
     # No branch filter: a stacked PR (base = another fix/** branch, as when
     # these PRs are chained) produced no pull_request-triggered run at all, so
     # it was never checked against its merge preview and offered no check
     # context a branch-protection rule could require.
+  workflow_dispatch:
 
-# One run per ref. Without this the push and pull_request triggers both fire on
-# every push to an open PR branch, duplicating a 4-leg matrix (two of them
-# Windows) and leaving superseded runs to finish.
+# Deduplication happens at the TRIGGER above, not here. Unifying the group key so
+# both events collapse into one — github.event.pull_request.head.ref ||
+# github.ref_name does yield an identical string — was rejected: combined with
+# cancel-in-progress that is a race, and whichever run starts second kills the
+# first. The two runs are not interchangeable (push tests the branch tip,
+# pull_request tests the merge preview), and a cancelled run reports `cancelled`
+# rather than `success`, which would poison any required-status-check rule added
+# later.
+#
+# What this block still does is collapse superseded runs when a PR branch is
+# pushed repeatedly. It must NOT do that on main: cancelling there would leave a
+# merged commit that never completed a run. Hence the event-conditional.
 concurrency:
   group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
