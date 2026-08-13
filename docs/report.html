@@ -400,6 +400,7 @@
                 border-radius:2px; background:rgba(68,224,230,0.06); cursor:pointer; transition:all .12s; }
   .code .copy:hover { color:var(--void); background:var(--cyan); border-color:var(--cyan); }
   .code .copy.done { color:var(--void); background:var(--green); border-color:var(--green); }
+  .code .copy.failed { color:var(--void); background:var(--red); border-color:var(--red); }
   .code-cmd { font-family:var(--mono); font-size:12.5px; line-height:1.7;
               white-space:pre-wrap; word-break:break-word; padding:12px 14px; margin:0; }
   .code-cmd .cl-c { color:var(--muted); }                 /* # comment lines       */
@@ -462,7 +463,7 @@
       <div class="brand">
         <img class="diamond" src="data:image/png;base64,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" width="26" height="26" alt="Apotrope">
         <span class="name glitch" data-txt="APOTROPE">APOTROPE</span>
-        <span class="ver">v0.1.12</span>
+        <span class="ver">v0.2.0</span>
       </div>
       <div class="topbar-meta">
         <div class="meta-item"><span class="label">Host</span><span class="v"><b>WORKSTATION-07</b></span></div>
@@ -2353,17 +2354,62 @@ if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
     rows.forEach(function(r){ r.querySelector('.fbody').setAttribute('hidden',''); r.querySelector('.fhead').classList.remove('is-open'); });
   });
 
+  // Windows clipboard text is CRLF by convention. The HTML parser normalises
+  // CRLF to bare LF inside attribute values, so data-cmd reaches this script as
+  // LF-only no matter what the file on disk contains — and pasting LF-only text
+  // into a Windows console reorders it. Reproduced on Windows Terminal 1.24 with
+  // pwsh 7.6 / PSReadLine 2.4: a three-line block pasted as line 3, 2, 1, while
+  // the identical text normalised to CRLF pasted in the correct order. Notepad
+  // took either form correctly, so the clipboard content was never the problem —
+  // only its line endings.
+  function toCrlf(s){ return s.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n'); }
+
+  // Fallback for when navigator.clipboard is unavailable. These reports are
+  // built to be saved and emailed, so they are usually opened over file://,
+  // where the async clipboard API is not guaranteed to exist.
+  function legacyCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
   document.querySelectorAll('.code .copy').forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
       // Copy the RAW command from data-cmd. The rendered lines carry a
       // non-selectable "PS>" prompt that must never reach the clipboard.
       var box = btn.closest('.code');
-      var code = box ? (box.getAttribute('data-cmd') || '') : '';
-      if (navigator.clipboard) navigator.clipboard.writeText(code);
-      btn.classList.add('done');
-      var t = btn.textContent; btn.textContent = '✓ Copied';
-      setTimeout(function(){ btn.textContent = t; btn.classList.remove('done'); }, 1400);
+      var code = toCrlf(box ? (box.getAttribute('data-cmd') || '') : '');
+      var label = btn.textContent;
+
+      // Report the real outcome. Announcing success unconditionally makes a
+      // failed copy indistinguishable from a good one, and the operator then
+      // pastes whatever the clipboard held before.
+      function settle(ok){
+        btn.classList.add(ok ? 'done' : 'failed');
+        btn.textContent = ok ? '✓ Copied' : '⚠ Copy failed — select the text';
+        setTimeout(function(){
+          btn.textContent = label;
+          btn.classList.remove('done', 'failed');
+        }, ok ? 1400 : 2600);
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(
+          function(){ settle(true); },
+          function(){ settle(legacyCopy(code)); }
+        );
+      } else {
+        settle(legacyCopy(code));
+      }
     });
   });
 
