@@ -59,6 +59,10 @@ $RECYCLE.BIN/
 # file, so a future brand token (e.g. brand/palette.json) can't silently fall
 # back into the *.json ignore above.
 !brand/*.json
+# tools/fixtures/ is the tracked input the published sample reports are built
+# from — without it docs/report.html and docs/exec-report.html have no
+# reproducible source, which is how they drifted to a stale version once already.
+!tools/fixtures/*.json
 # docs/ is the published marketing site (GitHub Pages) — commit all of its HTML
 !docs/index.html
 !docs/report.html
