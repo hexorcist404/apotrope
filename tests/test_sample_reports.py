@@ -32,13 +32,17 @@ sanitized scan rather than a snapshot of an old release:
 
 from __future__ import annotations
 
+import importlib
+import pkgutil
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
 
 import apotrope
+from apotrope import checks as checks_pkg
 from apotrope import cis_map
 from apotrope.compare import load_baseline
 from apotrope.models import Status
@@ -65,9 +69,38 @@ DOCS = ROOT / "docs"
 REGENERATE = "python tools/generate_sample_reports.py"
 
 
-def _squash(text: str) -> str:
-    """Collapse whitespace runs so reflowed source literals still compare equal."""
-    return re.sub(r"\s+", " ", text).strip()
+# A resolved source literal keeps ``{placeholder}`` wherever the value is only
+# known at scan time, so a rendered field is compared against the literal with
+# each placeholder standing for any run of text. Everything else must match
+# exactly: whitespace is not collapsed, because a newline in PowerShell
+# terminates a comment and separates statements, and folding it into a space
+# would let two commands that behave differently compare equal.
+#
+# re.escape turns "{x}" into "\{x\}", so the character class must exclude the
+# backslash as well as the brace — "[^}]*" swallows it and never matches.
+_ESCAPED_PLACEHOLDER = re.compile(r"\\\{[^\\}]*\\\}")
+
+
+@lru_cache(maxsize=1)
+def _category_to_module() -> dict[str, str]:
+    """Map each check category to the single module that emits it."""
+    mapping: dict[str, str] = {}
+    for info in pkgutil.iter_modules(checks_pkg.__path__):
+        if info.name.startswith("_"):
+            continue
+        module = importlib.import_module(f"apotrope.checks.{info.name}")
+        category = getattr(module, "CATEGORY", None)
+        if category:
+            mapping[category] = f"{info.name}.py"
+    return mapping
+
+
+def _emits(literal: str, rendered: str) -> bool:
+    """Whether a source literal can produce this rendered value."""
+    if literal == rendered:
+        return True
+    pattern = _ESCAPED_PLACEHOLDER.sub(".+?", re.escape(literal))
+    return re.fullmatch(pattern, rendered, re.S) is not None
 
 # Anchors are deliberately narrow. All three files also contain CIS benchmark
 # strings ("v5.0.0", "v4.0.0"), so a loose r"v\d+\.\d+\.\d+" sweep captures those
@@ -194,29 +227,40 @@ def test_fixture_commands_pass_the_shipped_lint() -> None:
     )
 
 
-def test_fixture_commands_are_still_shipped_by_the_check_modules() -> None:
-    """Every sample command must be one the modules emit today, verbatim.
+@pytest.mark.parametrize("field", command_audit.RESULT_TEXT_FIELDS)
+def test_fixture_text_fields_are_what_the_owning_module_emits(field: str) -> None:
+    """Every code-owned text field must be producible by the check that owns it.
 
-    Catches drift no lint rule models — a reworded comment, a dropped guard —
-    by requiring membership in the real inventory rather than mere plausibility.
-    Runtime values are substituted back out: ``BitLocker — G:`` renders the
-    ``{mount}`` command with its own mount point.
+    Covers all three of ``description``, ``remediation`` and ``command`` — the
+    module docstring calls them source-owned, so leaving any of them unchecked
+    lets the fixture drift again while this file still passes. The Audit Policy
+    remediation drifted exactly that way.
+
+    Scoped to the owning module, not a global pool: categories map 1:1 to check
+    modules, so a valid AutoPlay command sitting in the NetBIOS row is a
+    mismatch here rather than an accidental pass. Matching is exact apart from
+    ``{placeholder}`` spans, so a dropped ``Test-Path`` guard or a reworded
+    comment fails — no whitespace is collapsed.
     """
-    shipped = {_squash(c.text) for c in command_audit.collect_commands()}
+    index = command_audit.collect_result_fields()
+    cat2mod = _category_to_module()
+    report = load_baseline(str(FIXTURE))
 
     stale: list[str] = []
-    for cmd in _fixture_commands():
-        candidates = {_squash(cmd.text)}
-        # Per-row mount, taken from the check name (e.g. "BitLocker — G:").
-        mount = cmd.module.rsplit("—", 1)[-1].strip()
-        if re.fullmatch(r"[A-Z]:", mount):
-            candidates.add(_squash(cmd.text.replace(mount, "{mount}")))
-        if not candidates & shipped:
-            stale.append(cmd.module)
+    checked = 0
+    for r in report.results:
+        rendered = getattr(r, field)
+        if not rendered:
+            continue
+        checked += 1
+        literals = index[cat2mod[r.category]][field]
+        if not any(_emits(lit, rendered) for lit in literals):
+            stale.append(r.check_name)
 
+    assert checked, f"no fixture row carries a {field} — the audit is covering nothing"
     assert not stale, (
-        f"these sample commands are no longer what the check modules emit: {stale}. "
-        "Refresh them from source, then regenerate: " + REGENERATE
+        f"these sample rows carry a {field} the owning check module no longer "
+        f"emits: {stale}. Refresh from source, then regenerate: {REGENERATE}"
     )
 
 

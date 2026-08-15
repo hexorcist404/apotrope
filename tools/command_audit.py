@@ -186,6 +186,55 @@ def collect_commands() -> list[Command]:
     return commands
 
 
+#: ``CheckResult`` text fields the check modules own outright. A published
+#: sample must carry what the source emits for these; ``status``/``details`` are
+#: the scanned machine's and have no source-side answer.
+RESULT_TEXT_FIELDS = ("description", "remediation", "command")
+
+#: Positional slots on ``CheckResult(category, check_name, status, severity,
+#: description, details, ...)`` for fields also passable positionally.
+_POSITIONAL_FIELDS = {4: "description"}
+
+
+def collect_result_fields() -> dict[str, dict[str, set[str]]]:
+    """Return ``{module filename: {field: {resolved literals}}}`` for the text fields.
+
+    Same resolution as :func:`collect_commands`, widened to every field in
+    :data:`RESULT_TEXT_FIELDS` and indexed by owning module so a caller can ask
+    "does *this* check's module emit this string?" rather than searching a
+    global pool, where a valid AutoPlay command would satisfy a NetBIOS row.
+
+    Runtime interpolations stay as ``{name}`` placeholders, so a caller
+    comparing a rendered value must let each placeholder match any run of text.
+    """
+    index: dict[str, dict[str, set[str]]] = {}
+    for path in sorted(CHECKS_DIR.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        consts = _collect_constants(tree)
+        bucket = index.setdefault(path.name, {f: set() for f in RESULT_TEXT_FIELDS})
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "CheckResult":
+                for idx, field in _POSITIONAL_FIELDS.items():
+                    if len(node.args) > idx:
+                        bucket[field].update(
+                            t for t in _resolve_branches(node.args[idx], consts) if t
+                        )
+                for kw in node.keywords:
+                    if kw.arg in RESULT_TEXT_FIELDS:
+                        bucket[kw.arg].update(
+                            t for t in _resolve_branches(kw.value, consts) if t
+                        )
+            elif isinstance(node, ast.Assign):
+                # Checks that build the text in a local before passing it on.
+                for tgt in node.targets:
+                    if isinstance(tgt, ast.Name) and tgt.id in RESULT_TEXT_FIELDS:
+                        bucket[tgt.id].update(
+                            t for t in _resolve_branches(node.value, consts) if t
+                        )
+    return index
+
+
 # --------------------------------------------------------------------------- #
 # Lint rules
 # --------------------------------------------------------------------------- #

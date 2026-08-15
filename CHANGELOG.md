@@ -86,23 +86,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   already fixed.** `tools/fixtures/sample_report.json` was recovered by parsing
   the v0.1.12 `docs/report.html`, so it arrived carrying that release's
   remediation — faithfully, and wrongly. Three commands had moved on in the
-  source and were republished under a v0.2.0 banner: the BitLocker block created
-  a recovery password the operator can never read back (the same defect this
-  release fixed in the scanner, above), the AutoPlay write lacked the
-  registry-key guard that stops it destroying neighbouring policies, and the
-  NetBIOS call discarded the WMI `ReturnValue` that is its only failure signal.
-  All three now come from the check modules verbatim, as does the Audit Policy
-  wording.
+  source and were republished under a v0.2.0 banner:
 
-  The regeneration gate that landed with the fixture could not catch this: it
-  asserts the committed HTML is what the fixture renders, and both sides were
-  equally stale. The fixture holds two kinds of field — machine-owned
-  (`status`, `details`, `score`, timestamps), frozen at the sample scan, and
-  code-owned (`description`, `remediation`, `command`, `cis_reference`), which
-  must track the source. `tests/test_sample_reports.py` now runs the shipped
-  remediation lint over the fixture, requires every sample command to be one the
-  modules still emit, and pins `cis_reference` to `cis_map`. Verified against the
-  previous fixture: all three commands are rejected.
+  - The **BitLocker** block created a recovery-password protector without ever
+    displaying the 48-digit password, so an operator could paste it, see a
+    success-looking table, and keep no copy — leaving nothing to hand the
+    recovery prompt after a later TPM change. (The same defect the 0.2.0 entry
+    below records fixing in the scanner.)
+  - The **AutoPlay** write was a bare `Set-ItemProperty`, which fails outright
+    when the `Policies\Explorer` key does not exist. The source now creates the
+    key first, behind a `Test-Path` guard so the create cannot clobber
+    neighbouring values.
+  - The **NetBIOS** call discarded the WMI `ReturnValue`, which is that call's
+    only failure signal — including its distinct "succeeded, reboot required"
+    result.
+
+  The Audit Policy remediation wording had drifted too. All four now come from
+  the check modules verbatim.
+
+  The fixture holds two kinds of field: machine-owned (`status`, `details`,
+  `score`, timestamps), frozen at the sample scan, and code-owned
+  (`description`, `remediation`, `command`, `cis_reference`), which must track
+  the source. The regeneration guard only compared the rendered reports against
+  the fixture, so a stale value on either side went unnoticed. The sample's
+  commands are now linted by the same rules the check modules are held to, every
+  code-owned field must be one its owning module still emits, and
+  `cis_reference` is pinned to `cis_map`.
 
 ---
 
