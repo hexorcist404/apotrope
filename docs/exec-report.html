@@ -362,7 +362,7 @@ hr.rule { border: none; border-top: 1px solid var(--rule); margin: 14pt 0; }
       
       <div class="rm-item">
         <div class="rm-title"><span class="cat">Hardening</span>Audit Policy</div>
-        <div class="rm-action">Enable audit logging for the key subcategories that currently have auditing disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</div>
+        <div class="rm-action">Enable audit logging for the subcategories confirmed disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</div>
         <div class="rm-meta"><span class="sev med">MEDIUM</span><span class="cis-ref">CIS 17.1.1</span></div>
       </div>
       
@@ -453,11 +453,11 @@ hr.rule { border: none; border-top: 1px solid var(--rule); margin: 14pt 0; }
         <span class="fname">Audit Policy</span>
       </div>
       <div class="finding-grid">
-        <div class="fblock"><div class="fk">Finding</div><p class="fdetails">The following subcategories have auditing disabled: Sensitive Privilege Use. Security-relevant events may not be recorded.</p></div>
+        <div class="fblock"><div class="fk">Finding</div><p class="fdetails">Not all expected audit subcategories are confirmed logging: Sensitive Privilege Use. Security-relevant events may not be recorded.</p></div>
         <div class="fblock"><div class="fk">Business impact</div><p>Convenience features left enabled give attackers well-known shortcuts to run code or gather information on this machine.</p></div>
       </div>
       
-      <div class="fblock full action"><div class="fk">Recommended action</div><p>Enable audit logging for the key subcategories that currently have auditing disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</p></div>
+      <div class="fblock full action"><div class="fk">Recommended action</div><p>Enable audit logging for the subcategories confirmed disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</p></div>
       
     </div>
     
@@ -645,22 +645,22 @@ hr.rule { border: none; border-top: 1px solid var(--rule); margin: 14pt 0; }
     
     <div class="cmd">
       <div class="cmd-h"><span class="num">03</span><span class="t">BitLocker — G:</span><span class="c">Encryption · P2</span></div>
-      <pre><div class="cmt"># BitLocker requires Windows Pro/Enterprise/Education (absent on Home).</div><div>if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {</div><div>    Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest</div><div>    if (&#39;G:&#39; -eq $env:SystemDrive) { Add-BitLockerKeyProtector -MountPoint &#39;G:&#39; -TpmProtector } else { Enable-BitLockerAutoUnlock -MountPoint &#39;G:&#39; }</div><div>} else {</div><div>    Write-Warning &#39;BitLocker is unavailable on this Windows edition.&#39;</div><div>}</div></pre>
+      <pre><div class="cmt"># BitLocker requires Windows Pro/Enterprise/Education (absent on Home).</div><div>if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {</div><div>    Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest</div><div>    if (&#39;G:&#39; -eq $env:SystemDrive) { Add-BitLockerKeyProtector -MountPoint &#39;G:&#39; -TpmProtector } else { Enable-BitLockerAutoUnlock -MountPoint &#39;G:&#39; }</div><div> </div><div class="cmt">    # SAVE THIS BEFORE YOU REBOOT. The recovery password is the only</div><div class="cmt">    # way back in once the key stops being released automatically. The</div><div class="cmt">    # cmdlets above return a volume object whose default table shows the</div><div class="cmt">    # protector TYPES but not the password, and it cannot be read back</div><div class="cmt">    # from the recovery prompt itself.</div><div>    $rp = (Get-BitLockerVolume -MountPoint &#39;G:&#39;).KeyProtector | Where-Object KeyProtectorType -eq &#39;RecoveryPassword&#39;</div><div>    $rp | Format-List KeyProtectorId, RecoveryPassword</div><div class="cmt">    # Domain- or Entra-joined? Escrow it centrally as well:</div><div class="cmt">    # Backup-BitLockerKeyProtector -MountPoint &#39;G:&#39; -KeyProtectorId $rp.KeyProtectorId</div><div class="cmt">    # BackupToAAD-BitLockerKeyProtector -MountPoint &#39;G:&#39; -KeyProtectorId $rp.KeyProtectorId</div><div>} else {</div><div>    Write-Warning &#39;BitLocker is unavailable on this Windows edition.&#39;</div><div>}</div></pre>
     </div>
     
     <div class="cmd">
       <div class="cmd-h"><span class="num">04</span><span class="t">Audit Policy</span><span class="c">Hardening · P2</span></div>
-      <pre><div>auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable</div></pre>
+      <pre><div>auditpol /set /subcategory:&#39;Sensitive Privilege Use&#39; /success:enable /failure:enable</div></pre>
     </div>
     
     <div class="cmd">
       <div class="cmd-h"><span class="num">05</span><span class="t">AutoPlay Disabled</span><span class="c">Hardening · P2</span></div>
-      <pre><div>Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force</div></pre>
+      <pre><div>reg.exe add &#34;HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#34; /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f</div><div>if ($LASTEXITCODE -ne 0) { throw &#34;reg.exe add failed ($LASTEXITCODE)&#34; }</div></pre>
     </div>
     
     <div class="cmd">
       <div class="cmd-h"><span class="num">06</span><span class="t">NetBIOS over TCP/IP</span><span class="c">Network · P3</span></div>
-      <pre><div>Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 } | Out-Null }</div></pre>
+      <pre><div>Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object {</div><div>    $r = Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }</div><div>    switch ($r.ReturnValue) {</div><div>        0 { &#34;$($_.Description): NetBIOS disabled&#34; }</div><div>        1 { Write-Warning &#34;$($_.Description): disabled, REBOOT REQUIRED&#34; }</div><div>        default { Write-Warning &#34;$($_.Description): failed, ReturnValue=$($r.ReturnValue)&#34; }</div><div>    }</div><div>}</div></pre>
     </div>
     
     

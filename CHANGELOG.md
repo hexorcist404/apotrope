@@ -82,6 +82,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `[System.Environment]::OSVersion.Version` remain allowed — Constrained
   Language blocks the call, not the type.
 
+- **The published sample reports no longer advertise remediation the source has
+  already fixed.** `tools/fixtures/sample_report.json` was recovered by parsing
+  the v0.1.12 `docs/report.html`, so it arrived carrying that release's
+  remediation — faithfully, and wrongly. Three commands had moved on in the
+  source and were republished under a v0.2.0 banner: the BitLocker block created
+  a recovery password without ever displaying or saving it (the same defect this
+  release fixed in the scanner, above) — retrievable while Windows still boots,
+  but not at the recovery screen, which is the one place it is needed — the
+  AutoPlay write was a bare
+  `Set-ItemProperty` that fails outright when the `Policies\Explorer` key does
+  not exist, and the NetBIOS call discarded the WMI `ReturnValue` that is its
+  only failure signal.
+  All three now come from the check modules verbatim, as does the Audit Policy
+  wording.
+
+  The regeneration gate that landed with the fixture could not catch this: it
+  asserts the committed HTML is what the fixture renders, and both sides were
+  equally stale. What the fixture owns splits by origin rather than neatly by
+  field: machine-owned (`status`, `score`, timestamps, and the observations
+  carried inside `details`) is frozen at the sample scan, while code-owned
+  (`description`, `remediation`, `command`, `cis_reference`, and the prose that
+  wraps those observations in `details`) should say what the source says.
+
+  `tests/test_sample_reports.py` enforces a deliberately narrower slice of that:
+  every fixture command passes the shipped remediation lint; every non-Audit
+  command must appear in the command inventory, compared with whitespace
+  normalized against a statically extracted inventory; the Audit Policy row is
+  pinned on its own, its command against the module's template and its details
+  as an exact pin on the subcategory this persona reports, because a membership
+  check accepts the hardcoded `Logon` command the sample carried; and
+  `cis_reference` is pinned to `cis_map`. Verified against the previous fixture:
+  all three commands are rejected.
+
+  `description`, `remediation` and the general `details` prose are **not**
+  checked against source, and some remain v0.1.12-era — Guest Account omits the
+  `('Guest', RID-501)` the module now names, and Pending Windows Updates says
+  "were found; the system is up to date" where the module says "No pending
+  Windows Updates found." Left as follow-up: the published commands, which is
+  what an operator copies, are correct.
+
 ---
 
 ## [0.2.0] - 2026-07-27
