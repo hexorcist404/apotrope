@@ -82,6 +82,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `[System.Environment]::OSVersion.Version` remain allowed — Constrained
   Language blocks the call, not the type.
 
+- **The published sample reports no longer advertise remediation the source has
+  already fixed.** `tools/fixtures/sample_report.json` was recovered by parsing
+  the v0.1.12 `docs/report.html`, so it arrived carrying that release's
+  remediation — faithfully, and wrongly. Three commands had moved on in the
+  source and were republished under a v0.2.0 banner: the BitLocker block created
+  a recovery password the operator can never read back (the same defect this
+  release fixed in the scanner, above), the AutoPlay write lacked the
+  registry-key guard that stops it destroying neighbouring policies, and the
+  NetBIOS call discarded the WMI `ReturnValue` that is its only failure signal.
+  All three now come from the check modules verbatim, as does the Audit Policy
+  wording.
+
+  The regeneration gate that landed with the fixture could not catch this: it
+  asserts the committed HTML is what the fixture renders, and both sides were
+  equally stale. The fixture holds two kinds of field — machine-owned
+  (`status`, `details`, `score`, timestamps), frozen at the sample scan, and
+  code-owned (`description`, `remediation`, `command`, `cis_reference`), which
+  must track the source. `tests/test_sample_reports.py` now runs the shipped
+  remediation lint over the fixture, requires every sample command to be one the
+  modules still emit, and pins `cis_reference` to `cis_map`. Verified against the
+  previous fixture: all three commands are rejected.
+
 ---
 
 ## [0.2.0] - 2026-07-27

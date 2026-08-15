@@ -6,13 +6,28 @@ when the package version moved they could not be regenerated and sat advertising
 v0.1.12 two releases later. ``tools/fixtures/sample_report.json`` is now their
 source and ``tools/generate_sample_reports.py`` renders them.
 
-Two failure modes are guarded here:
+Three failure modes are guarded here:
 
 * **Branding drift** — a committed asset naming a version the package no longer
   is. Covers ``docs/index.html`` too, whose demo terminal and JSON-LD carry the
   same version by hand.
 * **Source drift** — the committed assets no longer being what the fixture
   renders, which would put the reproducible path back where it started.
+* **Content drift** — the fixture publishing remediation the check modules no
+  longer emit. The fixture was recovered from the v0.1.12 report, so it arrived
+  carrying that release's commands: a BitLocker block that creates a recovery
+  password the operator can never read back, an AutoPlay write with no
+  registry-key guard, and a WMI call that discards its ``ReturnValue``. All
+  three had been fixed in the source by then and all three were published under
+  a v0.2.0 banner.
+
+The fixture holds two kinds of field, and the distinction is what makes it a
+sanitized scan rather than a snapshot of an old release:
+
+* **machine-owned** — ``status``, ``details``, ``hostname``, ``score``,
+  timestamps. Frozen at the sample machine; the source has nothing to say.
+* **code-owned** — ``description``, ``remediation``, ``command``,
+  ``cis_reference``. Must equal what the modules emit today.
 """
 
 from __future__ import annotations
@@ -24,6 +39,7 @@ from pathlib import Path
 import pytest
 
 import apotrope
+from apotrope import cis_map
 from apotrope.compare import load_baseline
 from apotrope.models import Status
 from apotrope.scoring import calculate_score
@@ -32,6 +48,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 # Imported in-process, not spawned: conftest's autouse guard patches
 # subprocess.run process-wide, so shelling out to the generator would raise.
+import command_audit
+
 from generate_sample_reports import (
     EXECUTIVE_NAME,
     EXPECTED_COUNTS,
@@ -45,6 +63,11 @@ from generate_sample_reports import (
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 REGENERATE = "python tools/generate_sample_reports.py"
+
+
+def _squash(text: str) -> str:
+    """Collapse whitespace runs so reflowed source literals still compare equal."""
+    return re.sub(r"\s+", " ", text).strip()
 
 # Anchors are deliberately narrow. All three files also contain CIS benchmark
 # strings ("v5.0.0", "v4.0.0"), so a loose r"v\d+\.\d+\.\d+" sweep captures those
@@ -143,3 +166,66 @@ def test_fixture_severity_placeholders_are_confined_to_unrendered_rows() -> None
         r.severity for r in report.results if r.status in (Status.FAIL, Status.WARN)
     }
     assert len(rendered) > 1, "FAIL/WARN severities look overwritten, not recovered"
+
+
+def _fixture_commands() -> list[command_audit.Command]:
+    """Fixture rows carrying a command, shaped for the shipped lint."""
+    report = load_baseline(str(FIXTURE))
+    return [
+        command_audit.Command(module=r.check_name, line=0, text=r.command)
+        for r in report.results
+        if r.command
+    ]
+
+
+def test_fixture_commands_pass_the_shipped_lint() -> None:
+    """The sample's commands must clear the same lint the check modules do.
+
+    ``tests/test_remediation_commands.py`` runs this over the source inventory.
+    Running it over the fixture as well is what stops the published sample
+    advertising a command the source has already fixed — which is exactly how a
+    BitLocker block with no recovery-password readback reached apotrope.sh under
+    a v0.2.0 banner.
+    """
+    violations = command_audit.lint_commands(_fixture_commands())
+    assert violations == [], (
+        "the published sample carries remediation the lint rejects:\n"
+        + "\n".join(f"  {v.module}: {v.rule}" for v in violations)
+    )
+
+
+def test_fixture_commands_are_still_shipped_by_the_check_modules() -> None:
+    """Every sample command must be one the modules emit today, verbatim.
+
+    Catches drift no lint rule models — a reworded comment, a dropped guard —
+    by requiring membership in the real inventory rather than mere plausibility.
+    Runtime values are substituted back out: ``BitLocker — G:`` renders the
+    ``{mount}`` command with its own mount point.
+    """
+    shipped = {_squash(c.text) for c in command_audit.collect_commands()}
+
+    stale: list[str] = []
+    for cmd in _fixture_commands():
+        candidates = {_squash(cmd.text)}
+        # Per-row mount, taken from the check name (e.g. "BitLocker — G:").
+        mount = cmd.module.rsplit("—", 1)[-1].strip()
+        if re.fullmatch(r"[A-Z]:", mount):
+            candidates.add(_squash(cmd.text.replace(mount, "{mount}")))
+        if not candidates & shipped:
+            stale.append(cmd.module)
+
+    assert not stale, (
+        f"these sample commands are no longer what the check modules emit: {stale}. "
+        "Refresh them from source, then regenerate: " + REGENERATE
+    )
+
+
+def test_fixture_cis_references_match_the_benchmark_map() -> None:
+    """``cis_reference`` is code-owned too — it comes from cis_map, not the scan."""
+    report = load_baseline(str(FIXTURE))
+    wrong = [
+        (r.check_name, r.cis_reference, cis_map.lookup(r.check_name))
+        for r in report.results
+        if r.cis_reference != cis_map.lookup(r.check_name)
+    ]
+    assert not wrong, f"fixture CIS references disagree with cis_map: {wrong}"

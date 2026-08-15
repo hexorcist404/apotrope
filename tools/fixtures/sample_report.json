@@ -181,7 +181,7 @@
       "description": "Checks BitLocker encryption status for drive G:.",
       "details": "Drive: G: | Type: 1 | Status: Unknown | Encrypted: 0% | Protection: Off",
       "remediation": "Encrypt drive G: with BitLocker using the TPM protector.",
-      "command": "# BitLocker requires Windows Pro/Enterprise/Education (absent on Home).\nif (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {\n    Enable-BitLocker -MountPoint 'G:' -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest\n    if ('G:' -eq $env:SystemDrive) { Add-BitLockerKeyProtector -MountPoint 'G:' -TpmProtector } else { Enable-BitLockerAutoUnlock -MountPoint 'G:' }\n} else {\n    Write-Warning 'BitLocker is unavailable on this Windows edition.'\n}",
+      "command": "# BitLocker requires Windows Pro/Enterprise/Education (absent on Home).\nif (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {\n    Enable-BitLocker -MountPoint 'G:' -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest\n    if ('G:' -eq $env:SystemDrive) { Add-BitLockerKeyProtector -MountPoint 'G:' -TpmProtector } else { Enable-BitLockerAutoUnlock -MountPoint 'G:' }\n\n    # SAVE THIS BEFORE YOU REBOOT. The recovery password is the only\n    # way back in once the key stops being released automatically. The\n    # cmdlets above return a volume object whose default table shows the\n    # protector TYPES but not the password, and it cannot be read back\n    # from the recovery prompt itself.\n    $rp = (Get-BitLockerVolume -MountPoint 'G:').KeyProtector | Where-Object KeyProtectorType -eq 'RecoveryPassword'\n    $rp | Format-List KeyProtectorId, RecoveryPassword\n    # Domain- or Entra-joined? Escrow it centrally as well:\n    # Backup-BitLockerKeyProtector -MountPoint 'G:' -KeyProtectorId $rp.KeyProtectorId\n    # BackupToAAD-BitLockerKeyProtector -MountPoint 'G:' -KeyProtectorId $rp.KeyProtectorId\n} else {\n    Write-Warning 'BitLocker is unavailable on this Windows edition.'\n}",
       "check_duration": 0.0,
       "cis_reference": "CIS 18.10.10"
     },
@@ -313,7 +313,7 @@
       "description": "Checks whether AutoPlay is disabled for all drive types.",
       "details": "AutoPlay is partially disabled (NoDriveTypeAutoRun = 158). Some drive types may still trigger AutoPlay.",
       "remediation": "Disable AutoPlay for all drive types so the remaining drive types can no longer auto-execute content.",
-      "command": "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force",
+      "command": "if (-not (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer')) { New-Item -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Force | Out-Null }\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force",
       "check_duration": 0.0,
       "cis_reference": "CIS 18.10.8.3"
     },
@@ -324,7 +324,7 @@
       "severity": "MEDIUM",
       "description": "Checks that key audit policy subcategories log Success/Failure events.",
       "details": "The following subcategories have auditing disabled: Sensitive Privilege Use. Security-relevant events may not be recorded.",
-      "remediation": "Enable audit logging for the key subcategories that currently have auditing disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).",
+      "remediation": "Enable audit logging for the listed subcategories so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).",
       "command": "auditpol /set /subcategory:'Logon' /success:enable /failure:enable",
       "check_duration": 0.0,
       "cis_reference": "CIS 17.1.1"
@@ -373,7 +373,7 @@
       "description": "Checks whether NetBIOS over TCP/IP is disabled on all network adapters.",
       "details": "2 adapter(s) inherit NetBIOS setting from DHCP. If the DHCP server does not explicitly disable NetBIOS, it may be active.",
       "remediation": "Explicitly disable NetBIOS on all adapters rather than relying on DHCP.",
-      "command": "Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 } | Out-Null }",
+      "command": "Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' | ForEach-Object {\n    $r = Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }\n    switch ($r.ReturnValue) {\n        0 { \"$($_.Description): NetBIOS disabled\" }\n        1 { Write-Warning \"$($_.Description): disabled, REBOOT REQUIRED\" }\n        default { Write-Warning \"$($_.Description): failed, ReturnValue=$($r.ReturnValue)\" }\n    }\n}",
       "check_duration": 0.0,
       "cis_reference": ""
     },
