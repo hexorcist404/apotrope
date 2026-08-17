@@ -166,29 +166,54 @@ class TestDestructiveRuleCoversMoreThanReboots:
             ], safe
 
 
-class TestUnguardedNewItemForceRule:
+class TestRegistryNewItemForceRule:
     """`New-Item -Force` on the registry provider REPLACES the key.
 
     It deletes every value and subkey underneath. On a shared policy container
     that means destroying unrelated policy the operator never asked to touch.
+
+    A `Test-Path` guard used to clear this rule. It no longer does: the test and
+    the create are two operations, so a key created in the window between them
+    is still replaced, losing exactly the values the guard existed to protect.
     """
 
     _REG = r"$key = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Foo'" + "\n"
 
     def test_unguarded_registry_new_item_is_flagged(self) -> None:
         planted = [Command("fake.py", 1, self._REG + "New-Item -Path $key -Force | Out-Null")]
-        assert [v for v in lint_commands(planted) if v.rule == "unguarded-new-item-force"]
+        assert [v for v in lint_commands(planted) if v.rule == "registry-new-item-force"]
 
-    def test_test_path_guard_clears_it(self) -> None:
+    def test_test_path_guard_no_longer_clears_it(self) -> None:
+        # The racy form the rule used to prescribe.
         planted = [Command(
             "fake.py", 1,
             self._REG + "if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }",
         )]
-        assert not [v for v in lint_commands(planted) if v.rule == "unguarded-new-item-force"]
+        assert [v for v in lint_commands(planted) if v.rule == "registry-new-item-force"]
+
+    def test_backtick_continuation_does_not_hide_force(self) -> None:
+        # A trailing backtick continues the statement onto the next physical
+        # line. A per-line rule that stops at the newline never sees the -Force.
+        planted = [Command(
+            "fake.py", 1,
+            self._REG + "New-Item -Path $key `\n  -Force | Out-Null",
+        )]
+        assert [v for v in lint_commands(planted) if v.rule == "registry-new-item-force"]
+
+    def test_reg_exe_add_is_accepted(self) -> None:
+        # The prescribed remedy: writes the value, creates missing parents,
+        # touches nothing else, and runs under Constrained Language Mode.
+        planted = [Command(
+            "fake.py", 1,
+            'reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Foo" '
+            "/v Enabled /t REG_DWORD /d 1 /f\n"
+            'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }',
+        )]
+        assert not lint_commands(planted)
 
     def test_commented_new_item_is_not_flagged(self) -> None:
         planted = [Command("fake.py", 1, self._REG + "# New-Item -Path $key -Force")]
-        assert not [v for v in lint_commands(planted) if v.rule == "unguarded-new-item-force"]
+        assert not [v for v in lint_commands(planted) if v.rule == "registry-new-item-force"]
 
     def test_filesystem_new_item_is_not_flagged(self) -> None:
         # On the filesystem provider -Force creates parents; that is the
@@ -196,14 +221,48 @@ class TestUnguardedNewItemForceRule:
         planted = [Command(
             "fake.py", 1, r'New-Item -Path "$env:TEMP\apotrope" -ItemType Directory -Force',
         )]
-        assert not [v for v in lint_commands(planted) if v.rule == "unguarded-new-item-force"]
+        assert not [v for v in lint_commands(planted) if v.rule == "registry-new-item-force"]
 
-    def test_every_shipped_registry_create_is_guarded(self) -> None:
-        # The real inventory, not a planted case: this is what would have caught
-        # the AutoPlay block before it shipped.
+    def test_no_shipped_command_creates_a_registry_key_with_new_item(self) -> None:
+        # The real inventory, not a planted case.
         violations = [
             v for v in lint_commands(collect_commands())
-            if v.rule == "unguarded-new-item-force"
+            if v.rule == "registry-new-item-force"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
+class TestConstrainedLanguageRule:
+    """Constrained Language Mode refuses .NET method invocation.
+
+    Apotrope scores a machine in Constrained Language as a hardened PASS, so a
+    remediation needing full language fails on exactly the hosts it praised.
+    Static property reads remain legal — the distinction is the call, not the
+    type: even `[Math]::Floor(1.5)` is refused, while
+    `[System.Environment]::OSVersion.Version` is fine.
+    """
+
+    def test_method_call_is_flagged(self) -> None:
+        planted = [Command(
+            "fake.py", 1,
+            r"[void][Microsoft.Win32.Registry]::LocalMachine.CreateSubKey('SOFTWARE\Foo')",
+        )]
+        assert [v for v in lint_commands(planted)
+                if v.rule == "constrained-language-method-call"]
+
+    def test_static_property_read_is_not_flagged(self) -> None:
+        planted = [Command("fake.py", 1, "$v = [System.Environment]::OSVersion.Version")]
+        assert not [v for v in lint_commands(planted)
+                    if v.rule == "constrained-language-method-call"]
+
+    def test_commented_method_call_is_not_flagged(self) -> None:
+        planted = [Command("fake.py", 1, "# [System.IO.File]::ReadAllText('x')")]
+        assert not lint_commands(planted)
+
+    def test_no_shipped_command_invokes_a_dotnet_method(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "constrained-language-method-call"
         ]
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
 

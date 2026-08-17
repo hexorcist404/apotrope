@@ -5,6 +5,68 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **The Audit Policy remediation now names the subcategories that are actually
+  disabled.** It emitted the literal `auditpol /set /subcategory:'Logon'`
+  regardless of the finding, while the finding itself listed whatever was
+  missing. On a host where only `Sensitive Privilege Use` had auditing off, the
+  operator pasted an elevated command that succeeded and changed nothing
+  relevant — then saw the same WARN on the next scan. It now emits one enable
+  line per confirmed-disabled subcategory, sorted so the command is stable
+  between scans.
+
+  Subcategories that `auditpol` never reported get no command at all. They were
+  not observed disabled — usually the name came back localized and this check
+  could not match it — and enabling auditing the operator never asked for is a
+  change they did not consent to. Those are called out for manual verification
+  instead, in wording kept distinct from the confirmed-disabled case.
+
+- **Registry policy values are written with `reg.exe`, not `New-Item -Force`.**
+  Four remediation commands — AutoPlay, LLMNR, script-block logging and module
+  logging — created their policy key first, across five create operations. On
+  the registry provider `-Force` *replaces* a key, deleting every value and
+  subkey under it, and `...\Policies\Explorer` is shared with
+  `NoRecentDocsHistory`, `NoActiveDesktop` and friends. Each create was wrapped
+  in `if (-not (Test-Path $key))`, which is not a fix: the test and the create
+  are two operations, so a key created in between by a Group Policy refresh, an
+  installer or another admin is replaced anyway. Measured on a live key — a
+  `-Force` create over a key holding a value drops that value.
+
+  Each command now makes a single `reg.exe add ... /v <Name> /t <type> /d <data> /f`
+  write. That creates any missing parents, touches only the named value, and
+  removes the create-then-set window entirely. `reg.exe` reports failure through
+  the exit code rather than a PowerShell error, so every write is followed by an
+  explicit `$LASTEXITCODE` check — without it a denied write is indistinguishable
+  from a successful one.
+
+  Two other forms were tried and rejected, both by measurement rather than
+  argument. Dropping `-Force` from `New-Item` cannot create a key whose parents
+  are missing, and a policy key is absent precisely when its parents are too.
+  `[Microsoft.Win32.Registry]::...CreateSubKey()` is refused by PowerShell
+  **Constrained Language Mode** — which Apotrope scores as a hardened PASS, so
+  it would have failed on exactly the machines the tool praises.
+
+  `tests/test_registry_create.py` runs each shipped command against a throwaway
+  `HKCU` key and asserts it creates missing parents, leaves an unrelated value,
+  the default value and a child subkey intact, runs under Constrained Language,
+  and surfaces a genuine failure. It also keeps the counter-example proving
+  `-Force` really does destroy neighbouring state.
+
+  Two lint rules changed. `unguarded-new-item-force` prescribed the racy
+  `Test-Path` form as its remedy; it is now `registry-new-item-force`, rejects
+  registry `New-Item -Force` outright, points at `reg.exe`, and no longer misses
+  a `-Force` carried onto the next line by a backtick continuation. A new
+  `constrained-language-method-call` rule rejects .NET method invocation in
+  remediation, so a command that cannot run on a hardened host fails the build
+  instead of shipping. Static property reads such as
+  `[System.Environment]::OSVersion.Version` remain allowed — Constrained
+  Language blocks the call, not the type.
+
+---
+
 ## [0.2.0] - 2026-07-27
 
 ### Security

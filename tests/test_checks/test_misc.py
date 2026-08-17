@@ -168,6 +168,83 @@ class TestCheckAuditPolicy:
             r = misc._check_audit_policy()[0]
         assert r.status == Status.ERROR
 
+    # -- the command must remediate the finding it reports -------------------
+    #
+    # It used to be the literal `auditpol /set /subcategory:'Logon' ...` no
+    # matter which subcategory was disabled, so a host missing only 'Sensitive
+    # Privilege Use' got a command that ran cleanly and fixed nothing.
+
+    def _all_auditing_except(self, disabled=(), omitted=()):
+        return [
+            self._entry(name, "No Auditing" if name in disabled else "Success and Failure")
+            for name in misc._EXPECTED_AUDIT
+            if name not in omitted
+        ]
+
+    def test_command_names_the_disabled_subcategory(self):
+        r = self._run(self._all_auditing_except(disabled=["Sensitive Privilege Use"]))[0]
+        assert "Sensitive Privilege Use" in r.command
+        assert "Logon" not in r.command, "the old hardcoded subcategory is back"
+        assert r.command.count("auditpol") == 1
+
+    def test_subcategory_names_are_quoted_as_one_argument(self):
+        # Every auditpol subcategory name contains spaces. Unquoted,
+        # `/subcategory:Sensitive Privilege Use` parses fine as PowerShell and
+        # reaches auditpol as three arguments, so verify_commands.py's parser
+        # cannot catch this — only an assertion on the exact text can.
+        r = self._run(self._all_auditing_except(disabled=["Sensitive Privilege Use"]))[0]
+        assert (
+            "/subcategory:'Sensitive Privilege Use'" in r.command
+        ), f"subcategory not quoted as a single argument: {r.command!r}"
+
+    def test_command_covers_every_disabled_subcategory_in_order(self):
+        disabled = ["Sensitive Privilege Use", "Logoff"]
+        r = self._run(self._all_auditing_except(disabled=disabled))[0]
+
+        lines = r.command.splitlines()
+        assert len(lines) == 2, f"expected one line per disabled subcategory, got {lines}"
+        # Sorted, so the emitted command is stable across scans.
+        assert lines == sorted(lines)
+        for name in disabled:
+            assert sum(f"'{name}'" in ln for ln in lines) == 1, f"{name} missing or duplicated"
+
+    def test_unreported_subcategories_get_no_command(self):
+        # auditpol never reported it — usually a localized name this check could
+        # not match. Enabling auditing the operator never asked for is a change
+        # they did not consent to, so this is verification guidance, not a fix.
+        r = self._run(self._all_auditing_except(omitted=["Logon"]))[0]
+        assert r.status == Status.WARN
+        assert r.command == ""
+        assert "verify" in r.remediation.lower()
+
+    def test_mixed_targets_only_the_confirmed_disabled(self):
+        r = self._run(self._all_auditing_except(
+            disabled=["Sensitive Privilege Use"], omitted=["Logon"],
+        ))[0]
+        assert "Sensitive Privilege Use" in r.command
+        assert "Logon" not in r.command
+        assert "Logon" in r.details and "not reported" in r.details
+        assert "Logon" in r.remediation
+
+    def test_pass_branch_still_emits_nothing(self):
+        r = self._run([self._entry(name) for name in misc._EXPECTED_AUDIT])[0]
+        assert r.command == "" and r.remediation == ""
+
+    def test_emitted_command_clears_the_shipped_lint(self):
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+        import command_audit
+
+        r = self._run(self._all_auditing_except(
+            disabled=["Sensitive Privilege Use", "Credential Validation"],
+        ))[0]
+        violations = command_audit.lint_commands(
+            [command_audit.Command(module="misc.py", line=0, text=r.command)]
+        )
+        assert violations == [], violations
+
 
 # ---------------------------------------------------------------------------
 # _check_screen_lock
@@ -288,33 +365,58 @@ class TestScreenLockPayloadShapes:
 
 
 class TestMiscFixes:
-    def test_autoplay_command_creates_key(self):
-        # Set-ItemProperty -Force does not create a missing key; the command must
-        # New-Item it first (the NOTSET finding fires when the key is absent).
+    def test_autoplay_command_writes_the_value(self):
+        # `Set-ItemProperty` cannot create a missing key, and the NOTSET finding
+        # fires exactly when the key is absent. reg.exe writes the value and
+        # creates the parents in one step.
         with patch("apotrope.checks.misc.run_powershell", return_value="NOTSET"):
             r = misc._check_autoplay()[0]
-        assert "New-Item" in r.command
 
-    def test_autoplay_new_item_is_guarded_by_test_path(self):
-        # `New-Item -Force` on the registry provider REPLACES an existing key,
-        # deleting the unrelated Explorer policies that share it. Assert the
-        # guard wraps the New-Item rather than merely appearing somewhere in the
-        # block — an unguarded create on a later line would still be destructive.
+        assert "reg.exe add" in r.command
+        assert "/v NoDriveTypeAutoRun" in r.command
+        assert "/t REG_DWORD" in r.command and "/d 255" in r.command
+
+    def test_autoplay_uses_no_form_that_destroys_or_cannot_run(self):
+        # Three forms are ruled out, each measured: New-Item -Force replaces the
+        # key and deletes the unrelated Explorer policies sharing it (a Test-Path
+        # guard does not fix that, since the test and the create are separate);
+        # New-Item without -Force cannot create the missing parents; and a .NET
+        # method call is refused under Constrained Language Mode, which Apotrope
+        # scores as a hardened PASS.
         with patch("apotrope.checks.misc.run_powershell", return_value="NOTSET"):
             r = misc._check_autoplay()[0]
-        guard = r.command.splitlines()[0]
-        assert guard.startswith("if (-not (Test-Path ")
-        assert "New-Item" in guard
-        assert "New-Item" not in "\n".join(r.command.splitlines()[1:])
 
-    def test_autoplay_remediation_guarded_on_every_branch(self):
+        assert "New-Item" not in r.command
+        assert "]::" not in r.command, "a .NET call cannot run under Constrained Language"
+
+    def test_autoplay_command_targets_the_reg_exe_hive_form(self):
+        # reg.exe takes "HKLM\..." — the "HKLM:\..." provider form would be read
+        # as a key literally named "HKLM:".
+        with patch("apotrope.checks.misc.run_powershell", return_value="NOTSET"):
+            r = misc._check_autoplay()[0]
+
+        add = next(ln for ln in r.command.splitlines() if "reg.exe add" in ln)
+        assert "HKLM:" not in add, f"provider-form path passed to reg.exe: {add}"
+        assert f'"HKLM\\{misc._AUTOPLAY_SUBKEY}"' in add
+
+    def test_autoplay_checks_the_exit_code(self):
+        # reg.exe reports failure through the exit code, not a PowerShell error,
+        # so without this a denied write looks exactly like a successful one.
+        with patch("apotrope.checks.misc.run_powershell", return_value="NOTSET"):
+            r = misc._check_autoplay()[0]
+
+        assert "$LASTEXITCODE" in r.command and "throw" in r.command
+
+    def test_autoplay_remediation_is_safe_on_every_branch(self):
         # 158 -> "partially disabled" WARN; 0 and an unparseable value -> the
         # AutoPlay-enabled branch. Both read a value back, so the key provably
-        # exists — precisely the case an unguarded New-Item -Force would wipe.
+        # exists — precisely the case a -Force create would wipe.
         for output in ("158", "0", "notanint"):
             with patch("apotrope.checks.misc.run_powershell", return_value=output):
                 r = misc._check_autoplay()[0]
-            assert "Test-Path" in r.command, f"unguarded New-Item for output {output!r}"
+            assert "reg.exe add" in r.command, f"no write for output {output!r}"
+            assert "New-Item" not in r.command, f"New-Item returned for output {output!r}"
+            assert "]::" not in r.command, f"a .NET call returned for output {output!r}"
 
     def test_machine_inactivity_policy_is_pass(self):
         # A machine-wide inactivity lock counts even without a per-user screensaver.
