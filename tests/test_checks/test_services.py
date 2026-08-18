@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unittest.mock import patch
 
 
@@ -148,3 +149,30 @@ class TestRun:
         with patch("apotrope.checks.services.run_powershell_json", return_value=[]):
             results = services.run()
         assert all(r.category == "Services" for r in results)
+
+class TestRiskyServiceAssignment:
+    """The emitted CheckResult must carry the RiskyService fields it names.
+
+    tests/test_remediation_commands.py compares the lint inventory against
+    _RISKY directly, so it cannot see the assignment in between: swapping
+    `command=risky.command` for `command=risky.remediation` would leave both
+    the inventory and that test unchanged.
+    """
+
+    def _run_with(self, service: str):
+        running = [{"Name": service, "DisplayName": service, "Status": "Running"}]
+        with patch("apotrope.checks.services.run_powershell_json", return_value=running):
+            return services._check_risky_services()
+
+    @pytest.mark.parametrize("service", sorted(services._RISKY))
+    def test_fields_reach_the_result_unswapped(self, service: str) -> None:
+        result = next(
+            r for r in self._run_with(service) if r.check_name.endswith(service)
+        )
+        expected = services._RISKY[service]
+
+        assert result.command == expected.command
+        assert result.remediation == expected.remediation
+        assert result.details == expected.details
+        assert result.status == expected.status
+        assert result.severity == expected.severity

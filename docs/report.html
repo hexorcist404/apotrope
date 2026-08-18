@@ -1492,8 +1492,8 @@ if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
         
         
         
-        <div class="frow is-warn" data-status="WARN" data-text="autoplay disabled hardening autoplay is partially disabled (nodrivetypeautorun = 158). some drive types may still trigger autoplay. cis 18.10.8.3 if (-not (test-path &#39;hklm:\software\microsoft\windows\currentversion\policies\explorer&#39;)) { new-item -path &#39;hklm:\software\microsoft\windows\currentversion\policies\explorer&#39; -force | out-null }
-set-itemproperty -path &#39;hklm:\software\microsoft\windows\currentversion\policies\explorer&#39; -name nodrivetypeautorun -value 255 -type dword -force">
+        <div class="frow is-warn" data-status="WARN" data-text="autoplay disabled hardening autoplay is partially disabled (nodrivetypeautorun = 158). some drive types may still trigger autoplay. cis 18.10.8.3 reg.exe add &#34;hklm\software\microsoft\windows\currentversion\policies\explorer&#34; /v nodrivetypeautorun /t reg_dword /d 255 /f
+if ($lastexitcode -ne 0) { throw &#34;reg.exe add failed ($lastexitcode)&#34; }">
           <button class="fhead is-open">
             <span class="spill spill-warn">WARN</span>
             <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
@@ -1514,13 +1514,13 @@ set-itemproperty -path &#39;hklm:\software\microsoft\windows\currentversion\poli
               <div class="rem">
                 <div class="rem-note">Disable AutoPlay for all drive types so the remaining drive types can no longer auto-execute content.</div>
                 
-                <div class="code" data-cmd="if (-not (Test-Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39;)) { New-Item -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Force | Out-Null }
-Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force">
+                <div class="code" data-cmd="reg.exe add &#34;HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#34; /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f
+if ($LASTEXITCODE -ne 0) { throw &#34;reg.exe add failed ($LASTEXITCODE)&#34; }">
                   <div class="code-bar">
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>if (-not (Test-Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39;)) { New-Item -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Force | Out-Null }</div><div class="cl-x"><span class="ps">PS&gt;</span>Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force</div></pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>reg.exe add &#34;HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#34; /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f</div><div class="cl-x"><span class="ps">PS&gt;</span>if ($LASTEXITCODE -ne 0) { throw &#34;reg.exe add failed ($LASTEXITCODE)&#34; }</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1531,7 +1531,7 @@ Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Poli
         </div>
         
         
-        <div class="frow is-warn" data-status="WARN" data-text="audit policy hardening the following subcategories have auditing disabled: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;logon&#39; /success:enable /failure:enable">
+        <div class="frow is-warn" data-status="WARN" data-text="audit policy hardening the following subcategories have auditing disabled: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;sensitive privilege use&#39; /success:enable /failure:enable">
           <button class="fhead is-open">
             <span class="spill spill-warn">WARN</span>
             <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
@@ -1550,14 +1550,14 @@ Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Poli
             
             <div class="fld"><span class="k">Remediation</span>
               <div class="rem">
-                <div class="rem-note">Enable audit logging for the listed subcategories so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</div>
+                <div class="rem-note">Enable audit logging for the subcategories confirmed disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</div>
                 
-                <div class="code" data-cmd="auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable">
+                <div class="code" data-cmd="auditpol /set /subcategory:&#39;Sensitive Privilege Use&#39; /success:enable /failure:enable">
                   <div class="code-bar">
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable</div></pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>auditpol /set /subcategory:&#39;Sensitive Privilege Use&#39; /success:enable /failure:enable</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 

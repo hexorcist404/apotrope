@@ -82,6 +82,45 @@ def _collect_constants(tree: ast.Module) -> dict[str, str]:
     return consts
 
 
+_FOLD_OPS = {
+    ast.Add: lambda a, b: a + b,
+    ast.Sub: lambda a, b: a - b,
+    ast.Mult: lambda a, b: a * b,
+    ast.FloorDiv: lambda a, b: a // b,
+    ast.Div: lambda a, b: a / b,
+}
+
+
+def _fold(node: ast.AST, consts: dict[str, str]) -> str | None:
+    """Evaluate a numeric expression over literals and known constants.
+
+    `f"...within {_LOCK_WARN_SECS // 60} minutes."` is fully determined at
+    source-read time, but rendering it as a `{expr}` placeholder turns the
+    threshold into a wildcard that accepts any number. Deliberately not eval:
+    only these five operators over numbers this module already resolved.
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return str(node.value)
+    if isinstance(node, ast.Name):
+        raw = consts.get(node.id)
+        if raw is not None:
+            try:
+                return str(int(raw))
+            except ValueError:
+                return None
+        return None
+    if isinstance(node, ast.BinOp) and type(node.op) in _FOLD_OPS:
+        left = _fold(node.left, consts)
+        right = _fold(node.right, consts)
+        if left is None or right is None:
+            return None
+        try:
+            return str(_FOLD_OPS[type(node.op)](int(left), int(right)))
+        except (ValueError, ZeroDivisionError):
+            return None
+    return None
+
+
 def _placeholder(node: ast.AST, consts: dict[str, str]) -> str:
     """Render a non-literal sub-expression as a ``{name}`` placeholder (or its const value)."""
     if isinstance(node, ast.Name):
@@ -92,6 +131,9 @@ def _placeholder(node: ast.AST, consts: dict[str, str]) -> str:
         return "{" + node.attr + "}"
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
         return "{" + node.func.attr + "}"
+    folded = _fold(node, consts)
+    if folded is not None:
+        return folded
     return "{expr}"
 
 
@@ -186,53 +228,269 @@ def collect_commands() -> list[Command]:
     return commands
 
 
-#: ``CheckResult`` text fields the check modules own outright. A published
-#: sample must carry what the source emits for these; ``status``/``details`` are
-#: the scanned machine's and have no source-side answer.
+# --------------------------------------------------------------------------- #
+# Result templates — per-call, branch-correlated
+# --------------------------------------------------------------------------- #
+
+#: Text fields the check modules own outright. A published sample must carry
+#: what the source emits for these; `status`/`details` belong to the scanned
+#: machine and have no source-side answer.
 RESULT_TEXT_FIELDS = ("description", "remediation", "command")
 
-#: Positional slots on ``CheckResult(category, check_name, status, severity,
-#: description, details, ...)`` for fields also passable positionally.
-_POSITIONAL_FIELDS = {4: "description"}
+#: Calls that construct a finding. RiskyService feeds CheckResult verbatim, so
+#: its fields are owned the same way.
+_RESULT_CALLS = ("CheckResult", "RiskyService")
+
+#: Positional slots on CheckResult(category, check_name, status, severity,
+#: description, details, ...).
+_POSITIONAL = {1: "check_name", 2: "status", 4: "description"}
+
+#: Ceiling on branch enumeration per call. Four independent conditions is
+#: already more than anything here, and without a cap a future call with a dozen
+#: of them would expand to thousands of variants.
+_MAX_CONDITIONS = 4
 
 
-def collect_result_fields() -> dict[str, dict[str, set[str]]]:
-    """Return ``{module filename: {field: {resolved literals}}}`` for the text fields.
+@dataclass(frozen=True)
+class ResultTemplate:
+    """One resolvable outcome of a single CheckResult/RiskyService call.
 
-    Same resolution as :func:`collect_commands`, widened to every field in
-    :data:`RESULT_TEXT_FIELDS` and indexed by owning module so a caller can ask
-    "does *this* check's module emit this string?" rather than searching a
-    global pool, where a valid AutoPlay command would satisfy a NetBIOS row.
-
-    Runtime interpolations stay as ``{name}`` placeholders, so a caller
-    comparing a rendered value must let each placeholder match any run of text.
+    A call with `status=X if cond else Y` yields two templates, not one record
+    holding both statuses — otherwise the pairing between a status and the
+    remediation that accompanies it is lost, and a PASS row carrying a FAIL's
+    remediation would validate.
     """
-    index: dict[str, dict[str, set[str]]] = {}
+
+    module: str
+    line: int
+    check_name: str | None
+    status: str | None
+    description: str | None
+    remediation: str | None
+    command: str | None
+    unresolved: frozenset[str]
+
+
+def _condition_key(test: ast.expr) -> tuple[str, bool]:
+    """Normalise a condition to (key, polarity).
+
+    `not enabled` and `enabled` are the same underlying question asked with
+    opposite polarity. Keying on the raw source would treat them as independent
+    and admit the impossible combination where both are true — which is exactly
+    the pairing accounts.py depends on (`status=FAIL if enabled`,
+    `remediation="" if not enabled`).
+    """
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+        return ast.unparse(test.operand), False
+    return ast.unparse(test), True
+
+
+def _enclosing_locals(tree: ast.Module, target: ast.AST) -> dict[str, ast.expr]:
+    """Simple single-target assignments in the function enclosing *target*.
+
+    Lets `inbound_status = Status.PASS if ok else Status.WARN` followed by
+    `status=inbound_status` resolve, which is how firewall.py is written. A name
+    assigned more than once is dropped: which assignment reaches the call is not
+    decidable here, and guessing is how a guard starts validating the wrong
+    thing.
+    """
+    for func in ast.walk(tree):
+        if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not any(node is target for node in ast.walk(func)):
+            continue
+        seen: dict[str, ast.expr] = {}
+        repeated: set[str] = set()
+        for node in ast.walk(func):
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                tgt = node.targets[0]
+                if isinstance(tgt, ast.Name):
+                    if tgt.id in seen:
+                        repeated.add(tgt.id)
+                    seen[tgt.id] = node.value
+        return {k: v for k, v in seen.items() if k not in repeated}
+    return {}
+
+
+def _if_chain_branches(
+    func: ast.AST, names: set[str]
+) -> list[dict[str, ast.expr]]:
+    """Per-branch bindings for locals assigned across an if/elif/else chain.
+
+    smb.py, network.py and accounts.py all use the same shape: one chain whose
+    every arm assigns `status`, `remediation` and `command` together, then a
+    single CheckResult passing them by name. Those names are assigned more than
+    once, so they cannot be resolved by looking at assignments in isolation —
+    and resolving them independently would pair a PASS status with a FAIL's
+    remediation, which is the correlation bug this collector exists to prevent.
+
+    Each arm of the chain is one coherent outcome, so each becomes one set of
+    bindings. Returns [] when no chain assigns these names, leaving the caller
+    on its ordinary path.
+    """
+    def arm_bindings(body: list[ast.stmt]) -> dict[str, ast.expr]:
+        found: dict[str, ast.expr] = {}
+        for stmt in body:
+            if not (isinstance(stmt, ast.Assign) and len(stmt.targets) == 1):
+                continue
+            tgt = stmt.targets[0]
+            if isinstance(tgt, ast.Name):
+                if tgt.id in names:
+                    found[tgt.id] = stmt.value
+            elif isinstance(tgt, (ast.Tuple, ast.List)):
+                # `status, severity = Status.WARN, Severity.MEDIUM` — accounts.py
+                # and network.py both set the status this way, so skipping tuple
+                # targets leaves the status unresolved and the row unverifiable.
+                value = stmt.value
+                if isinstance(value, (ast.Tuple, ast.List)) and len(value.elts) == len(tgt.elts):
+                    for name_node, val in zip(tgt.elts, value.elts, strict=True):
+                        if isinstance(name_node, ast.Name) and name_node.id in names:
+                            found[name_node.id] = val
+        return found
+
+    for node in ast.walk(func):
+        if not isinstance(node, ast.If):
+            continue
+        arms: list[dict[str, ast.expr]] = []
+        current: ast.If | None = node
+        while current is not None:
+            arms.append(arm_bindings(current.body))
+            nxt = current.orelse
+            if len(nxt) == 1 and isinstance(nxt[0], ast.If):
+                current = nxt[0]
+            else:
+                if nxt:
+                    arms.append(arm_bindings(nxt))
+                current = None
+        # Only a chain that actually assigns the names, in every arm, describes
+        # mutually exclusive outcomes. A partial chain would leave a name bound
+        # by whatever ran before it, which is not decidable here.
+        if arms and all(set(a) == names for a in arms):
+            return arms
+    return []
+
+
+def _conditions(node: ast.expr, locals_: dict[str, ast.expr]) -> list[tuple[str, bool]]:
+    """Every distinct condition governing this expression, following locals."""
+    found: list[tuple[str, bool]] = []
+
+    def walk(expr: ast.expr, depth: int = 0) -> None:
+        if depth > 8:
+            return
+        if isinstance(expr, ast.IfExp):
+            key = _condition_key(expr.test)
+            if key[0] not in {k for k, _ in found}:
+                found.append(key)
+            walk(expr.body, depth + 1)
+            walk(expr.orelse, depth + 1)
+        elif isinstance(expr, ast.Name) and expr.id in locals_:
+            walk(locals_[expr.id], depth + 1)
+        elif isinstance(expr, ast.BinOp):
+            walk(expr.left, depth + 1)
+            walk(expr.right, depth + 1)
+
+    walk(node)
+    return found
+
+
+def _pick(
+    node: ast.expr, truth: dict[str, bool], locals_: dict[str, ast.expr], depth: int = 0
+) -> ast.expr:
+    """Collapse IfExps under a fixed truth assignment, following locals."""
+    if depth > 8:
+        return node
+    if isinstance(node, ast.IfExp):
+        key, polarity = _condition_key(node.test)
+        chosen = node.body if truth.get(key, True) == polarity else node.orelse
+        return _pick(chosen, truth, locals_, depth + 1)
+    if isinstance(node, ast.Name) and node.id in locals_:
+        return _pick(locals_[node.id], truth, locals_, depth + 1)
+    return node
+
+
+def _status_of(node: ast.expr) -> str | None:
+    """`Status.WARN` -> 'WARN'."""
+    return node.attr if isinstance(node, ast.Attribute) else None
+
+
+def collect_result_templates() -> list[ResultTemplate]:
+    """Every statically resolvable outcome of every finding-constructing call."""
+    templates: list[ResultTemplate] = []
     for path in sorted(CHECKS_DIR.glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         consts = _collect_constants(tree)
-        bucket = index.setdefault(path.name, {f: set() for f in RESULT_TEXT_FIELDS})
 
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "CheckResult":
-                for idx, field in _POSITIONAL_FIELDS.items():
-                    if len(node.args) > idx:
-                        bucket[field].update(
-                            t for t in _resolve_branches(node.args[idx], consts) if t
-                        )
-                for kw in node.keywords:
-                    if kw.arg in RESULT_TEXT_FIELDS:
-                        bucket[kw.arg].update(
-                            t for t in _resolve_branches(kw.value, consts) if t
-                        )
-            elif isinstance(node, ast.Assign):
-                # Checks that build the text in a local before passing it on.
-                for tgt in node.targets:
-                    if isinstance(tgt, ast.Name) and tgt.id in RESULT_TEXT_FIELDS:
-                        bucket[tgt.id].update(
-                            t for t in _resolve_branches(node.value, consts) if t
-                        )
-    return index
+        for call in ast.walk(tree):
+            if not (isinstance(call, ast.Call) and getattr(call.func, "id", "") in _RESULT_CALLS):
+                continue
+
+            fields: dict[str, ast.expr] = {}
+            for idx, name in _POSITIONAL.items():
+                if len(call.args) > idx:
+                    fields[name] = call.args[idx]
+            for kw in call.keywords:
+                if kw.arg in ("check_name", "status", *RESULT_TEXT_FIELDS):
+                    fields[kw.arg] = kw.value
+
+            locals_ = _enclosing_locals(tree, call)
+            func = next(
+                (f for f in ast.walk(tree)
+                 if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 and any(n is call for n in ast.walk(f))),
+                None,
+            )
+            # Names the call passes through that no single assignment defines.
+            chain_names = {
+                n.id for n in fields.values()
+                if isinstance(n, ast.Name) and n.id not in locals_
+            }
+            arms = _if_chain_branches(func, chain_names) if func and chain_names else []
+
+            conds: list[tuple[str, bool]] = []
+            for expr in fields.values():
+                for key in _conditions(expr, locals_):
+                    if key[0] not in {k for k, _ in conds}:
+                        conds.append(key)
+
+            if len(conds) > _MAX_CONDITIONS:
+                # Fail closed rather than enumerate a combinatorial blow-up.
+                templates.append(ResultTemplate(
+                    path.name, call.lineno, None, None, None, None, None,
+                    frozenset(("check_name", "status", *RESULT_TEXT_FIELDS)),
+                ))
+                continue
+
+            keys = [k for k, _ in conds]
+            for arm in (arms or [{}]):
+                scope = {**locals_, **arm}
+                for bits in range(2 ** len(keys)):
+                    truth = {k: bool(bits >> i & 1) for i, k in enumerate(keys)}
+                    resolved: dict[str, str | None] = {}
+                    unresolved: set[str] = set()
+                    for name in ("check_name", "status", *RESULT_TEXT_FIELDS):
+                        field_expr = fields.get(name)
+                        if field_expr is None:
+                            resolved[name] = None
+                            continue
+                        picked = _pick(field_expr, truth, scope)
+                        if name == "status":
+                            value = _status_of(picked)
+                        else:
+                            value = _resolve(picked, consts)
+                        if value is None:
+                            unresolved.add(name)
+                        resolved[name] = value
+                    templates.append(ResultTemplate(
+                        module=path.name,
+                        line=call.lineno,
+                        check_name=resolved["check_name"],
+                        status=resolved["status"],
+                        description=resolved["description"],
+                        remediation=resolved["remediation"],
+                        command=resolved["command"],
+                        unresolved=frozenset(unresolved),
+                    ))
+    return templates
 
 
 # --------------------------------------------------------------------------- #

@@ -78,6 +78,25 @@ _EXPECTED_AUDIT = (
 # linted and PowerShell-parsed even though the emitted command is assembled
 # with a join it cannot resolve statically. Inline the format string into
 # _check_audit_policy and the command leaves the inventory entirely.
+# The three remediation wordings, kept at module level rather than inline so the
+# static resolver in tools/command_audit.py can see each branch. Inline, they are
+# assignments to a local inside an if/elif/else, which it cannot follow — and an
+# unresolvable field is one the published sample cannot be checked against.
+_FIX_AUDIT_DISABLED = (
+    "Enable audit logging for the subcategories confirmed disabled so "
+    "security-relevant events are recorded."
+)
+_FIX_AUDIT_UNREPORTED = (
+    "Verify these subcategories by hand — this scan could not read them back, "
+    "which usually means auditpol reported them under localized names rather "
+    "than that auditing is off."
+)
+_FIX_AUDIT_MIXED = (
+    "Enable audit logging for the subcategories confirmed disabled, and verify "
+    "the ones this scan could not read back ({unreported}) by hand — they may "
+    "be localized under different names."
+)
+
 _CMD_AUDITPOL_ENABLE = (
     "auditpol /set /subcategory:'{subcategory}' /success:enable /failure:enable"
 )
@@ -420,22 +439,11 @@ def _check_audit_policy() -> list[CheckResult]:
         )
 
         if no_audit and missing:
-            fix = (
-                "Enable audit logging for the subcategories confirmed disabled, and "
-                f"verify the ones this scan could not read back ({', '.join(missing)}) "
-                "by hand — they may be localized under different names."
-            )
+            fix = _FIX_AUDIT_MIXED.format(unreported=", ".join(missing))
         elif no_audit:
-            fix = (
-                "Enable audit logging for the subcategories confirmed disabled so "
-                "security-relevant events are recorded."
-            )
+            fix = _FIX_AUDIT_DISABLED
         else:
-            fix = (
-                "Verify these subcategories by hand — this scan could not read them "
-                "back, which usually means auditpol reported them under localized "
-                "names rather than that auditing is off."
-            )
+            fix = _FIX_AUDIT_UNREPORTED
 
         return [CheckResult(
             category=CATEGORY,

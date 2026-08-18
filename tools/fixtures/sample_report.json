@@ -313,7 +313,7 @@
       "description": "Checks whether AutoPlay is disabled for all drive types.",
       "details": "AutoPlay is partially disabled (NoDriveTypeAutoRun = 158). Some drive types may still trigger AutoPlay.",
       "remediation": "Disable AutoPlay for all drive types so the remaining drive types can no longer auto-execute content.",
-      "command": "if (-not (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer')) { New-Item -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Force | Out-Null }\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force",
+      "command": "reg.exe add \"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\" /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f\nif ($LASTEXITCODE -ne 0) { throw \"reg.exe add failed ($LASTEXITCODE)\" }",
       "check_duration": 0.0,
       "cis_reference": "CIS 18.10.8.3"
     },
@@ -324,8 +324,8 @@
       "severity": "MEDIUM",
       "description": "Checks that key audit policy subcategories log Success/Failure events.",
       "details": "The following subcategories have auditing disabled: Sensitive Privilege Use. Security-relevant events may not be recorded.",
-      "remediation": "Enable audit logging for the listed subcategories so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).",
-      "command": "auditpol /set /subcategory:'Logon' /success:enable /failure:enable",
+      "remediation": "Enable audit logging for the subcategories confirmed disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).",
+      "command": "auditpol /set /subcategory:'Sensitive Privilege Use' /success:enable /failure:enable",
       "check_duration": 0.0,
       "cis_reference": "CIS 17.1.1"
     },

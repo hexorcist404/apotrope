@@ -108,10 +108,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `score`, timestamps), frozen at the sample scan, and code-owned
   (`description`, `remediation`, `command`, `cis_reference`), which must track
   the source. The regeneration guard only compared the rendered reports against
-  the fixture, so a stale value on either side went unnoticed. The sample's
-  commands are now linted by the same rules the check modules are held to, every
-  code-owned field must be one its owning module still emits, and
-  `cis_reference` is pinned to `cis_map`.
+  the fixture, so a stale value on either side went unnoticed.
+
+  Every code-owned field of all 53 published rows is now checked against the
+  check module that owns it, and the check is precise about which outcome it is
+  comparing. A single `CheckResult` often produces several — `accounts.py`
+  builds one from three conditionals on the same variable, one of them inverted
+  — so the fields are resolved together under each branch rather than
+  independently. Resolved independently, a PASS row carrying a FAIL's
+  remediation validates. Runtime values are bound rather than wildcarded, so a
+  `BitLocker — G:` row whose command targets `C:` is a mismatch, and thresholds
+  computed from module constants are folded to their real value instead of
+  standing in as "any number". Fields assembled at scan time, such as the Audit
+  Policy command, are checked by a named validator against the property that
+  matters — that it enables exactly the subcategories the finding reports — and
+  never by an approved wildcard. Nothing is exempt: the requirement is zero
+  unverified fields, not a list of the ones we gave up on.
+
+  Eleven mutations of a published row are asserted to be rejected, including
+  swapping two commands inside one module, blanking a field, and a command that
+  enables a subcategory the finding did not report.
 
 ---
 
