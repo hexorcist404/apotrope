@@ -232,6 +232,52 @@ class TestRegistryNewItemForceRule:
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
 
 
+class TestRiskyServiceInventory:
+    """The risky-service commands must stay inside the inventory.
+
+    They lived in a dict of positional tuples, which the AST collector cannot
+    read: `services.py` contributed exactly one command to a 44-command
+    inventory, and it was the unquoted-ImagePath block. The four
+    Stop-Service/Set-Service commands were therefore never linted here and never
+    PowerShell-parsed by tools/verify_commands.py.
+
+    Naming the NamedTuple fields is what fixes that — `collect_commands()`
+    collects every `command=` keyword on any call. Revert those to positional
+    arguments and the commands silently vanish again, which is what these tests
+    exist to prevent.
+    """
+
+    _EXPECTED = {"RemoteRegistry", "TlntSvr", "Telnet", "SNMP"}
+
+    def test_every_risky_service_command_is_collected(self) -> None:
+        collected = [
+            c for c in collect_commands()
+            if c.module == "services.py" and "Stop-Service" in c.text
+        ]
+        named = {
+            svc for svc in self._EXPECTED
+            if any(f"'{svc}'" in c.text for c in collected)
+        }
+        assert named == self._EXPECTED, f"missing from the inventory: {self._EXPECTED - named}"
+
+    def test_collected_text_matches_what_the_check_emits(self) -> None:
+        # Not merely "a command mentioning the service" — the exact text the
+        # module ships, so a drifting copy in the inventory is a failure.
+        from apotrope.checks.services import _RISKY
+
+        inventory = {c.text for c in collect_commands() if c.module == "services.py"}
+        for svc, risky in _RISKY.items():
+            assert risky.command in inventory, f"{svc}: emitted command is not in the inventory"
+
+    def test_risky_service_commands_are_lint_clean(self) -> None:
+        from apotrope.checks.services import _RISKY
+
+        planted = [
+            Command("services.py", 0, risky.command) for risky in _RISKY.values()
+        ]
+        assert lint_commands(planted) == []
+
+
 class TestConstrainedLanguageRule:
     """Constrained Language Mode refuses .NET method invocation.
 

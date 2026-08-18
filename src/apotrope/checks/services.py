@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import NamedTuple
 
 from apotrope.exceptions import ApotropeError
 from apotrope.models import CheckResult, Severity, Status
@@ -34,39 +35,55 @@ _PS_UNQUOTED = (
     "| ConvertTo-Json -Compress"
 )
 
-# Known-risky service names → (status, severity, details, remediation, command)
-_RISKY: dict[str, tuple[Status, Severity, str, str, str]] = {
-    "RemoteRegistry": (
-        Status.WARN,
-        Severity.HIGH,
-        "Remote Registry service is running — allows remote modification of the registry.",
-        "Stop and disable the Remote Registry service.",
-        "Stop-Service -Name 'RemoteRegistry' -Force\n"
-        "Set-Service -Name 'RemoteRegistry' -StartupType Disabled",
+
+class RiskyService(NamedTuple):
+    """The finding a known-risky service produces when it is found running."""
+
+    status: Status
+    severity: Severity
+    details: str
+    remediation: str
+    command: str
+
+
+# The keyword arguments below are load-bearing, not house style.
+# tools/command_audit.py collects every `command=` keyword on any call, so
+# naming the fields is what puts these four commands into the lint inventory and
+# in front of tools/verify_commands.py's PowerShell parser. As a positional
+# tuple they were invisible to both: services.py contributed exactly one command
+# to a 44-command inventory, and it was the unquoted-ImagePath block.
+_RISKY: dict[str, RiskyService] = {
+    "RemoteRegistry": RiskyService(
+        status=Status.WARN,
+        severity=Severity.HIGH,
+        details="Remote Registry service is running — allows remote modification of the registry.",
+        remediation="Stop and disable the Remote Registry service.",
+        command="Stop-Service -Name 'RemoteRegistry' -Force\n"
+                "Set-Service -Name 'RemoteRegistry' -StartupType Disabled",
     ),
-    "TlntSvr": (
-        Status.FAIL,
-        Severity.CRITICAL,
-        "Telnet Server is running — all traffic (including credentials) is sent in cleartext.",
-        "Stop and disable the Telnet Server service immediately.",
-        "Stop-Service -Name 'TlntSvr' -Force\n"
-        "Set-Service -Name 'TlntSvr' -StartupType Disabled",
+    "TlntSvr": RiskyService(
+        status=Status.FAIL,
+        severity=Severity.CRITICAL,
+        details="Telnet Server is running — all traffic (including credentials) is sent in cleartext.",
+        remediation="Stop and disable the Telnet Server service immediately.",
+        command="Stop-Service -Name 'TlntSvr' -Force\n"
+                "Set-Service -Name 'TlntSvr' -StartupType Disabled",
     ),
-    "Telnet": (
-        Status.FAIL,
-        Severity.CRITICAL,
-        "Telnet service is running — cleartext credential exposure.",
-        "Stop and disable the Telnet service immediately.",
-        "Stop-Service -Name 'Telnet' -Force\n"
-        "Set-Service -Name 'Telnet' -StartupType Disabled",
+    "Telnet": RiskyService(
+        status=Status.FAIL,
+        severity=Severity.CRITICAL,
+        details="Telnet service is running — cleartext credential exposure.",
+        remediation="Stop and disable the Telnet service immediately.",
+        command="Stop-Service -Name 'Telnet' -Force\n"
+                "Set-Service -Name 'Telnet' -StartupType Disabled",
     ),
-    "SNMP": (
-        Status.WARN,
-        Severity.MEDIUM,
-        "SNMP service is running. SNMPv1/v2 uses weak community-string authentication.",
-        "Disable SNMP if it is not required; if it is, restrict access and use SNMPv3.",
-        "Stop-Service -Name 'SNMP' -Force\n"
-        "Set-Service -Name 'SNMP' -StartupType Disabled",
+    "SNMP": RiskyService(
+        status=Status.WARN,
+        severity=Severity.MEDIUM,
+        details="SNMP service is running. SNMPv1/v2 uses weak community-string authentication.",
+        remediation="Disable SNMP if it is not required; if it is, restrict access and use SNMPv3.",
+        command="Stop-Service -Name 'SNMP' -Force\n"
+                "Set-Service -Name 'SNMP' -StartupType Disabled",
     ),
 }
 
@@ -94,18 +111,18 @@ def _check_risky_services() -> list[CheckResult]:
     running_names = {str(s.get("Name", "")).lower(): str(s.get("Name", "")) for s in services}
 
     results: list[CheckResult] = []
-    for svc_name, (status, severity, details, remediation, command) in _RISKY.items():
+    for svc_name, risky in _RISKY.items():
         if svc_name.lower() in running_names:
             display = running_names[svc_name.lower()]
             results.append(CheckResult(
                 category=CATEGORY,
                 check_name=f"Risky Service — {display}",
-                status=status,
-                severity=severity,
+                status=risky.status,
+                severity=risky.severity,
                 description=f"Checks whether the {display} service is running.",
-                details=details,
-                remediation=remediation,
-                command=command,
+                details=risky.details,
+                remediation=risky.remediation,
+                command=risky.command,
             ))
 
     if not results:
