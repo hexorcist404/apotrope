@@ -154,6 +154,26 @@ def collect_commands() -> list[Command]:
                     if isinstance(tgt, ast.Name) and tgt.id == "command":
                         exprs.append(node.value)
 
+        # Module-level `_CMD_*` constants are inventory members in their own
+        # right, whether or not a `command=` reference resolves back to them.
+        # A check that assembles its command at runtime — Audit Policy expands
+        # one line per confirmed-disabled subcategory — would otherwise drop out
+        # of the inventory entirely and ship unlinted and unparsed. Declaring the
+        # template under this name keeps one representative form in scope.
+        # Every existing `_CMD_*` is already reachable through a `command=`
+        # reference, and collection dedupes on (module, text), so this adds no
+        # duplicates.
+        for node in tree.body:
+            target: str | None = None
+            value: ast.expr | None = None
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                if isinstance(node.targets[0], ast.Name):
+                    target, value = node.targets[0].id, node.value
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                target, value = node.target.id, node.value
+            if target is not None and value is not None and target.startswith("_CMD_"):
+                exprs.append(value)
+
         for expr in exprs:
             for text in _resolve_branches(expr, consts):
                 if not text or not text.strip():
@@ -203,12 +223,45 @@ _DESTRUCTIVE = re.compile(
 # absent and destructive for a shared policy container — ...\Policies\Explorer
 # carries NoRecentDocsHistory, NoActiveDesktop and friends alongside the value
 # being set. `Set-ItemProperty -Force` cannot create a missing key, so the
-# New-Item is legitimate; it just has to be guarded by a Test-Path.
+# New-Item is legitimate — but `-Force` on it never is.
+#
+# A `Test-Path` guard is NOT an acceptable remedy, and this rule used to accept
+# one. The test and the create are two operations: anything that creates the key
+# in the window between them — a Group Policy refresh, an installer, another
+# admin — is then replaced, losing exactly the values the guard existed to
+# protect.
+#
+# Dropping -Force is no good either: on the registry provider New-Item cannot
+# create a key whose parents are missing, and a policy key is absent precisely
+# when its parents are too. Write the value with reg.exe instead, which creates
+# the parents, touches only the named value, needs no separate create step, and
+# runs under Constrained Language Mode:
+#
+#     reg.exe add "HKLM\<path>" /v <Name> /t REG_DWORD /d <n> /f
+#     if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }
+#
+# reg.exe signals failure through the exit code, not a PowerShell error, so the
+# check is what stops a denied write looking identical to a successful one.
 #
 # Filesystem New-Item is NOT flagged — there `-Force` creates parents and
 # overwrites a file, which is the documented, expected behaviour. The registry
 # gate below keys off the hive reference in the surrounding command.
-_NEW_ITEM_FORCE = re.compile(r"\bNew-Item\b[^\n]*?-Force\b", re.IGNORECASE)
+#
+# `[^\n]` would let a backtick line continuation carry -Force onto the next
+# physical line and slip past; continuations are folded out before matching.
+_NEW_ITEM_FORCE = re.compile(r"\bNew-Item\b.*?-Force\b", re.IGNORECASE | re.DOTALL)
+
+# PowerShell Constrained Language Mode blocks .NET *method invocation* — the
+# error is MethodInvocationNotSupportedInConstrainedLanguage — while still
+# permitting static property reads, so `[System.Environment]::OSVersion.Version`
+# is fine and `[Microsoft.Win32.Registry]::LocalMachine.CreateSubKey(...)` is
+# not. Both were measured; the distinction is the call, not the type, and even
+# `[Math]::Floor(1.5)` is refused.
+#
+# This matters more here than in ordinary code: Apotrope scores a machine in
+# Constrained Language as a hardened PASS, so remediation that needs full
+# language fails on exactly the hosts the tool has just praised.
+_CLM_METHOD_CALL = re.compile(r"\[[\w.]+\]::[\w.]*\w+\s*\(")
 
 # A BitLocker recovery password the operator never sees is worse than no
 # encryption advice at all. Enable-BitLocker / Add-BitLockerKeyProtector return a
@@ -284,7 +337,6 @@ _SURFACES_RECOVERY_PASSWORD = re.compile(
     r"|\bmanage-bde\b[^\n]*-protectors\b",
     re.IGNORECASE,
 )
-_TEST_PATH_GUARD = re.compile(r"^\s*if\s*\(\s*-not\s*\(\s*Test-Path\b", re.IGNORECASE)
 _REGISTRY_HIVE = re.compile(r"\b(?:HKLM|HKCU|HKCR|HKU|HKCC)\s*:|Registry::|\bHKEY_", re.IGNORECASE)
 # -DisplayGroup selects an EXISTING firewall rule by its resolved MUI string
 # ('Remote Desktop' is @FirewallAPI.dll,-28752 rendered in the display
@@ -309,6 +361,18 @@ _UNRESOLVED_EXPR = re.compile(r"\{expr\}")
 
 def _uncommented_lines(text: str) -> list[str]:
     return [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
+
+
+# A trailing backtick continues a PowerShell statement onto the next physical
+# line, so `New-Item -Path $k `\n  -Force` is one command wearing two lines.
+# Per-line rules must see the joined statement or a continuation hides the
+# argument they exist to find.
+_CONTINUATION = re.compile(r"`[ \t]*\r?\n[ \t]*")
+
+
+def _logical_lines(text: str) -> list[str]:
+    """Uncommented lines with backtick continuations folded into one line each."""
+    return _uncommented_lines(_CONTINUATION.sub(" ", text))
 
 
 def lint_commands(commands: list[Command]) -> list[Violation]:
@@ -389,6 +453,19 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 "after a step that shows the current membership and `whoami`",
                 text,
             ))
+        for line in _logical_lines(text):
+            if _CLM_METHOD_CALL.search(line):
+                violations.append(Violation(
+                    cmd.module, cmd.line, "constrained-language-method-call",
+                    "invokes a .NET method, which PowerShell Constrained Language Mode "
+                    "refuses (MethodInvocationNotSupportedInConstrainedLanguage). "
+                    "Apotrope scores a machine in Constrained Language as a hardened "
+                    "PASS, so this fails on exactly the hosts it has just praised. Use "
+                    "a cmdlet or a native tool such as reg.exe. Static property reads "
+                    "like [System.Environment]::OSVersion.Version are still fine",
+                    text,
+                ))
+                break
         if _REGISTRY_HIVE.search(active):
             for line in _uncommented_lines(text):
                 if _SILENCED_REGISTRY_MUTATION.search(line):
@@ -401,13 +478,17 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                         text,
                     ))
                     break
-            for line in _uncommented_lines(text):
-                if _NEW_ITEM_FORCE.search(line) and not _TEST_PATH_GUARD.match(line):
+            for line in _logical_lines(text):
+                if _NEW_ITEM_FORCE.search(line):
                     violations.append(Violation(
-                        cmd.module, cmd.line, "unguarded-new-item-force",
+                        cmd.module, cmd.line, "registry-new-item-force",
                         "New-Item -Force on a registry key REPLACES it, deleting every "
-                        "value and subkey under it. Guard the create with "
-                        "`if (-not (Test-Path <key>)) { New-Item ... }`",
+                        "value and subkey under it. A Test-Path guard does not fix this "
+                        "— the test and the create are two operations, and a key created "
+                        "in between is still replaced — and dropping -Force cannot "
+                        "create missing parents. Write the value with reg.exe instead: "
+                        '`reg.exe add \"HKLM\\<path>\" /v <Name> /t REG_DWORD /d <n> /f` '
+                        'followed by `if ($LASTEXITCODE -ne 0) { throw ... }`',
                         text,
                     ))
                     break

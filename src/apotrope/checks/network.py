@@ -237,9 +237,14 @@ def _check_llmnr() -> list[CheckResult]:
             ),
             remediation="Disable LLMNR to block Responder-style name-resolution poisoning.",
             command=(
-                "$key = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient'\n"
-                "if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }\n"
-                "Set-ItemProperty -Path $key -Name 'EnableMulticast' -Value 0"
+                # reg.exe writes the value and creates the missing parents in one
+                # step. New-Item -Force would replace the key and delete its
+                # values; without -Force it cannot create the parents; and a
+                # [Registry]::...CreateSubKey() call is blocked under Constrained
+                # Language Mode. See misc.py for the full comparison.
+                'reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient" '
+                "/v EnableMulticast /t REG_DWORD /d 0 /f\n"
+                'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }'
             ),
         )]
 

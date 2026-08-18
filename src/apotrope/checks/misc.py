@@ -16,30 +16,51 @@ CATEGORY = "Hardening"
 # PowerShell snippets
 # ---------------------------------------------------------------------------
 
-_AUTOPLAY_KEY = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer"
+_AUTOPLAY_SUBKEY = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer"
+_AUTOPLAY_KEY = "HKLM:\\" + _AUTOPLAY_SUBKEY
 _PS_AUTOPLAY = (
     f"$v = (Get-ItemProperty -LiteralPath '{_AUTOPLAY_KEY}' "
     "-ErrorAction SilentlyContinue).NoDriveTypeAutoRun; "
     "if ($null -eq $v) { 'NOTSET' } else { [string]$v }"
 )
-# Create the policy key first: Set-ItemProperty -Force does NOT create a missing
-# key, and the NOTSET finding fires precisely when that key is absent.
-# `Set-ItemProperty -Force` cannot create a missing key, so the NOTSET branch
-# genuinely needs a New-Item — but on the *registry* provider `New-Item -Force`
-# REPLACES an existing key, deleting every value and subkey under it. This key is
-# shared with unrelated Explorer policies (NoRecentDocsHistory, NoActiveDesktop,
-# ForceActiveDesktopOn, ...), and the two other branches that emit this command
-# are only reachable when a value was read back, i.e. when the key already
-# exists. Unguarded, the paste would destroy those neighbouring policies.
+# Create the policy key first: `Set-ItemProperty -Force` cannot create a missing
+# key, and the NOTSET finding fires precisely when that key is absent — so the
+# NOTSET branch genuinely needs a New-Item.
+#
+# `reg.exe add` writes the value and creates whatever parents are missing, in
+# one operation. Four things ruled out the alternatives, each measured rather
+# than reasoned about:
+#
+#   New-Item -Force            on the registry provider REPLACES the key,
+#                              deleting every value and subkey under it. This
+#                              key is shared with unrelated Explorer policies
+#                              (NoRecentDocsHistory, NoActiveDesktop, ...).
+#   ... behind a Test-Path     still replaces: the test and the create are two
+#                              operations, and a key created in between by a
+#                              GPO refresh or an installer is destroyed anyway.
+#   New-Item without -Force    cannot create a key whose parents are missing —
+#                              and a policy key is absent exactly when its
+#                              parents are too.
+#   [Registry]::...CreateSubKey  blocked by PowerShell Constrained Language
+#                              Mode, which Apotrope itself scores as a hardened
+#                              PASS. It would fail on the machines we praise.
+#
+# reg.exe is a native executable, so Constrained Language permits it; it creates
+# the full path; and writing the value directly leaves no create/set window.
+# Verified against a live key: an unrelated value, the default value and a child
+# subkey all survive a repeat `reg add`.
+#
+# reg.exe reports failure through the exit code, not a PowerShell error, so the
+# check below is the only thing standing between a denied write and a clean
+# prompt.
 #
 # Kept as one module-level string so tools/command_audit.py still resolves it
 # statically; a wrapper it cannot resolve collapses the command to "{expr}" and
 # drops it from the lint inventory.
 _CMD_AUTOPLAY_DISABLE = (
-    f"if (-not (Test-Path '{_AUTOPLAY_KEY}')) "
-    f"{{ New-Item -Path '{_AUTOPLAY_KEY}' -Force | Out-Null }}\n"
-    f"Set-ItemProperty -Path '{_AUTOPLAY_KEY}' -Name NoDriveTypeAutoRun -Value 255 "
-    "-Type DWord -Force"
+    f'reg.exe add "HKLM\\{_AUTOPLAY_SUBKEY}" /v NoDriveTypeAutoRun '
+    "/t REG_DWORD /d 255 /f\n"
+    'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }'
 )
 
 # The five security-relevant audit subcategories Apotrope requires (order fixed
@@ -47,6 +68,18 @@ _CMD_AUTOPLAY_DISABLE = (
 _EXPECTED_AUDIT = (
     "Logon", "Account Lockout", "Logoff",
     "Credential Validation", "Sensitive Privilege Use",
+)
+
+# One enable line, expanded per confirmed-disabled subcategory at scan time.
+# Subcategory names contain spaces, so each is single-quoted.
+#
+# This lives at module level under the `_CMD_` prefix on purpose:
+# tools/command_audit.py collects those constants directly, so the template is
+# linted and PowerShell-parsed even though the emitted command is assembled
+# with a join it cannot resolve statically. Inline the format string into
+# _check_audit_policy and the command leaves the inventory entirely.
+_CMD_AUDITPOL_ENABLE = (
+    "auditpol /set /subcategory:'{subcategory}' /success:enable /failure:enable"
 )
 
 # Machine-wide inactivity lock policy (applies even without a per-user screensaver).
@@ -371,6 +404,39 @@ def _check_audit_policy() -> list[CheckResult]:
 
     if no_audit or missing:
         problem = no_audit + [f"{name} (not reported)" for name in missing]
+
+        # One line per subcategory this scan actually confirmed disabled. The
+        # command previously hardcoded 'Logon' regardless of the finding, so a
+        # host missing only 'Sensitive Privilege Use' got a command that ran
+        # cleanly and remediated nothing.
+        #
+        # Only `no_audit` is enabled. A subcategory auditpol never reported was
+        # not observed disabled — it is usually a localized name this check
+        # could not match — and turning on auditing the operator never asked
+        # for is a change they did not consent to. Those are called out for
+        # manual verification instead.
+        enable = "\n".join(
+            _CMD_AUDITPOL_ENABLE.format(subcategory=name) for name in sorted(no_audit)
+        )
+
+        if no_audit and missing:
+            fix = (
+                "Enable audit logging for the subcategories confirmed disabled, and "
+                f"verify the ones this scan could not read back ({', '.join(missing)}) "
+                "by hand — they may be localized under different names."
+            )
+        elif no_audit:
+            fix = (
+                "Enable audit logging for the subcategories confirmed disabled so "
+                "security-relevant events are recorded."
+            )
+        else:
+            fix = (
+                "Verify these subcategories by hand — this scan could not read them "
+                "back, which usually means auditpol reported them under localized "
+                "names rather than that auditing is off."
+            )
+
         return [CheckResult(
             category=CATEGORY,
             check_name="Audit Policy",
@@ -382,11 +448,10 @@ def _check_audit_policy() -> list[CheckResult]:
                 f"{', '.join(problem)}. Security-relevant events may not be recorded."
             ),
             remediation=(
-                "Enable audit logging for the listed subcategories so security-relevant "
-                "events are recorded. This can also be configured via Group Policy "
+                f"{fix} This can also be configured via Group Policy "
                 "(secpol.msc → Advanced Audit Policy Configuration)."
             ),
-            command="auditpol /set /subcategory:'Logon' /success:enable /failure:enable",
+            command=enable,
         )]
 
     return [CheckResult(

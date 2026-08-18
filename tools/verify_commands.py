@@ -35,6 +35,9 @@ _PLACEHOLDERS = {
     "{mount}": "D:",
     "{name}": "SampleAdmin",
     "{count}": "3",
+    # Deliberately a name containing a space: auditpol subcategories all do, and
+    # an unquoted expansion would parse as two arguments.
+    "{subcategory}": "Sensitive Privilege Use",
 }
 
 # PowerShell that parses each command and resolves every invoked command name.

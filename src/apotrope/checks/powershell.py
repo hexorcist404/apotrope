@@ -17,14 +17,16 @@ _RISKY_POLICIES = {"unrestricted", "bypass"}
 
 _PS_EXEC_POLICY = "Get-ExecutionPolicy -Scope LocalMachine"
 
-_SBL_KEY = "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging"
+_SBL_SUBKEY = "SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging"
+_SBL_KEY = "HKLM:\\" + _SBL_SUBKEY
 _PS_SBL = (
     f"$v = (Get-ItemProperty -LiteralPath '{_SBL_KEY}' "
     "-ErrorAction SilentlyContinue).EnableScriptBlockLogging; "
     "if ($null -eq $v) { 'NOTSET' } else { [string]$v }"
 )
 
-_ML_KEY = "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging"
+_ML_SUBKEY = "SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging"
+_ML_KEY = "HKLM:\\" + _ML_SUBKEY
 _PS_ML = (
     f"$v = (Get-ItemProperty -LiteralPath '{_ML_KEY}' "
     "-ErrorAction SilentlyContinue).EnableModuleLogging; "
@@ -116,9 +118,12 @@ def _check_script_block_logging() -> list[CheckResult]:
         ),
         command=(
             "" if enabled else
-            f"$key = '{_SBL_KEY}'\n"
-            "if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }\n"
-            "Set-ItemProperty -Path $key -Name 'EnableScriptBlockLogging' -Value 1 -Type DWord"
+            # reg.exe writes the value and creates the missing parents in one
+            # step, and works under Constrained Language Mode where a
+            # [Registry]::...CreateSubKey() call does not. See misc.py.
+            f'reg.exe add "HKLM\\{_SBL_SUBKEY}" /v EnableScriptBlockLogging '
+            "/t REG_DWORD /d 1 /f\n"
+            'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }'
         ),
     )]
 
@@ -150,12 +155,15 @@ def _check_module_logging() -> list[CheckResult]:
         ),
         command=(
             "" if enabled else
-            f"$key = '{_ML_KEY}'\n"
-            "if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }\n"
-            "Set-ItemProperty -Path $key -Name 'EnableModuleLogging' -Value 1 -Type DWord\n"
-            "if (-not (Test-Path \"$key\\ModuleNames\")) "
-            "{ New-Item -Path \"$key\\ModuleNames\" -Force | Out-Null }\n"
-            "Set-ItemProperty -Path \"$key\\ModuleNames\" -Name '*' -Value '*'"
+            # Two writes: the policy flag, then the wildcard under ModuleNames
+            # that selects every module. Each is checked on its own, so a failure
+            # on the first does not leave the second reporting success. See
+            # misc.py for why this is reg.exe and not New-Item.
+            f'reg.exe add "HKLM\\{_ML_SUBKEY}" /v EnableModuleLogging '
+            "/t REG_DWORD /d 1 /f\n"
+            'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }\n'
+            f'reg.exe add "HKLM\\{_ML_SUBKEY}\\ModuleNames" /v "*" /t REG_SZ /d "*" /f\n'
+            'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }'
         ),
     )]
 
