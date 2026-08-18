@@ -9,6 +9,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Four shipped remediation commands are now covered by the lint and the
+  PowerShell parser.** `services.py` held them in a dict of positional tuples,
+  which `tools/command_audit.py` cannot read — it collects `command=` keywords,
+  not tuple positions. The effect was quiet and total: `services.py` contributed
+  exactly one command to a 44-command inventory, and it was the
+  unquoted-`ImagePath` block. The `Stop-Service` / `Set-Service` commands for
+  Remote Registry, Telnet Server, Telnet and SNMP had never been linted by
+  `tests/test_remediation_commands.py` nor parsed by `tools/verify_commands.py`.
+
+  The dict values are now a `RiskyService` `NamedTuple` built with keyword
+  arguments, which is what puts them in front of both. Naming the fields is the
+  whole mechanism — no change to the collector was needed. The inventory goes
+  44 → 48, the existing 44 are byte-identical, and all four new entries are lint
+  clean and parse on Windows.
+
+  No behaviour change: `tests/test_checks/test_services.py` passes untouched.
+
 - **The Audit Policy remediation now names the subcategories that are actually
   disabled.** It emitted the literal `auditpol /set /subcategory:'Logon'`
   regardless of the finding, while the finding itself listed whatever was
