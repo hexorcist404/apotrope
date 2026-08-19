@@ -243,7 +243,7 @@ _RESULT_CALLS = ("CheckResult", "RiskyService")
 
 #: Positional slots on CheckResult(category, check_name, status, severity,
 #: description, details, ...).
-_POSITIONAL = {1: "check_name", 2: "status", 4: "description"}
+_POSITIONAL = {1: "check_name", 2: "status", 4: "description", 5: "details"}
 
 #: Ceiling on branch enumeration per call. Four independent conditions is
 #: already more than anything here, and without a cap a future call with a dozen
@@ -265,24 +265,101 @@ class ResultTemplate:
     line: int
     check_name: str | None
     status: str | None
+    #: Not a field the sample must keep current — it belongs to the scanned
+    #: machine. It is collected because it is the only thing that says WHICH
+    #: outcome produced a row when several share a name and status: AutoPlay
+    #: has three WARN outcomes, and without this any of them would validate any
+    #: of the others' remediation.
+    details: str | None
     description: str | None
     remediation: str | None
     command: str | None
     unresolved: frozenset[str]
 
 
-def _condition_key(test: ast.expr) -> tuple[str, bool]:
-    """Normalise a condition to (key, polarity).
+def _as_enum(node: ast.expr, scope: dict[str, ast.expr], depth: int = 0) -> str | None:
+    """`Status.PASS` -> 'Status.PASS', following names bound in scope."""
+    if depth > 6:
+        return None
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+        return f"{node.value.id}.{node.attr}"
+    if isinstance(node, ast.Name) and node.id in scope:
+        return _as_enum(scope[node.id], scope, depth + 1)
+    return None
 
-    `not enabled` and `enabled` are the same underlying question asked with
-    opposite polarity. Keying on the raw source would treat them as independent
-    and admit the impossible combination where both are true — which is exactly
-    the pairing accounts.py depends on (`status=FAIL if enabled`,
-    `remediation="" if not enabled`).
+
+def _decide(test: ast.expr, scope: dict[str, ast.expr]) -> bool | None:
+    """Evaluate a condition the surrounding branch has already settled.
+
+    `remediation="" if status is Status.PASS else ...` is not a free choice once
+    an if-chain arm has bound `status` — but treated as free it doubles every
+    arm and emits a FAIL result carrying a PASS's blank remediation, which the
+    runtime cannot produce. Only identity and equality against an enum member
+    are decided here; anything else stays a genuine branch.
     """
     if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
-        return ast.unparse(test.operand), False
-    return ast.unparse(test), True
+        inner = _decide(test.operand, scope)
+        return None if inner is None else not inner
+    if not (isinstance(test, ast.Compare) and len(test.ops) == 1):
+        return None
+    left = _as_enum(test.left, scope)
+    right = _as_enum(test.comparators[0], scope)
+    if left is None or right is None:
+        return None
+    op = test.ops[0]
+    if isinstance(op, (ast.Is, ast.Eq)):
+        return left == right
+    if isinstance(op, (ast.IsNot, ast.NotEq)):
+        return left != right
+    return None
+
+
+def _atoms(test: ast.expr, scope: dict[str, ast.expr] | None = None, depth: int = 0) -> list[str]:
+    """The indivisible questions a condition asks.
+
+    `and`, `or` and `not` are decomposed so a compound condition shares its
+    atoms with the simple conditions elsewhere in the same call. Keeping
+    `too_long or not password_on_resume` whole makes it a third, independent
+    axis alongside `too_long` and `password_on_resume`, and the resulting
+    product pairs a PASS screen-lock status with the remediation that only the
+    WARN branch emits.
+    """
+    if depth > 6:
+        return [ast.unparse(test)]
+    if isinstance(test, ast.BoolOp):
+        out: list[str] = []
+        for value in test.values:
+            out.extend(_atoms(value, scope, depth + 1))
+        return out
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+        return _atoms(test.operand, scope, depth + 1)
+    # A boolean alias is not a new question. firewall.py sets
+    # `inbound_needs_fix = not inbound_ok` and keys the status off one and the
+    # remediation off the other; left unresolved they look independent, and the
+    # product pairs a PASS status with the remediation only WARN emits.
+    if scope is not None and isinstance(test, ast.Name) and test.id in scope:
+        return _atoms(scope[test.id], scope, depth + 1)
+    return [ast.unparse(test)]
+
+
+def _eval_cond(
+    test: ast.expr, truth: dict[str, bool], scope: dict[str, ast.expr]
+) -> bool | None:
+    """Evaluate a condition from settled enum comparisons and atom truth values."""
+    settled = _decide(test, scope)
+    if settled is not None:
+        return settled
+    if isinstance(test, ast.BoolOp):
+        values = [_eval_cond(v, truth, scope) for v in test.values]
+        if any(v is None for v in values):
+            return None
+        return all(values) if isinstance(test.op, ast.And) else any(values)
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+        inner = _eval_cond(test.operand, truth, scope)
+        return None if inner is None else not inner
+    if isinstance(test, ast.Name) and test.id in scope:
+        return _eval_cond(scope[test.id], truth, scope)
+    return truth.get(ast.unparse(test))
 
 
 def _enclosing_locals(tree: ast.Module, target: ast.AST) -> dict[str, ast.expr]:
@@ -378,11 +455,15 @@ def _conditions(node: ast.expr, locals_: dict[str, ast.expr]) -> list[tuple[str,
         if depth > 8:
             return
         if isinstance(expr, ast.IfExp):
-            key = _condition_key(expr.test)
-            if key[0] not in {k for k, _ in found}:
-                found.append(key)
-            walk(expr.body, depth + 1)
-            walk(expr.orelse, depth + 1)
+            settled = _decide(expr.test, locals_)
+            if settled is None:
+                for atom in _atoms(expr.test, locals_):
+                    if atom not in {k for k, _ in found}:
+                        found.append((atom, True))
+                walk(expr.body, depth + 1)
+                walk(expr.orelse, depth + 1)
+            else:
+                walk(expr.body if settled else expr.orelse, depth + 1)
         elif isinstance(expr, ast.Name) and expr.id in locals_:
             walk(locals_[expr.id], depth + 1)
         elif isinstance(expr, ast.BinOp):
@@ -400,8 +481,8 @@ def _pick(
     if depth > 8:
         return node
     if isinstance(node, ast.IfExp):
-        key, polarity = _condition_key(node.test)
-        chosen = node.body if truth.get(key, True) == polarity else node.orelse
+        value = _eval_cond(node.test, truth, locals_)
+        chosen = node.body if (value is None or value) else node.orelse
         return _pick(chosen, truth, locals_, depth + 1)
     if isinstance(node, ast.Name) and node.id in locals_:
         return _pick(locals_[node.id], truth, locals_, depth + 1)
@@ -429,7 +510,7 @@ def collect_result_templates() -> list[ResultTemplate]:
                 if len(call.args) > idx:
                     fields[name] = call.args[idx]
             for kw in call.keywords:
-                if kw.arg in ("check_name", "status", *RESULT_TEXT_FIELDS):
+                if kw.arg in ("check_name", "status", "details", *RESULT_TEXT_FIELDS):
                     fields[kw.arg] = kw.value
 
             locals_ = _enclosing_locals(tree, call)
@@ -446,28 +527,36 @@ def collect_result_templates() -> list[ResultTemplate]:
             }
             arms = _if_chain_branches(func, chain_names) if func and chain_names else []
 
-            conds: list[tuple[str, bool]] = []
-            for expr in fields.values():
-                for key in _conditions(expr, locals_):
-                    if key[0] not in {k for k, _ in conds}:
-                        conds.append(key)
-
-            if len(conds) > _MAX_CONDITIONS:
-                # Fail closed rather than enumerate a combinatorial blow-up.
-                templates.append(ResultTemplate(
-                    path.name, call.lineno, None, None, None, None, None,
-                    frozenset(("check_name", "status", *RESULT_TEXT_FIELDS)),
-                ))
-                continue
-
-            keys = [k for k, _ in conds]
             for arm in (arms or [{}]):
                 scope = {**locals_, **arm}
+
+                # Conditions are recomputed per arm, against that arm's
+                # bindings. Computing them once over the unbound fields treats
+                # the arm and the conditions inside it as independent axes and
+                # emits their Cartesian product — combinations the runtime
+                # cannot produce, such as a FAIL password-length result with a
+                # blank remediation and command. Once the arm has bound a field
+                # to a literal there is no condition left in it to enumerate.
+                conds: list[tuple[str, bool]] = []
+                for expr in fields.values():
+                    for key in _conditions(expr, scope):
+                        if key[0] not in {k for k, _ in conds}:
+                            conds.append(key)
+
+                if len(conds) > _MAX_CONDITIONS:
+                    # Fail closed rather than enumerate a combinatorial blow-up.
+                    templates.append(ResultTemplate(
+                        path.name, call.lineno, None, None, None, None, None, None,
+                        frozenset(("check_name", "status", "details", *RESULT_TEXT_FIELDS)),
+                    ))
+                    continue
+
+                keys = [k for k, _ in conds]
                 for bits in range(2 ** len(keys)):
                     truth = {k: bool(bits >> i & 1) for i, k in enumerate(keys)}
                     resolved: dict[str, str | None] = {}
                     unresolved: set[str] = set()
-                    for name in ("check_name", "status", *RESULT_TEXT_FIELDS):
+                    for name in ("check_name", "status", "details", *RESULT_TEXT_FIELDS):
                         field_expr = fields.get(name)
                         if field_expr is None:
                             resolved[name] = None
@@ -485,6 +574,7 @@ def collect_result_templates() -> list[ResultTemplate]:
                         line=call.lineno,
                         check_name=resolved["check_name"],
                         status=resolved["status"],
+                        details=resolved["details"],
                         description=resolved["description"],
                         remediation=resolved["remediation"],
                         command=resolved["command"],
@@ -568,6 +658,15 @@ _NEW_ITEM_FORCE = re.compile(r"\bNew-Item\b.*?-Force\b", re.IGNORECASE | re.DOTA
 # This matters more here than in ordinary code: Apotrope scores a machine in
 # Constrained Language as a hardened PASS, so remediation that needs full
 # language fails on exactly the hosts the tool has just praised.
+# Remediation exists to increase coverage. An auditpol line that turns success
+# or failure auditing off reduces it, which is the opposite of the finding it
+# claims to fix — and it reads almost identically to the enabling form, so a
+# copy-edit slip produces a command that looks right and silences the log.
+_AUDITPOL_DISABLES = re.compile(
+    r"\bauditpol\b[^\n]*/(?:success|failure):disable\b", re.IGNORECASE
+)
+
+
 _CLM_METHOD_CALL = re.compile(r"\[[\w.]+\]::[\w.]*\w+\s*\(")
 
 # A BitLocker recovery password the operator never sees is worse than no
@@ -760,6 +859,16 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 "after a step that shows the current membership and `whoami`",
                 text,
             ))
+        for line in _logical_lines(text):
+            if _AUDITPOL_DISABLES.search(line):
+                violations.append(Violation(
+                    cmd.module, cmd.line, "auditpol-disables-auditing",
+                    "turns auditing off. Remediation for an audit-policy finding must "
+                    "enable the subcategory it reports, not silence it — /success:enable "
+                    "/failure:enable",
+                    text,
+                ))
+                break
         for line in _logical_lines(text):
             if _CLM_METHOD_CALL.search(line):
                 violations.append(Violation(

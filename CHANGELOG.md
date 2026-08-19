@@ -94,9 +94,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     recovery prompt after a later TPM change. (The same defect the 0.2.0 entry
     below records fixing in the scanner.)
   - The **AutoPlay** write was a bare `Set-ItemProperty`, which fails outright
-    when the `Policies\Explorer` key does not exist. The source now creates the
-    key first, behind a `Test-Path` guard so the create cannot clobber
-    neighbouring values.
+    when the `Policies\Explorer` key does not exist. The source now writes the
+    value with `reg.exe add`, which creates any missing parents and touches
+    nothing else — see the entry above for why the `Test-Path`-guarded create
+    it used in between was not safe either.
   - The **NetBIOS** call discarded the WMI `ReturnValue`, which is that call's
     only failure signal — including its distinct "succeeded, reboot required"
     result.

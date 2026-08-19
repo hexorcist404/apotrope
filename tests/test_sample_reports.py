@@ -116,22 +116,32 @@ def _match(literal: str | None, rendered: str, bound: dict[str, str] | None = No
 # name.
 
 def _validate_audit_policy_command(row) -> str | None:
-    """The command must enable exactly the subcategories details reports disabled.
+    """Every line must be the shipped template, and together they must cover
+    exactly the subcategories details reports disabled.
 
-    This is the invariant the hardcoded `subcategory:'Logon'` violated: it ran
-    cleanly and remediated nothing. Checked semantically because the command
-    expands one line per subcategory and has no single static form.
+    Two separate things, and checking only the second is not enough: reading
+    the quoted subcategories while ignoring the rest of the line accepts
+    `auditpol ... /success:disable /failure:disable`, which names the right
+    subcategory and turns its auditing off. The executable and the switches
+    have to be pinned too, so the template is matched whole with only the
+    subcategory substituted.
     """
     reported = [n for n in misc._EXPECTED_AUDIT if n in row["details"]]
-    targeted = re.findall(r"/subcategory:'([^']+)'", row["command"])
+    lines = [ln for ln in row["command"].splitlines() if ln.strip()]
+
+    targeted = []
+    for line in lines:
+        for name in misc._EXPECTED_AUDIT:
+            if line == misc._CMD_AUDITPOL_ENABLE.format(subcategory=name):
+                targeted.append(name)
+                break
+        else:
+            return f"line is not the shipped auditpol template: {line!r}"
 
     if sorted(targeted) != sorted(reported):
-        return f"targets {sorted(targeted)}, details report {sorted(reported)}"
+        return f"enables {sorted(targeted)}, details report {sorted(reported)}"
     if len(targeted) != len(set(targeted)):
         return f"duplicate subcategory lines: {targeted}"
-    lines = [ln for ln in row["command"].splitlines() if ln.strip()]
-    if len(lines) != len(targeted):
-        return f"{len(lines)} lines for {len(targeted)} subcategories"
     return None
 
 
@@ -297,7 +307,15 @@ def test_fixture_commands_pass_the_shipped_lint() -> None:
 
 
 def _templates_for(row) -> list:
-    """Templates whose check name and status match this row, with bindings."""
+    """Templates describing the outcome that produced this row.
+
+    Name and status alone do not identify an outcome: AutoPlay has three WARN
+    call sites with different remediation, so matching on those two lets any of
+    them validate another's fields. `details` is what says which branch ran —
+    it is machine-owned and never asserted to be current, only used to pick the
+    outcome. When it does narrow the candidates, the narrowed set wins; when it
+    cannot, every candidate stays and the caller requires agreement.
+    """
     out = []
     for t in command_audit.collect_result_templates():
         if t.module != _category_to_module()[row["category"]]:
@@ -308,7 +326,12 @@ def _templates_for(row) -> list:
         if bound is None:
             continue
         out.append((t, bound))
-    return out
+
+    discriminated = [
+        (t, bound) for t, bound in out
+        if t.details is not None and _match(t.details, row["details"], bound) is not None
+    ]
+    return discriminated or out
 
 
 def _verify_row(row) -> str | None:
@@ -316,6 +339,22 @@ def _verify_row(row) -> str | None:
     candidates = _templates_for(row)
     if not candidates:
         return "no check-module template matches this name and status"
+
+    # Ambiguity is not a licence to take whichever candidate fits. If details
+    # could not narrow to one outcome and the survivors disagree about a
+    # code-owned field, then a row carrying any of their values validates —
+    # which is how the partial-AutoPlay row accepted a different WARN
+    # outcome's remediation.
+    if len(candidates) > 1:
+        for field in command_audit.RESULT_TEXT_FIELDS:
+            if VALIDATORS.get((row["check_name"], field)):
+                continue
+            if len({getattr(t, field) for t, _ in candidates}) > 1:
+                lines = sorted(f"{t.module}:{t.line}" for t, _ in candidates)
+                return (
+                    f"{field}: {len(candidates)} outcomes ({', '.join(lines)}) share this "
+                    "name and status and disagree; details did not identify which one ran"
+                )
 
     problems = []
     for template, bound in candidates:
@@ -449,6 +488,38 @@ def _risky_service_row_gains_text(row: dict) -> dict:
     return row
 
 
+def _fail_row_takes_the_pass_pair(row: dict) -> dict:
+    # accounts.py binds status in an if-chain, then keys remediation and command
+    # off `status is Status.PASS`. Treating that settled condition as a free
+    # branch emits a FAIL outcome with the PASS blank pair, which the runtime
+    # cannot produce — and blanking both fields together validated against it.
+    row["remediation"] = ""
+    row["command"] = ""
+    return row
+
+
+def _outcome_swapped_within_one_status(row: dict) -> dict:
+    # AutoPlay has three WARN call sites with different remediation. Name and
+    # status alone do not say which one ran, so without `details` as the
+    # discriminator any of them validated another's fields.
+    other = next(
+        t.remediation for t in command_audit.collect_result_templates()
+        if t.check_name == "AutoPlay Disabled" and t.status == "WARN"
+        and t.remediation and t.remediation != row["remediation"]
+    )
+    row["remediation"] = other
+    return row
+
+
+def _audit_command_disables_instead_of_enabling(row: dict) -> dict:
+    # Names the right subcategory and silences its auditing. Reading only the
+    # quoted names accepted this; the whole line has to match the template.
+    row["command"] = row["command"].replace(
+        "/success:enable /failure:enable", "/success:disable /failure:disable"
+    )
+    return row
+
+
 MUTATIONS = [
     pytest.param("AutoPlay Disabled", _swap_within_module, id="swap-command-within-module"),
     pytest.param("BitLocker — G:", _blank_a_field, id="blank-a-field"),
@@ -462,6 +533,12 @@ MUTATIONS = [
     pytest.param("SMB Encryption", _assigned_status_row_takes_another_branch,
                  id="branch-correlation-assigned"),
     pytest.param("Risky Services", _risky_service_row_gains_text, id="risky-service-row"),
+    pytest.param("Password Policy — Minimum Length", _fail_row_takes_the_pass_pair,
+                 id="impossible-branch-combination"),
+    pytest.param("AutoPlay Disabled", _outcome_swapped_within_one_status,
+                 id="outcome-swapped-within-one-status"),
+    pytest.param("Audit Policy", _audit_command_disables_instead_of_enabling,
+                 id="audit-command-disables"),
 ]
 
 
