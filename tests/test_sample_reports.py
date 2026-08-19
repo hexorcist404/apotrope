@@ -79,7 +79,7 @@ REGENERATE = "python tools/generate_sample_reports.py"
 # collapsed, because a newline in PowerShell ends a comment and separates
 # statements.
 _PLACEHOLDER = re.compile(r"\\\{([A-Za-z_]\w*)\\\}")
-_ANY_PLACEHOLDER = re.compile(r"\{[A-Za-z_]\w*\}")
+_ANY_PLACEHOLDER = re.compile(r"\{([A-Za-z_]\w*)\}")
 
 
 def _pattern(literal: str, bound: dict[str, str] | None = None) -> re.Pattern[str]:
@@ -115,6 +115,26 @@ def _match(literal: str | None, rendered: str, bound: dict[str, str] | None = No
 # never a bare wildcard — an approved wildcard is the same hole under a nicer
 # name.
 
+def _audit_subcategories(details: str) -> tuple[list[str], list[str]]:
+    """Split the reported subcategories into (confirmed disabled, unreported).
+
+    `misc.py` renders them into one list and marks the second kind
+    `"<name> (not reported)"`. A substring scan cannot tell them apart, and
+    conflating them inverts the consent rule the source deliberately follows:
+    an unreported subcategory was never observed disabled, so enabling it is a
+    change the operator did not ask for. Treated as disabled, a legitimate
+    missing-only row with no command is rejected while a command that switches
+    on the unreported one is accepted.
+    """
+    disabled, unreported = [], []
+    for name in misc._EXPECTED_AUDIT:
+        if f"{name} (not reported)" in details:
+            unreported.append(name)
+        elif name in details:
+            disabled.append(name)
+    return disabled, unreported
+
+
 def _validate_audit_policy_command(row) -> str | None:
     """Every line must be the shipped template, and together they must cover
     exactly the subcategories details reports disabled.
@@ -126,7 +146,7 @@ def _validate_audit_policy_command(row) -> str | None:
     have to be pinned too, so the template is matched whole with only the
     subcategory substituted.
     """
-    reported = [n for n in misc._EXPECTED_AUDIT if n in row["details"]]
+    disabled, _ = _audit_subcategories(row["details"])
     lines = [ln for ln in row["command"].splitlines() if ln.strip()]
 
     targeted = []
@@ -138,24 +158,37 @@ def _validate_audit_policy_command(row) -> str | None:
         else:
             return f"line is not the shipped auditpol template: {line!r}"
 
-    if sorted(targeted) != sorted(reported):
-        return f"enables {sorted(targeted)}, details report {sorted(reported)}"
+    if sorted(targeted) != sorted(disabled):
+        return f"enables {sorted(targeted)}, details report disabled {sorted(disabled)}"
     if len(targeted) != len(set(targeted)):
         return f"duplicate subcategory lines: {targeted}"
     return None
 
 
 def _validate_audit_policy_remediation(row) -> str | None:
-    """One of the three shipped wordings, plus the shared Group Policy suffix."""
-    wordings = (
-        misc._FIX_AUDIT_DISABLED,
-        misc._FIX_AUDIT_UNREPORTED,
-        misc._FIX_AUDIT_MIXED.split("{")[0],
+    """Rebuild the exact remediation for this outcome and require equality.
+
+    Accepting a permitted prefix plus a `secpol.msc` substring is fail-open:
+    a fabricated policy path, arbitrary appended instructions, and the wrong
+    outcome's wording all satisfy it. Which of the three wordings applies is
+    fully determined by what details report, so there is nothing to be lenient
+    about.
+    """
+    disabled, unreported = _audit_subcategories(row["details"])
+
+    if disabled and unreported:
+        fix = misc._FIX_AUDIT_MIXED.format(unreported=", ".join(unreported))
+    elif disabled:
+        fix = misc._FIX_AUDIT_DISABLED
+    else:
+        fix = misc._FIX_AUDIT_UNREPORTED
+
+    expected = (
+        f"{fix} This can also be configured via Group Policy "
+        "(secpol.msc → Advanced Audit Policy Configuration)."
     )
-    if not any(row["remediation"].startswith(w) for w in wordings):
-        return "does not begin with any shipped remediation wording"
-    if "secpol.msc" not in row["remediation"]:
-        return "lost the Group Policy suffix"
+    if row["remediation"] != expected:
+        return f"does not equal the wording this outcome produces: {expected!r}"
     return None
 
 
@@ -327,10 +360,17 @@ def _templates_for(row) -> list:
             continue
         out.append((t, bound))
 
-    discriminated = [
-        (t, bound) for t, bound in out
-        if t.details is not None and _match(t.details, row["details"], bound) is not None
-    ]
+    # Keep what the details match learned. `{count}` appearing in both details
+    # and remediation is one value, not two: discarding the binding lets details
+    # say 3 pending updates while the remediation says 999, each satisfying its
+    # own independent wildcard.
+    discriminated = []
+    for template, bound in out:
+        if template.details is None:
+            continue
+        learned = _match(template.details, row["details"], bound)
+        if learned is not None:
+            discriminated.append((template, {**bound, **learned}))
     return discriminated or out
 
 
@@ -369,6 +409,20 @@ def _verify_row(row) -> str | None:
                 continue
             if field in template.unresolved:
                 failed = f"{field}: not statically resolvable and no validator"
+                break
+            # A placeholder nothing can bind is not a runtime value, it is a
+            # sub-expression the resolver gave up on — `{sid}` from a variable,
+            # `{render}` from a method call. Matched as `.+?` it accepts any
+            # text at all, which is the wildcard hole under a friendlier name.
+            # Fail closed unless the check name or details pin it.
+            literal = getattr(template, field) or ""
+            loose = sorted(set(_ANY_PLACEHOLDER.findall(literal)) - set(bound))
+            if loose:
+                failed = (
+                    f"{field}: {', '.join(loose)} bound by neither the check name "
+                    f"nor details, so it would match anything "
+                    f"({template.module}:{template.line})"
+                )
                 break
             # Empty must match empty. Skipping empties is what let a blanked
             # field pass, and it is also what makes a PASS branch meaningful.
@@ -547,3 +601,102 @@ def test_guard_rejects(check_name: str, mutate) -> None:
     row = _row(check_name)
     assert _verify_row(row) is None, f"{check_name} does not verify before mutation"
     assert _verify_row(mutate(row)) is not None, "the guard accepted a mutated row"
+
+
+# ── Audit Policy: unreported is not disabled ────────────────────────────────
+
+_AUDIT_SUFFIX = (
+    " This can also be configured via Group Policy "
+    "(secpol.msc → Advanced Audit Policy Configuration)."
+)
+
+
+def _audit_row(details: str, command: str, fix: str) -> dict:
+    row = _row("Audit Policy")
+    row["details"] = details
+    row["command"] = command
+    row["remediation"] = fix + _AUDIT_SUFFIX
+    return row
+
+
+_MISSING_ONLY_DETAILS = (
+    "Not all expected audit subcategories are confirmed logging: "
+    "Logon (not reported). Security-relevant events may not be recorded."
+)
+
+
+def test_missing_only_outcome_with_no_command_is_accepted() -> None:
+    """A subcategory auditpol never reported was not observed disabled.
+
+    The source deliberately emits no command for it — enabling auditing the
+    operator never asked for is a change they did not consent to. A guard that
+    reads the reported names without distinguishing "(not reported)" rejects
+    this source-correct row.
+    """
+    row = _audit_row(_MISSING_ONLY_DETAILS, "", misc._FIX_AUDIT_UNREPORTED)
+    assert _verify_row(row) is None
+
+
+def test_command_enabling_an_unreported_subcategory_is_rejected() -> None:
+    row = _audit_row(
+        _MISSING_ONLY_DETAILS,
+        misc._CMD_AUDITPOL_ENABLE.format(subcategory="Logon"),
+        misc._FIX_AUDIT_UNREPORTED,
+    )
+    assert _verify_row(row) is not None
+
+
+@pytest.mark.parametrize(
+    ("label", "remediation"),
+    [
+        ("fabricated policy path",
+         misc._FIX_AUDIT_DISABLED + " TOTALLY WRONG POLICY AREA secpol.msc"),
+        ("appended instructions", None),   # filled in below
+        ("wrong outcome wording", misc._FIX_AUDIT_UNREPORTED + _AUDIT_SUFFIX),
+    ],
+)
+def test_audit_remediation_must_equal_the_wording_for_its_outcome(
+    label: str, remediation: str | None
+) -> None:
+    """Prefix plus a `secpol.msc` substring is fail-open."""
+    row = _row("Audit Policy")
+    row["remediation"] = (
+        row["remediation"] + " Also, email the auditor."
+        if remediation is None else remediation
+    )
+    assert _verify_row(row) is not None, label
+
+
+# ── Bindings and wildcards ──────────────────────────────────────────────────
+
+def test_a_value_learned_from_details_constrains_the_other_fields() -> None:
+    """`{count}` in details and in remediation is one value, not two.
+
+    Discarding what the details match learned lets details say 3 and the
+    remediation say 999, each satisfying its own independent wildcard.
+    """
+    template = "Found {count} item(s)."
+    bound = _match(template, "Found 3 item(s).")
+    assert bound == {"count": "3"}
+    # The same binding must then pin the other field.
+    assert _match("Fix all {count} of them.", "Fix all 3 of them.", bound) is not None
+    assert _match("Fix all {count} of them.", "Fix all 999 of them.", bound) is None
+
+
+def test_a_placeholder_nothing_binds_is_not_treated_as_a_runtime_value() -> None:
+    """`{sid}`, `{render}` and friends are the resolver giving up.
+
+    Matched as an unbound group they accept any text at all. A row whose
+    template carries one must fail closed rather than validate.
+    """
+    row = _row("Built-in Administrator Account")
+    # accounts.py emits `Disable-LocalUser -SID '{sid}'` on its enabled branch;
+    # nothing in the check name or details binds {sid}.
+    row["status"] = "WARN"
+    row["details"] = "Built-in Administrator account is enabled (renamed to 'x')."
+    row["remediation"] = (
+        "Consider disabling the built-in Administrator account if it is not in active use."
+    )
+    row["command"] = "Disable-LocalUser -SID 'ANYTHING-AT-ALL'"
+    why = _verify_row(row)
+    assert why is not None and "bound by neither" in why, why

@@ -126,9 +126,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   never by an approved wildcard. Nothing is exempt: the requirement is zero
   unverified fields, not a list of the ones we gave up on.
 
-  Eleven mutations of a published row are asserted to be rejected, including
-  swapping two commands inside one module, blanking a field, and a command that
-  enables a subcategory the finding did not report.
+  Fourteen mutations of a published row are asserted to be rejected, plus
+  targeted cases for the wildcard and binding rules: swapping two commands
+  inside one module, blanking a field, a command enabling a subcategory the
+  finding did not report, a value that disagrees between details and
+  remediation, and a placeholder nothing binds.
 
 ---
 

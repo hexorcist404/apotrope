@@ -278,6 +278,41 @@ class TestRiskyServiceInventory:
         assert lint_commands(planted) == []
 
 
+class TestAuditpolDisablesRule:
+    """Remediation exists to increase coverage, not reduce it.
+
+    The disabling form reads almost identically to the enabling one, so a
+    copy-edit slip produces a command that looks right and silences the log it
+    was supposed to turn on.
+    """
+
+    _ENABLE = "auditpol /set /subcategory:'Sensitive Privilege Use' /success:enable /failure:enable"
+    _DISABLE = _ENABLE.replace("enable", "disable")
+
+    def test_disabling_command_is_flagged(self) -> None:
+        planted = [Command("fake.py", 1, self._DISABLE)]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-disables-auditing"]
+
+    def test_partial_disable_is_flagged(self) -> None:
+        half = self._ENABLE.replace("/failure:enable", "/failure:disable")
+        planted = [Command("fake.py", 1, half)]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-disables-auditing"]
+
+    def test_enabling_command_is_clean(self) -> None:
+        assert not lint_commands([Command("fake.py", 1, self._ENABLE)])
+
+    def test_commented_disable_is_not_flagged(self) -> None:
+        planted = [Command("fake.py", 1, "# " + self._DISABLE)]
+        assert not [v for v in lint_commands(planted) if v.rule == "auditpol-disables-auditing"]
+
+    def test_no_shipped_command_disables_auditing(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "auditpol-disables-auditing"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
 class TestConstrainedLanguageRule:
     """Constrained Language Mode refuses .NET method invocation.
 
