@@ -105,40 +105,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   The Audit Policy remediation wording had drifted too. All four now come from
   the check modules verbatim.
 
-  The fixture holds two kinds of field: machine-owned (`status`, `details`,
-  `score`, timestamps), frozen at the sample scan, and code-owned
-  (`description`, `remediation`, `command`, `cis_reference`), which must track
-  the source. The regeneration guard only compared the rendered reports against
-  the fixture, so a stale value on either side went unnoticed.
+  The regeneration guard only compared the rendered reports against the
+  fixture, so a value stale on both sides went unnoticed. The staleness guard
+  now works by **generation**: `tests/sample_machine.py` holds the
+  reconstructed inputs of the sample machine — the PowerShell and WMI payloads
+  each check module consumed, with the clock frozen at the persona's own scan
+  instant — and `tests/test_sample_reports.py` runs the *real* check functions
+  against them, requiring every published row to equal the output exactly, on
+  every field. An earlier version of the guard instead re-derived what the
+  checks could emit by interpreting their source; successive reviews kept
+  finding text that slipped past that partial interpreter, so it was replaced
+  rather than patched again. Running the real code leaves nothing to slip past:
+  a source change that moves any published field — wording, severity, a
+  command, the CIS mapping — fails the guard naming the field, and the fix is
+  to regenerate the sample.
 
-  Every code-owned field of all 53 published rows is now checked against the
-  check module that owns it, and the check is precise about which outcome it is
-  comparing. A single `CheckResult` often produces several — `accounts.py`
-  builds one from three conditionals on the same variable, one of them inverted
-  — so the fields are resolved together under each branch rather than
-  independently. Resolved independently, a PASS row carrying a FAIL's
-  remediation validates. Runtime values are bound rather than wildcarded, so a
-  `BitLocker — G:` row whose command targets `C:` is a mismatch, and thresholds
-  computed from module constants are folded to their real value instead of
-  standing in as "any number". Fields assembled at scan time, such as the Audit
-  Policy command, are checked by a named validator against the property that
-  matters — that it enables exactly the subcategories the finding reports — and
-  never by an approved wildcard. Nothing is exempt: the requirement is zero
-  unverified fields, not a list of the ones we gave up on.
-
-  Severity is verified too: it drives the score, and 47 rows had arrived from
+  Severity is part of that: it drives the score, and 47 rows had arrived from
   the HTML recovery carrying a uniform `INFO` stand-in because the report
-  renders severity only for FAIL/WARN. They now hold what their outcome
-  emits, and restoring the real values left both rendered reports
-  byte-identical — which is what the committed row order was always sorted
-  by. The set of checks the sample shows is pinned as well, since status
-  totals do not notice one being swapped for a duplicate of another.
+  renders severity only for FAIL/WARN. They now hold what their outcome emits,
+  and restoring the real values left both rendered reports byte-identical —
+  which is what the committed row order was always sorted by. The set of checks
+  the sample shows is pinned as well, since status totals do not notice one
+  being swapped for a duplicate of another.
 
-  Fourteen mutations of a published row are asserted to be rejected, plus
-  targeted cases for the wildcard and binding rules: swapping two commands
-  inside one module, blanking a field, a command enabling a subcategory the
-  finding did not report, a value that disagrees between details and
-  remediation, and a placeholder nothing binds.
+  Reconstructing the machine surfaced four more stale `details` strings, which
+  are refreshed: the Guest Account text predates the SID/RID-based rewrite, the
+  Pending Windows Updates wording changed after v0.1.12, and the last-update
+  date and end-of-support day count had leaked the capture machine's actual
+  clock (16 July) where the published header says 13 July — the sample is now
+  internally consistent with its own timestamp.
+
+  Twenty-one mutations of a published row are asserted to be rejected — the
+  accumulated exploit corpus of every review round against the previous
+  matcher, from a command swapped between two checks in one module to a paired
+  status flip that preserves every global total. Under generation each is
+  rejected by construction: a mutated row cannot equal what the real code
+  emits.
 
 ---
 

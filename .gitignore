@@ -63,6 +63,9 @@ $RECYCLE.BIN/
 # from — without it docs/report.html and docs/exec-report.html have no
 # reproducible source, which is how they drifted to a stale version once already.
 !tools/fixtures/*.json
+# tests/sample_machine.json is the reconstructed sample machine the guard in
+# tests/test_sample_reports.py runs the real checks against.
+!tests/sample_machine.json
 # docs/ is the published marketing site (GitHub Pages) — commit all of its HTML
 !docs/index.html
 !docs/report.html

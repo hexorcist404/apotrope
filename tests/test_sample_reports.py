@@ -13,32 +13,33 @@ Three failure modes are guarded here:
   same version by hand.
 * **Source drift** — the committed assets no longer being what the fixture
   renders, which would put the reproducible path back where it started.
-* **Content drift** — the fixture publishing remediation the check modules no
-  longer emit. The fixture was recovered from the v0.1.12 report, so it arrived
-  carrying that release's commands: a BitLocker block that creates a recovery
-  password the operator can never read back, an AutoPlay write with no
-  registry-key guard, and a WMI call that discards its ``ReturnValue``. All
-  three had been fixed in the source by then and all three were published under
-  a v0.2.0 banner.
+* **Content drift** — the fixture publishing rows the check modules no longer
+  emit. Guarded by *generation*, not matching: ``tests/sample_machine.py``
+  holds the reconstructed inputs of the sample machine, the real check
+  functions run against them, and every published row must equal a generated
+  row exactly. An earlier version of this guard statically re-derived what the
+  checks could emit from their AST; six review rounds each found ways to slip
+  text past that partial interpreter. Running the real code leaves no matcher
+  to fool.
 
-The fixture holds two kinds of field, and the distinction is what makes it a
-sanitized scan rather than a snapshot of an old release:
-
-* **machine-owned** — ``status``, ``details``, ``hostname``, ``score``,
-  timestamps. Frozen at the sample machine; the source has nothing to say.
-* **code-owned** — ``description``, ``remediation``, ``command``,
-  ``cis_reference``. Must equal what the modules emit today.
+``sample_machine.py`` *is* the machine. Everything else on a row — status,
+severity, description, details, remediation, command, ``cis_reference`` — is
+whatever the current source produces from it, so any source change that moves a
+published field fails here, naming the field.
 """
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import pkgutil
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -50,6 +51,7 @@ from apotrope.compare import load_baseline
 from apotrope.scoring import calculate_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Imported in-process, not spawned: conftest's autouse guard patches
 # subprocess.run process-wide, so shelling out to the generator would raise.
@@ -64,6 +66,7 @@ from generate_sample_reports import (
     TECHNICAL_NAME,
     main,
 )
+from sample_machine import MACHINE
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
@@ -128,168 +131,6 @@ EXPECTED_CHECK_NAMES = (
 )
 
 
-# A resolved literal keeps `{placeholder}` wherever the value is only known at
-# scan time. Each placeholder becomes a named group, so a value bound by the
-# check name constrains every other field: `BitLocker — {mount}` binding
-# mount=G: forces the command to say G: throughout. Repeats inside one field
-# become backreferences. Everything else must match exactly — no whitespace is
-# collapsed, because a newline in PowerShell ends a comment and separates
-# statements.
-_PLACEHOLDER = re.compile(r"\\\{([A-Za-z_]\w*)\\\}")
-_ANY_PLACEHOLDER = re.compile(r"\{([A-Za-z_]\w*)\}")
-
-
-def _pattern(literal: str, bound: dict[str, str] | None = None) -> re.Pattern[str]:
-    """Compile a source literal into a regex with one named group per placeholder."""
-    seen: set[str] = set()
-
-    def sub(m: re.Match[str]) -> str:
-        name = m.group(1)
-        if bound and name in bound:
-            return re.escape(bound[name])
-        if name in seen:
-            return f"(?P={name})"
-        seen.add(name)
-        return f"(?P<{name}>.+?)"
-
-    return re.compile(_PLACEHOLDER.sub(sub, re.escape(literal)), re.S)
-
-
-def _match(literal: str | None, rendered: str, bound: dict[str, str] | None = None):
-    """Match a rendered value against a source literal, returning any bindings."""
-    if literal is None:
-        return None
-    if literal == rendered:
-        return {}
-    m = _pattern(literal, bound).fullmatch(rendered)
-    return m.groupdict() if m else None
-
-
-# ── Named validators ────────────────────────────────────────────────────────
-#
-# A field whose text is assembled at scan time cannot be matched against a
-# template. It gets a validator that checks the property that actually matters,
-# never a bare wildcard — an approved wildcard is the same hole under a nicer
-# name.
-
-class _AuditDetailsError(ValueError):
-    """Details that misc.py could not have produced for a WARN outcome."""
-
-
-def _audit_subcategories(details: str) -> tuple[list[str], list[str]]:
-    """Split the reported subcategories into (confirmed disabled, unreported).
-
-    `misc.py` renders them into one list and marks the second kind
-    `"<name> (not reported)"`. A substring scan cannot tell them apart, and
-    conflating them inverts the consent rule the source deliberately follows:
-    an unreported subcategory was never observed disabled, so enabling it is a
-    change the operator did not ask for. Treated as disabled, a legitimate
-    missing-only row with no command is rejected while a command that switches
-    on the unreported one is accepted.
-
-    Searching for those names anywhere in free-form prose is fail-open twice
-    over: text `misc.py` cannot emit still parses, and prose naming nothing at
-    all yields two empty lists, which then reads as a legitimate "everything was
-    unreported" outcome. The rendered shape is fixed, so it is matched whole and
-    every entry in it has to be one of the known names.
-    """
-    prefix = "Not all expected audit subcategories are confirmed logging: "
-    suffix = ". Security-relevant events may not be recorded."
-    if not (details.startswith(prefix) and details.endswith(suffix)):
-        raise _AuditDetailsError(f"not the shape misc.py renders: {details!r}")
-
-    entries = [e.strip() for e in details[len(prefix):-len(suffix)].split(", ") if e.strip()]
-    if not entries:
-        raise _AuditDetailsError("names no subcategory at all")
-    if len(entries) != len(set(entries)):
-        raise _AuditDetailsError(f"repeats an entry: {entries}")
-
-    disabled, unreported = [], []
-    for entry in entries:
-        name = entry[: -len(" (not reported)")] if entry.endswith(" (not reported)") else entry
-        if name not in misc._EXPECTED_AUDIT:
-            raise _AuditDetailsError(f"unknown subcategory {name!r}")
-        (unreported if entry.endswith(" (not reported)") else disabled).append(name)
-    return disabled, unreported
-
-
-def _validate_audit_policy_command(row) -> str | None:
-    """Every line must be the shipped template, and together they must cover
-    exactly the subcategories details reports disabled.
-
-    Two separate things, and checking only the second is not enough: reading
-    the quoted subcategories while ignoring the rest of the line accepts
-    `auditpol ... /success:disable /failure:disable`, which names the right
-    subcategory and turns its auditing off. The executable and the switches
-    have to be pinned too, so the template is matched whole with only the
-    subcategory substituted.
-    """
-    try:
-        disabled, _ = _audit_subcategories(row["details"])
-    except _AuditDetailsError as exc:
-        return str(exc)
-    lines = [ln for ln in row["command"].splitlines() if ln.strip()]
-
-    targeted = []
-    for line in lines:
-        for name in misc._EXPECTED_AUDIT:
-            if line == misc._CMD_AUDITPOL_ENABLE.format(subcategory=name):
-                targeted.append(name)
-                break
-        else:
-            return f"line is not the shipped auditpol template: {line!r}"
-
-    if sorted(targeted) != sorted(disabled):
-        return f"enables {sorted(targeted)}, details report disabled {sorted(disabled)}"
-    if len(targeted) != len(set(targeted)):
-        return f"duplicate subcategory lines: {targeted}"
-    return None
-
-
-def _validate_audit_policy_remediation(row) -> str | None:
-    """Rebuild the exact remediation for this outcome and require equality.
-
-    Accepting a permitted prefix plus a `secpol.msc` substring is fail-open:
-    a fabricated policy path, arbitrary appended instructions, and the wrong
-    outcome's wording all satisfy it. Which of the three wordings applies is
-    fully determined by what details report, so there is nothing to be lenient
-    about.
-    """
-    try:
-        disabled, unreported = _audit_subcategories(row["details"])
-    except _AuditDetailsError as exc:
-        return str(exc)
-
-    if disabled and unreported:
-        fix = misc._FIX_AUDIT_MIXED.format(unreported=", ".join(unreported))
-    elif disabled:
-        fix = misc._FIX_AUDIT_DISABLED
-    else:
-        fix = misc._FIX_AUDIT_UNREPORTED
-
-    expected = (
-        f"{fix} This can also be configured via Group Policy "
-        "(secpol.msc → Advanced Audit Policy Configuration)."
-    )
-    if row["remediation"] != expected:
-        return f"does not equal the wording this outcome produces: {expected!r}"
-    return None
-
-
-#: (check_name, field) -> validator. Every entry names a function; there is no
-#: form of this table that approves a field without checking it.
-#: (check_name, status, field) -> validator. Status is part of the key on
-#: purpose: the Audit Policy WARN outcome builds its command and remediation
-#: at scan time and needs one, but the PASS and INFO outcomes are ordinary
-#: static text. Running the validators for every status accepted a WARN row
-#: relabelled PASS while still carrying its WARN command, and rejected the
-#: PASS and INFO results misc.py really emits.
-VALIDATORS = {
-    ("Audit Policy", "WARN", "command"): _validate_audit_policy_command,
-    ("Audit Policy", "WARN", "remediation"): _validate_audit_policy_remediation,
-}
-
-
 @lru_cache(maxsize=1)
 def _category_to_module() -> dict[str, str]:
     """Map each check category to the single module that emits it."""
@@ -300,9 +141,145 @@ def _category_to_module() -> dict[str, str]:
         module = importlib.import_module(f"apotrope.checks.{info.name}")
         category = getattr(module, "CATEGORY", None)
         if category:
-            mapping[category] = f"{info.name}.py"
+            mapping[category] = info.name
     return mapping
 
+
+# ── The generation core ─────────────────────────────────────────────────────
+#
+# sample_machine.MACHINE holds, per check module, the mocked Windows inputs of
+# the sample machine. The real run() executes against them; nothing about the
+# emitted rows is re-derived, matched, or approximated here.
+
+#: Every field a published row is compared on. check_duration is excluded —
+#: the scanner stamps it at scan time and both sides carry 0.0.
+_COMPARED_FIELDS = (
+    "category",
+    "check_name",
+    "status",
+    "severity",
+    "description",
+    "details",
+    "remediation",
+    "command",
+    "cis_reference",
+)
+
+
+def _frozen_datetime(iso: str) -> type:
+    """A datetime class pinned to *iso*, for modules that read the clock.
+
+    os_info and updates render durations from "now"; frozen at the persona's
+    own scan instant, their time-derived text reproduces exactly.
+    """
+    frozen = datetime.fromisoformat(iso)
+
+    class _Frozen(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is not None:
+                return frozen.astimezone(tz)
+            return frozen.replace(tzinfo=None)
+
+        @classmethod
+        def today(cls):
+            return frozen.replace(tzinfo=None)
+
+        @classmethod
+        def utcnow(cls):
+            return frozen.astimezone(timezone.utc).replace(tzinfo=None)
+
+    return _Frozen
+
+
+@lru_cache(maxsize=None)
+def _generated_rows(module_name: str) -> tuple[dict[str, str], ...]:
+    """Run the real check module against the reconstructed machine."""
+    module = importlib.import_module(f"apotrope.checks.{module_name}")
+    with contextlib.ExitStack() as stack:
+        for spec in MACHINE[module_name]:
+            target, kind, value = spec["target"], spec["kind"], spec["value"]
+            if kind == "frozen_datetime":
+                stack.enter_context(mock.patch(target, _frozen_datetime(value)))
+            elif kind == "side_effect":
+                stack.enter_context(
+                    mock.patch(target, mock.Mock(side_effect=list(value)))
+                )
+            else:
+                stack.enter_context(mock.patch(target, mock.Mock(return_value=value)))
+        rows = module.run()
+
+    generated = []
+    for r in rows:
+        generated.append({
+            "category": r.category,
+            "check_name": r.check_name,
+            "status": r.status.value,
+            "severity": r.severity.value,
+            "description": r.description,
+            "details": r.details,
+            "remediation": r.remediation,
+            "command": r.command,
+            # The scanner attaches CIS references after the modules run
+            # (scanner.py:376-384); replicate it so generated rows are complete.
+            "cis_reference": r.cis_reference or cis_map.lookup(r.check_name),
+        })
+    return tuple(generated)
+
+
+def _verify_row(row: dict) -> str | None:
+    """None if the row is exactly what the real check emits; otherwise why not."""
+    module_name = _category_to_module()[row["category"]]
+    mine = {field: row[field] for field in _COMPARED_FIELDS}
+    generated = _generated_rows(module_name)
+    if any(mine == g for g in generated):
+        return None
+
+    named = [g for g in generated if g["check_name"] == row["check_name"]]
+    if not named:
+        return f"the real {module_name} module emits no row named {row['check_name']!r}"
+    diffs = [
+        f"{field}: fixture {mine[field]!r} != generated {named[0][field]!r}"
+        for field in _COMPARED_FIELDS
+        if mine[field] != named[0][field]
+    ]
+    return "; ".join(diffs)
+
+
+def test_the_machine_covers_every_module() -> None:
+    """A module missing from sample_machine.py is a module nothing verifies."""
+    assert set(MACHINE) == set(_category_to_module().values())
+
+
+@pytest.mark.parametrize("module_name", sorted(MACHINE))
+def test_the_real_checks_reproduce_every_published_row(module_name: str) -> None:
+    """The core guard: real code, reconstructed machine, exact equality.
+
+    Any source change that moves a published field — wording, severity, a
+    command, the CIS mapping — fails here naming the module, and the fix is to
+    regenerate the sample rather than to argue with a matcher.
+    """
+    category = next(
+        cat for cat, mod in _category_to_module().items() if mod == module_name
+    )
+    report = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    fixture_rows = sorted(
+        ({field: r[field] for field in _COMPARED_FIELDS}
+         for r in report["results"] if r["category"] == category),
+        key=lambda g: g["check_name"],
+    )
+    generated = sorted(_generated_rows(module_name), key=lambda g: g["check_name"])
+
+    # Check names are unique (pinned below), so comparing name-sorted lists is
+    # a multiset comparison. Emission order and document order differ by
+    # design; the reporter re-sorts for rendering.
+    assert generated == fixture_rows, (
+        f"docs/ rows for {category!r} are not what {module_name}.run() emits. "
+        f"Refresh the fixture from source, then regenerate: {REGENERATE}"
+    )
+
+
+# ── Branding, rendering, persona ────────────────────────────────────────────
 
 # Anchors are deliberately narrow. All three files also contain CIS benchmark
 # strings ("v5.0.0", "v4.0.0"), so a loose r"v\d+\.\d+\.\d+" sweep captures those
@@ -376,27 +353,26 @@ def test_fixture_holds_the_sanitized_persona() -> None:
     assert report.error_count == 0, "the published sample must not show failed checks"
 
 
-def test_every_severity_is_one_its_check_can_emit() -> None:
-    """Severity is real data now, not a placeholder.
+def test_the_sample_contains_exactly_the_expected_checks() -> None:
+    """Status totals do not prove the right checks are present.
 
-    The fixture was recovered from HTML that renders severity only for
-    FAIL/WARN, so 47 rows arrived carrying a uniform INFO stand-in. Severity
-    drives the score, so leaving them unverified let a source change stale the
-    published report and its number. They now hold what their outcome emits —
-    and putting the real values back left both rendered reports byte-identical,
-    which is what the committed row order was always sorted by.
+    Swapping one row for a duplicate of another leaves 53 rows, the same
+    per-status counts, and every row individually verifiable — the sample would
+    simply stop showing a check while every guard stayed green.
     """
     report = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    placeholders = [
-        r["check_name"] for r in report["results"]
-        if r["status"] in ("PASS", "INFO") and r["severity"] == "INFO"
-    ]
-    # INFO severity is legitimate for some checks; a wholesale block of them is
-    # the old stand-in coming back.
-    assert len(placeholders) < 10, (
-        f"{len(placeholders)} PASS/INFO rows carry INFO severity — the recovered "
-        f"placeholder is back: {placeholders}"
-    )
+    names = [r["check_name"] for r in report["results"]]
+
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    assert not duplicates, f"the sample repeats a check: {duplicates}"
+    assert len(names) == sum(EXPECTED_COUNTS.values())
+
+    # Pinned so a check disappearing from the sample is a failure, not a
+    # silently shorter report.
+    assert sorted(names) == sorted(EXPECTED_CHECK_NAMES), {
+        "missing": sorted(set(EXPECTED_CHECK_NAMES) - set(names)),
+        "unexpected": sorted(set(names) - set(EXPECTED_CHECK_NAMES)),
+    }
 
 
 def _fixture_commands() -> list[command_audit.Command]:
@@ -425,138 +401,6 @@ def test_fixture_commands_pass_the_shipped_lint() -> None:
     )
 
 
-def _templates_for(row) -> list:
-    """Templates describing the outcome that produced this row.
-
-    Name and status alone do not identify an outcome: AutoPlay has three WARN
-    call sites with different remediation, so matching on those two lets any of
-    them validate another's fields. `details` is what says which branch ran —
-    it is machine-owned and never asserted to be current, only used to pick the
-    outcome. When it does narrow the candidates, the narrowed set wins; when it
-    cannot, every candidate stays and the caller requires agreement.
-    """
-    out = []
-    for t in command_audit.collect_result_templates():
-        if t.module != _category_to_module()[row["category"]]:
-            continue
-        if t.status is not None and t.status != row["status"]:
-            continue
-        bound = _match(t.check_name, row["check_name"])
-        if bound is None:
-            continue
-        out.append((t, bound))
-
-    # Keep what the details match learned. `{count}` appearing in both details
-    # and remediation is one value, not two: discarding the binding lets details
-    # say 3 pending updates while the remediation says 999, each satisfying its
-    # own independent wildcard.
-    discriminated = []
-    for template, bound in out:
-        if template.details is None:
-            continue
-        learned = _match(template.details, row["details"], bound)
-        if learned is not None:
-            discriminated.append((template, {**bound, **learned}))
-    return discriminated or out
-
-
-def _verify_row(row) -> str | None:
-    """None if every code-owned field is accounted for; otherwise why not."""
-    candidates = _templates_for(row)
-    if not candidates:
-        return "no check-module template matches this name and status"
-
-    # Ambiguity is not a licence to take whichever candidate fits. If details
-    # could not narrow to one outcome and the survivors disagree about a
-    # code-owned field, then a row carrying any of their values validates —
-    # which is how the partial-AutoPlay row accepted a different WARN
-    # outcome's remediation.
-    if len(candidates) > 1:
-        for field in command_audit.RESULT_TEXT_FIELDS:
-            if VALIDATORS.get((row["check_name"], row["status"], field)):
-                continue
-            if len({getattr(t, field) for t, _ in candidates}) > 1:
-                lines = sorted(f"{t.module}:{t.line}" for t, _ in candidates)
-                return (
-                    f"{field}: {len(candidates)} outcomes ({', '.join(lines)}) share this "
-                    "name and status and disagree; details did not identify which one ran"
-                )
-
-    problems = []
-    for template, bound in candidates:
-        failed = None
-        # Severity drives the score, so a source change here staled the
-        # published report and its number while every other check stayed green.
-        # Compared across the matched outcomes rather than against one, because
-        # a check may pick its severity from runtime state this cannot see —
-        # encryption.py takes HIGH for the OS drive and MEDIUM for any other.
-        emitted = {t.severity for t, _ in candidates if t.severity is not None}
-        if emitted and row["severity"] not in emitted:
-            problems.append(
-                f"severity: row says {row['severity']} but "
-                f"{template.module}:{template.line} emits {sorted(emitted)}"
-            )
-            continue
-        for field in command_audit.RESULT_TEXT_FIELDS:
-            validator = VALIDATORS.get((row["check_name"], row["status"], field))
-            if validator is not None:
-                failed = validator(row)
-                if failed:
-                    failed = f"{field}: {failed}"
-                    break
-                continue
-            if field in template.unresolved:
-                failed = f"{field}: not statically resolvable and no validator"
-                break
-            # A placeholder nothing can bind is not a runtime value, it is a
-            # sub-expression the resolver gave up on — `{sid}` from a variable,
-            # `{render}` from a method call. Matched as `.+?` it accepts any
-            # text at all, which is the wildcard hole under a friendlier name.
-            # Fail closed unless the check name or details pin it.
-            literal = getattr(template, field) or ""
-            loose = sorted(
-                (set(_ANY_PLACEHOLDER.findall(literal)) - set(bound))
-                | (set(_ANY_PLACEHOLDER.findall(literal)) & template.opaque)
-            )
-            if loose:
-                failed = (
-                    f"{field}: {', '.join(loose)} bound by neither the check name "
-                    f"nor details, so it would match anything "
-                    f"({template.module}:{template.line})"
-                )
-                break
-            # Empty must match empty. Skipping empties is what let a blanked
-            # field pass, and it is also what makes a PASS branch meaningful.
-            literal = template.__getattribute__(field) or ""
-            if _match(literal, row[field], bound) is None:
-                failed = f"{field}: does not match {template.module}:{template.line}"
-                break
-        if failed is None:
-            return None
-        problems.append(failed)
-    return problems[0]
-
-
-def test_every_published_row_is_verified_against_its_check_module() -> None:
-    """Every code-owned field of all 53 rows must be accounted for.
-
-    Not "allowlist what we cannot check" — an unverified field is the wildcard
-    weakness this guard exists to remove, so the requirement is zero.
-    """
-    report = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    failures = {
-        r["check_name"]: why
-        for r in report["results"]
-        if (why := _verify_row(r)) is not None
-    }
-    assert not failures, (
-        f"{len(failures)} of {len(report['results'])} published rows are not "
-        f"verified against their check module:\n"
-        + "\n".join(f"  {k}: {v}" for k, v in sorted(failures.items()))
-        + f"\nRefresh from source, then regenerate: {REGENERATE}"
-    )
-
-
 def test_fixture_cis_references_match_the_benchmark_map() -> None:
     """``cis_reference`` is code-owned too — it comes from cis_map, not the scan."""
     report = load_baseline(str(FIXTURE))
@@ -567,12 +411,14 @@ def test_fixture_cis_references_match_the_benchmark_map() -> None:
     ]
     assert not wrong, f"fixture CIS references disagree with cis_map: {wrong}"
 
+
 # ── Mutation coverage ───────────────────────────────────────────────────────
 #
 # A guard with no evidence it can fail is the failure mode this whole file
-# exists to prevent: the version before this one passed four of these five
-# unchanged. Each mutation below is applied to an in-memory copy of a published
-# row and must be rejected.
+# exists to prevent. Under generation every mutation is rejected by
+# construction — a mutated row cannot equal what the real code emits — but the
+# corpus stays: it is the accumulated exploit history of six review rounds
+# against the previous matcher, and it keeps any future verifier honest.
 
 
 def _row(name: str) -> dict:
@@ -627,7 +473,7 @@ def _audit_duplicates_a_line(row: dict) -> dict:
 
 def _pass_row_takes_a_warn_branch(row: dict) -> dict:
     # Direct-conditional form (accounts.py): a PASS row carrying the branch that
-    # only a FAIL produces. Independent per-field resolution accepts this.
+    # only a FAIL produces.
     row["remediation"] = "Disable the built-in Guest account."
     return row
 
@@ -645,32 +491,75 @@ def _risky_service_row_gains_text(row: dict) -> dict:
 
 def _fail_row_takes_the_pass_pair(row: dict) -> dict:
     # accounts.py binds status in an if-chain, then keys remediation and command
-    # off `status is Status.PASS`. Treating that settled condition as a free
-    # branch emits a FAIL outcome with the PASS blank pair, which the runtime
-    # cannot produce — and blanking both fields together validated against it.
+    # off `status is Status.PASS`. A FAIL outcome carrying the PASS blank pair
+    # is something the runtime cannot produce.
     row["remediation"] = ""
     row["command"] = ""
     return row
 
 
 def _outcome_swapped_within_one_status(row: dict) -> dict:
-    # AutoPlay has three WARN call sites with different remediation. Name and
-    # status alone do not say which one ran, so without `details` as the
-    # discriminator any of them validated another's fields.
-    other = next(
-        t.remediation for t in command_audit.collect_result_templates()
-        if t.check_name == "AutoPlay Disabled" and t.status == "WARN"
-        and t.remediation and t.remediation != row["remediation"]
-    )
+    # AutoPlay has three WARN outcomes with different remediation (key absent,
+    # value NOTSET, partial 158). The sample machine's is the partial one; take
+    # the NOTSET outcome's text from the real code so this can never drift.
+    with mock.patch("apotrope.checks.misc.run_powershell", return_value="NOTSET"):
+        other = misc._check_autoplay()[0].remediation
+    assert other != row["remediation"], "the two outcomes no longer differ"
     row["remediation"] = other
     return row
 
 
 def _audit_command_disables_instead_of_enabling(row: dict) -> dict:
-    # Names the right subcategory and silences its auditing. Reading only the
-    # quoted names accepted this; the whole line has to match the template.
+    # Names the right subcategory and silences its auditing.
     row["command"] = row["command"].replace(
         "/success:enable /failure:enable", "/success:disable /failure:disable"
+    )
+    return row
+
+
+def _severity_swapped(row: dict) -> dict:
+    # encryption.py picks HIGH for the OS drive and MEDIUM otherwise; swapping
+    # them leaves the score untouched for a PASS row, so only row-level
+    # verification can see it.
+    row["severity"] = "MEDIUM" if row["severity"] == "HIGH" else "HIGH"
+    return row
+
+
+def _status_flipped_pass_to_info(row: dict) -> dict:
+    # Paired PASS→INFO / INFO→PASS flips preserve every global total.
+    row["status"] = "INFO"
+    return row
+
+
+def _status_flipped_info_to_pass(row: dict) -> dict:
+    row["status"] = "PASS"
+    return row
+
+
+def _pass_fields_under_warn_details(row: dict) -> dict:
+    # The PASS outcome's (empty) fields presented alongside details only the
+    # WARN outcome produces.
+    row["status"] = "PASS"
+    row["remediation"] = ""
+    row["command"] = ""
+    return row
+
+
+def _details_gain_a_trailing_entry(row: dict) -> dict:
+    row["details"] = row["details"].replace(
+        ". Security-relevant", ", . Security-relevant"
+    )
+    return row
+
+
+def _details_in_an_unrenderable_order(row: dict) -> dict:
+    # misc.py renders subcategories in _EXPECTED_AUDIT order, where Logon
+    # precedes Sensitive Privilege Use.
+    row["details"] = row["details"].replace(
+        "Sensitive Privilege Use", "Sensitive Privilege Use, Logon"
+    )
+    row["command"] = (
+        row["command"] + "\n" + misc._CMD_AUDITPOL_ENABLE.format(subcategory="Logon")
     )
     return row
 
@@ -694,6 +583,16 @@ MUTATIONS = [
                  id="outcome-swapped-within-one-status"),
     pytest.param("Audit Policy", _audit_command_disables_instead_of_enabling,
                  id="audit-command-disables"),
+    pytest.param("BitLocker — C:", _severity_swapped, id="bitlocker-c-severity-swapped"),
+    pytest.param("BitLocker — G:", _severity_swapped, id="bitlocker-g-severity-swapped"),
+    pytest.param("Guest Account", _status_flipped_pass_to_info, id="status-flip-pass-to-info"),
+    pytest.param("PowerShell v2", _status_flipped_info_to_pass, id="status-flip-info-to-pass"),
+    pytest.param("Audit Policy", _pass_fields_under_warn_details,
+                 id="pass-fields-under-warn-details"),
+    pytest.param("Audit Policy", _details_gain_a_trailing_entry,
+                 id="details-trailing-entry"),
+    pytest.param("Audit Policy", _details_in_an_unrenderable_order,
+                 id="details-unrenderable-order"),
 ]
 
 
@@ -704,47 +603,12 @@ def test_guard_rejects(check_name: str, mutate) -> None:
     assert _verify_row(mutate(row)) is not None, "the guard accepted a mutated row"
 
 
-# ── Audit Policy: unreported is not disabled ────────────────────────────────
+# ── Audit Policy wording ────────────────────────────────────────────────────
 
 _AUDIT_SUFFIX = (
     " This can also be configured via Group Policy "
     "(secpol.msc → Advanced Audit Policy Configuration)."
 )
-
-
-def _audit_row(details: str, command: str, fix: str) -> dict:
-    row = _row("Audit Policy")
-    row["details"] = details
-    row["command"] = command
-    row["remediation"] = fix + _AUDIT_SUFFIX
-    return row
-
-
-_MISSING_ONLY_DETAILS = (
-    "Not all expected audit subcategories are confirmed logging: "
-    "Logon (not reported). Security-relevant events may not be recorded."
-)
-
-
-def test_missing_only_outcome_with_no_command_is_accepted() -> None:
-    """A subcategory auditpol never reported was not observed disabled.
-
-    The source deliberately emits no command for it — enabling auditing the
-    operator never asked for is a change they did not consent to. A guard that
-    reads the reported names without distinguishing "(not reported)" rejects
-    this source-correct row.
-    """
-    row = _audit_row(_MISSING_ONLY_DETAILS, "", misc._FIX_AUDIT_UNREPORTED)
-    assert _verify_row(row) is None
-
-
-def test_command_enabling_an_unreported_subcategory_is_rejected() -> None:
-    row = _audit_row(
-        _MISSING_ONLY_DETAILS,
-        misc._CMD_AUDITPOL_ENABLE.format(subcategory="Logon"),
-        misc._FIX_AUDIT_UNREPORTED,
-    )
-    assert _verify_row(row) is not None
 
 
 @pytest.mark.parametrize(
@@ -759,68 +623,10 @@ def test_command_enabling_an_unreported_subcategory_is_rejected() -> None:
 def test_audit_remediation_must_equal_the_wording_for_its_outcome(
     label: str, remediation: str | None
 ) -> None:
-    """Prefix plus a `secpol.msc` substring is fail-open."""
+    """Anything but the exact wording the real outcome produces is rejected."""
     row = _row("Audit Policy")
     row["remediation"] = (
         row["remediation"] + " Also, email the auditor."
         if remediation is None else remediation
     )
     assert _verify_row(row) is not None, label
-
-
-# ── Bindings and wildcards ──────────────────────────────────────────────────
-
-def test_a_value_learned_from_details_constrains_the_other_fields() -> None:
-    """`{count}` in details and in remediation is one value, not two.
-
-    Discarding what the details match learned lets details say 3 and the
-    remediation say 999, each satisfying its own independent wildcard.
-    """
-    template = "Found {count} item(s)."
-    bound = _match(template, "Found 3 item(s).")
-    assert bound == {"count": "3"}
-    # The same binding must then pin the other field.
-    assert _match("Fix all {count} of them.", "Fix all 3 of them.", bound) is not None
-    assert _match("Fix all {count} of them.", "Fix all 999 of them.", bound) is None
-
-
-def test_a_placeholder_nothing_binds_is_not_treated_as_a_runtime_value() -> None:
-    """`{sid}`, `{render}` and friends are the resolver giving up.
-
-    Matched as an unbound group they accept any text at all. A row whose
-    template carries one must fail closed rather than validate.
-    """
-    row = _row("Built-in Administrator Account")
-    # accounts.py emits `Disable-LocalUser -SID '{sid}'` on its enabled branch;
-    # nothing in the check name or details binds {sid}.
-    row["status"] = "WARN"
-    row["severity"] = "LOW"   # what accounts.py emits on the enabled branch
-    row["details"] = "Built-in Administrator account is enabled (renamed to 'x')."
-    row["remediation"] = (
-        "Consider disabling the built-in Administrator account if it is not in active use."
-    )
-    row["command"] = "Disable-LocalUser -SID 'ANYTHING-AT-ALL'"
-    why = _verify_row(row)
-    assert why is not None and "bound by neither" in why, why
-
-
-def test_the_sample_contains_exactly_the_expected_checks() -> None:
-    """Status totals do not prove the right checks are present.
-
-    Swapping one row for a duplicate of another leaves 53 rows, the same
-    per-status counts, and every row individually verifiable — the sample would
-    simply stop showing a check while every guard stayed green.
-    """
-    report = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    names = [r["check_name"] for r in report["results"]]
-
-    duplicates = sorted({n for n in names if names.count(n) > 1})
-    assert not duplicates, f"the sample repeats a check: {duplicates}"
-    assert len(names) == sum(EXPECTED_COUNTS.values())
-
-    # Pinned so a check disappearing from the sample is a failure, not a
-    # silently shorter report.
-    assert sorted(names) == sorted(EXPECTED_CHECK_NAMES), {
-        "missing": sorted(set(EXPECTED_CHECK_NAMES) - set(names)),
-        "unexpected": sorted(set(names) - set(EXPECTED_CHECK_NAMES)),
-    }

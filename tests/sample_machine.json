@@ -1,0 +1,468 @@
+{
+ "accounts": [
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.accounts.run_powershell_json",
+   "value": [
+    [
+     {
+      "Enabled": false,
+      "Name": "Administrator",
+      "SID": "S-1-5-21-1004336348-1177238915-682003330-500"
+     },
+     {
+      "Enabled": false,
+      "Name": "Guest",
+      "SID": "S-1-5-21-1004336348-1177238915-682003330-501"
+     },
+     {
+      "Enabled": true,
+      "Name": "jsmith",
+      "SID": "S-1-5-21-1004336348-1177238915-682003330-1001"
+     }
+    ],
+    [
+     {
+      "Enabled": false,
+      "Name": "Administrator",
+      "SID": "S-1-5-21-1004336348-1177238915-682003330-500"
+     },
+     {
+      "Enabled": false,
+      "Name": "Guest",
+      "SID": "S-1-5-21-1004336348-1177238915-682003330-501"
+     },
+     {
+      "Enabled": true,
+      "Name": "jsmith",
+      "SID": "S-1-5-21-1004336348-1177238915-682003330-1001"
+     }
+    ],
+    [
+     {
+      "Name": "DESKTOP-AB12CD\\Administrator",
+      "ObjectClass": "User",
+      "PrincipalSource": "Local"
+     },
+     {
+      "Name": "DESKTOP-AB12CD\\jsmith",
+      "ObjectClass": "User",
+      "PrincipalSource": "Local"
+     }
+    ]
+   ]
+  },
+  {
+   "kind": "return_value",
+   "target": "apotrope.checks.accounts.run_powershell",
+   "value": "[Unicode]\r\nUnicode=yes\r\n[System Access]\r\nMinimumPasswordAge = 0\r\nMaximumPasswordAge = 42\r\nMinimumPasswordLength = 0\r\nPasswordComplexity = 0\r\nPasswordHistorySize = 0\r\nLockoutBadCount = 10\r\nResetLockoutCount = 30\r\nLockoutDuration = 30\r\n[Version]\r\nsignature=\"$CHICAGO$\"\r\nRevision=1\r\n"
+  }
+ ],
+ "antivirus": [
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.antivirus.run_powershell_json",
+   "value": [
+    {
+     "AMRunningMode": "Normal",
+     "AMServiceEnabled": true,
+     "AntivirusEnabled": true,
+     "AntivirusSignatureAge": 0,
+     "IsTamperProtected": true,
+     "RealTimeProtectionEnabled": true
+    },
+    [
+     {
+      "displayName": "Windows Defender",
+      "productState": 397568
+     }
+    ]
+   ]
+  },
+  {
+   "kind": "return_value",
+   "target": "apotrope.checks.antivirus.get_wmi_object",
+   "value": []
+  }
+ ],
+ "encryption": [
+  {
+   "kind": "return_value",
+   "target": "apotrope.checks.encryption.run_powershell_json",
+   "value": [
+    {
+     "EncryptionMethod": null,
+     "EncryptionPercentage": 0,
+     "MountPoint": "G:",
+     "ProtectionStatus": 0,
+     "VolumeStatus": null,
+     "VolumeType": "1"
+    },
+    {
+     "EncryptionMethod": 6,
+     "EncryptionPercentage": 100,
+     "MountPoint": "C:",
+     "ProtectionStatus": 1,
+     "VolumeStatus": "1",
+     "VolumeType": null
+    }
+   ]
+  }
+ ],
+ "firewall": [
+  {
+   "kind": "return_value",
+   "target": "apotrope.checks.firewall.run_powershell_json",
+   "value": [
+    {
+     "DefaultInboundAction": "NotConfigured",
+     "DefaultOutboundAction": "NotConfigured",
+     "Enabled": true,
+     "Name": "Domain"
+    },
+    {
+     "DefaultInboundAction": "NotConfigured",
+     "DefaultOutboundAction": "NotConfigured",
+     "Enabled": true,
+     "Name": "Private"
+    },
+    {
+     "DefaultInboundAction": "NotConfigured",
+     "DefaultOutboundAction": "NotConfigured",
+     "Enabled": true,
+     "Name": "Public"
+    }
+   ]
+  }
+ ],
+ "misc": [
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.misc.run_powershell",
+   "value": [
+    "158",
+    "Stopped"
+   ]
+  },
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.misc.run_powershell_json",
+   "value": [
+    {
+     "Mask": null,
+     "Override": null
+    },
+    [
+     {
+      "Inclusion Setting": "Success and Failure",
+      "Subcategory": "Logon"
+     },
+     {
+      "Inclusion Setting": "Success",
+      "Subcategory": "Account Lockout"
+     },
+     {
+      "Inclusion Setting": "Success",
+      "Subcategory": "Logoff"
+     },
+     {
+      "Inclusion Setting": "Success and Failure",
+      "Subcategory": "Credential Validation"
+     },
+     {
+      "Inclusion Setting": "No Auditing",
+      "Subcategory": "Sensitive Privilege Use"
+     }
+    ],
+    {
+     "Active": "1",
+     "MachineInactivity": null,
+     "Secure": "1",
+     "Timeout": "600"
+    }
+   ]
+  }
+ ],
+ "network": [
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.network.run_powershell_json",
+   "value": [
+    [
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 135,
+      "ProcessName": "svchost"
+     },
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 139,
+      "ProcessName": "svchost"
+     },
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 445,
+      "ProcessName": "svchost"
+     },
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 5040,
+      "ProcessName": "svchost"
+     },
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 49664,
+      "ProcessName": "svchost"
+     },
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 49665,
+      "ProcessName": "svchost"
+     },
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 49666,
+      "ProcessName": "svchost"
+     },
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 49667,
+      "ProcessName": "svchost"
+     },
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 49668,
+      "ProcessName": "svchost"
+     },
+     {
+      "LocalAddress": "0.0.0.0",
+      "LocalPort": 49669,
+      "ProcessName": "svchost"
+     }
+    ],
+    [
+     0,
+     0
+    ]
+   ]
+  },
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.network.run_powershell",
+   "value": [
+    "0",
+    "3"
+   ]
+  }
+ ],
+ "os_info": [
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.os_info.run_powershell_json",
+   "value": [
+    {
+     "BuildNumber": "26200",
+     "Caption": "Microsoft Windows 11 Pro",
+     "ProductType": 1,
+     "Version": "10.0.26200"
+    },
+    {
+     "Domain": "WORKGROUP",
+     "PartOfDomain": false,
+     "Workgroup": "WORKGROUP"
+    },
+    {
+     "ManufacturerVersion": "7.2.2.0",
+     "TpmPresent": true,
+     "TpmReady": true
+    }
+   ]
+  },
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.os_info.run_powershell",
+   "value": [
+    "7",
+    "True"
+   ]
+  },
+  {
+   "kind": "frozen_datetime",
+   "target": "apotrope.checks.os_info.datetime",
+   "value": "2026-07-13T15:30:00+00:00"
+  }
+ ],
+ "powershell": [
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.powershell.run_powershell",
+   "value": [
+    "Undefined",
+    "1",
+    "1",
+    "FullLanguage",
+    ""
+   ]
+  }
+ ],
+ "rdp": [
+  {
+   "kind": "return_value",
+   "target": "apotrope.checks.rdp.run_powershell_json",
+   "value": {
+    "PolicyDenyTSConnections": null,
+    "PolicyUserAuthentication": null,
+    "PortNumber": null,
+    "UserAuthentication": null,
+    "fDenyTSConnections": 1
+   }
+  }
+ ],
+ "services": [
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.services.run_powershell_json",
+   "value": [
+    [],
+    []
+   ]
+  }
+ ],
+ "smb": [
+  {
+   "kind": "return_value",
+   "target": "apotrope.checks.smb.run_powershell_json",
+   "value": {
+    "EnableSMB1Protocol": false,
+    "EnableSecuritySignature": true,
+    "EncryptData": false,
+    "RequireSecuritySignature": true
+   }
+  }
+ ],
+ "startup": [
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.startup.run_powershell_json",
+   "value": [
+    [
+     {
+      "Command": "C:\\app.exe",
+      "Location": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "Name": "OneDrive",
+      "User": "Public"
+     },
+     {
+      "Command": "C:\\app.exe",
+      "Location": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "Name": "Microsoft Teams",
+      "User": "Public"
+     },
+     {
+      "Command": "C:\\app.exe",
+      "Location": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "Name": "Windows Security",
+      "User": "Public"
+     },
+     {
+      "Command": "C:\\app.exe",
+      "Location": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "Name": "Realtek Audio Console",
+      "User": "Public"
+     },
+     {
+      "Command": "C:\\app.exe",
+      "Location": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "Name": "Synaptics TouchPad",
+      "User": "Public"
+     },
+     {
+      "Command": "C:\\app.exe",
+      "Location": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "Name": "Snipping Tool",
+      "User": "Public"
+     }
+    ],
+    [
+     {
+      "RunAs": "SYSTEM",
+      "State": "Ready",
+      "TaskName": "Adobe Acrobat Update Task",
+      "TaskPath": "\\"
+     },
+     {
+      "RunAs": "SYSTEM",
+      "State": "Ready",
+      "TaskName": "GoogleUpdateTaskMachineCore",
+      "TaskPath": "\\"
+     },
+     {
+      "RunAs": "SYSTEM",
+      "State": "Ready",
+      "TaskName": "GoogleUpdateTaskMachineUA",
+      "TaskPath": "\\"
+     },
+     {
+      "RunAs": "SYSTEM",
+      "State": "Ready",
+      "TaskName": "MicrosoftEdgeUpdateTaskMachineCore",
+      "TaskPath": "\\"
+     },
+     {
+      "RunAs": "SYSTEM",
+      "State": "Ready",
+      "TaskName": "MicrosoftEdgeUpdateTaskMachineUA",
+      "TaskPath": "\\"
+     },
+     {
+      "RunAs": "SYSTEM",
+      "State": "Ready",
+      "TaskName": "OneDrive Standalone Update Task",
+      "TaskPath": "\\"
+     },
+     {
+      "RunAs": "SYSTEM",
+      "State": "Ready",
+      "TaskName": "Dell SupportAssist Trigger",
+      "TaskPath": "\\"
+     },
+     {
+      "RunAs": "SYSTEM",
+      "State": "Ready",
+      "TaskName": "Intel Driver & Support Assistant",
+      "TaskPath": "\\"
+     }
+    ]
+   ]
+  }
+ ],
+ "uac": [
+  {
+   "kind": "return_value",
+   "target": "apotrope.checks.uac.run_powershell_json",
+   "value": {
+    "ConsentPromptBehaviorAdmin": 5,
+    "ConsentPromptBehaviorUser": 3,
+    "EnableLUA": 1,
+    "EnableVirtualization": 1,
+    "PromptOnSecureDesktop": 1
+   }
+  }
+ ],
+ "updates": [
+  {
+   "kind": "side_effect",
+   "target": "apotrope.checks.updates.run_powershell",
+   "value": [
+    "2026-07-13",
+    "Automatic|Stopped",
+    "0"
+   ]
+  },
+  {
+   "kind": "frozen_datetime",
+   "target": "apotrope.checks.updates.datetime",
+   "value": "2026-07-13T15:30:00+00:00"
+  }
+ ]
+}
