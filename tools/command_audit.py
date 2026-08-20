@@ -242,6 +242,13 @@ _ANGLE_PLACEHOLDER = re.compile(r"(?<!\?)<[A-Za-z_][\w -]*>")
 # IGNORECASE is load-bearing, not tidiness: PowerShell resolves cmdlet names
 # case-insensitively, so `restart-computer -Force` runs exactly as
 # `Restart-Computer -Force` does while slipping past a case-sensitive rule.
+#
+# So is backtick removal: outside the named escape sequences, a backtick before
+# a character IS that character to PowerShell's tokenizer, so Restart-`Computer
+# executes as Restart-Computer while reading past any pattern that matches the
+# raw text. The deny rules below run on _ps_unescaped() text, which resolves
+# the escapes the way the tokenizer does — real escape sequences (`n, `t, ...)
+# become breaks, everything else collapses to the escaped character.
 _DESTRUCTIVE = re.compile(
     r"""
     \b(?:
@@ -325,6 +332,19 @@ _AUDITPOL_ENABLE_SHAPE = re.compile(
 def _dequoted(line: str) -> str:
     """The line as a native program receives it: PowerShell strips the quotes."""
     return line.replace('"', "").replace("'", "")
+
+
+# PowerShell's real escape sequences (lowercase only; `N is just N). These
+# resolve to control characters, so for matching purposes they are breaks —
+# treating "shutdow`n" as the word "shutdown" would be a false positive, since
+# it executes as "shutdow" followed by a newline.
+_PS_ESCAPE_SEQ = re.compile(r"`([nrtabfve0])")
+_PS_ESCAPED_CHAR = re.compile(r"`(.)", re.DOTALL)
+
+
+def _ps_unescaped(text: str) -> str:
+    """The text as PowerShell's tokenizer reads it: backtick escapes resolved."""
+    return _PS_ESCAPED_CHAR.sub(r"\1", _PS_ESCAPE_SEQ.sub(" ", text))
 
 
 _CLM_METHOD_CALL = re.compile(r"\[[\w.]+\]::[\w.]*\w+\s*\(")
@@ -472,14 +492,15 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 "<...> placeholder is parsed as a redirection operator by PowerShell",
                 text,
             ))
-        if _DESTRUCTIVE.search(active):
+        if _DESTRUCTIVE.search(_ps_unescaped(active)):
             violations.append(Violation(
                 cmd.module, cmd.line, "destructive-command",
                 "destructive/unattended command (TPM clear, reboot, shutdown, volume "
-                "or BitLocker teardown) must be a commented manual step, not copy-paste",
+                "or BitLocker teardown) must be a commented manual step, not copy-paste "
+                "— backtick-splitting the name does not help, the tokenizer resolves it",
                 text,
             ))
-        if _REMOTE_LOCKOUT.search(active):
+        if _REMOTE_LOCKOUT.search(_ps_unescaped(active)):
             violations.append(Violation(
                 cmd.module, cmd.line, "remote-access-lockout",
                 "actively severs a remote-access path the operator may be connected "

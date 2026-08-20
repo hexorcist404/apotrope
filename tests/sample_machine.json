@@ -1,6 +1,26 @@
 {
  "accounts": [
   {
+   "calls": [
+    {
+     "args": [
+      "try { Get-LocalUser -ErrorAction Stop | Select-Object Name, Enabled, @{Name='SID';Expression={$_.SID.Value}} | ConvertTo-Json -Compress } catch { Write-Error $_; exit 1 }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "try { Get-LocalUser -ErrorAction Stop | Select-Object Name, Enabled, @{Name='SID';Expression={$_.SID.Value}} | ConvertTo-Json -Compress } catch { Write-Error $_; exit 1 }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "try { Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop | Select-Object Name, PrincipalSource, ObjectClass | ConvertTo-Json -Compress } catch { Write-Error $_; exit 1 }"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.accounts.run_powershell_json",
    "value": [
@@ -53,6 +73,14 @@
    ]
   },
   {
+   "calls": [
+    {
+     "args": [
+      "$tmp = [System.IO.Path]::GetTempFileName(); try { secedit /export /cfg $tmp /areas SECURITYPOLICY /quiet | Out-Null; if ($LASTEXITCODE -ne 0) { throw \"secedit exited $LASTEXITCODE\" }; Get-Content -LiteralPath $tmp -ErrorAction Stop } catch { Write-Error $_; exit 1 } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "return_value",
    "target": "apotrope.checks.accounts.run_powershell",
    "value": "[Unicode]\r\nUnicode=yes\r\n[System Access]\r\nMinimumPasswordAge = 0\r\nMaximumPasswordAge = 42\r\nMinimumPasswordLength = 0\r\nPasswordComplexity = 0\r\nPasswordHistorySize = 0\r\nLockoutBadCount = 10\r\nResetLockoutCount = 30\r\nLockoutDuration = 30\r\n[Version]\r\nsignature=\"$CHICAGO$\"\r\nRevision=1\r\n"
@@ -60,6 +88,20 @@
  ],
  "antivirus": [
   {
+   "calls": [
+    {
+     "args": [
+      "try { Get-MpComputerStatus | Select-Object AMServiceEnabled, RealTimeProtectionEnabled, AntivirusEnabled, IsTamperProtected, AntivirusSignatureAge, AMRunningMode | ConvertTo-Json -Compress } catch { '{\"_QueryError\":true}' }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "Get-CimInstance -Namespace root\\SecurityCenter2 -ClassName AntiVirusProduct | Select-Object displayName, productState | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.antivirus.run_powershell_json",
    "value": [
@@ -80,6 +122,7 @@
    ]
   },
   {
+   "calls": [],
    "kind": "return_value",
    "target": "apotrope.checks.antivirus.get_wmi_object",
    "value": []
@@ -87,6 +130,14 @@
  ],
  "encryption": [
   {
+   "calls": [
+    {
+     "args": [
+      "try { Get-BitLockerVolume | Select-Object MountPoint, VolumeType, VolumeStatus, ProtectionStatus, EncryptionMethod, EncryptionPercentage | ConvertTo-Json -Compress } catch { '[]' }"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "return_value",
    "target": "apotrope.checks.encryption.run_powershell_json",
    "value": [
@@ -111,6 +162,14 @@
  ],
  "firewall": [
   {
+   "calls": [
+    {
+     "args": [
+      "Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "return_value",
    "target": "apotrope.checks.firewall.run_powershell_json",
    "value": [
@@ -137,6 +196,20 @@
  ],
  "misc": [
   {
+   "calls": [
+    {
+     "args": [
+      "$v = (Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -ErrorAction SilentlyContinue).NoDriveTypeAutoRun; if ($null -eq $v) { 'NOTSET' } else { [string]$v }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "(Get-Service -Name WinRM -ErrorAction SilentlyContinue).Status"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.misc.run_powershell",
    "value": [
@@ -145,6 +218,26 @@
    ]
   },
   {
+   "calls": [
+    {
+     "args": [
+      "$k = Get-ItemProperty -LiteralPath 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' -ErrorAction SilentlyContinue; @{ Override=$k.FeatureSettingsOverride; Mask=$k.FeatureSettingsOverrideMask } | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "try { auditpol /get /category:* /r | ConvertFrom-Csv | Where-Object {     $_.'Subcategory' -in @('Logon','Account Lockout','Logoff','Credential Validation','Sensitive Privilege Use') } | Select-Object Subcategory,'Inclusion Setting' | ConvertTo-Json -Compress } catch { '[]' }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "$d = Get-ItemProperty -LiteralPath 'HKCU:\\Control Panel\\Desktop' -ErrorAction SilentlyContinue; $m = Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -ErrorAction SilentlyContinue; @{ Active=$d.ScreenSaveActive; Secure=$d.ScreenSaverIsSecure; Timeout=$d.ScreenSaveTimeOut; MachineInactivity=$m.InactivityTimeoutSecs } | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.misc.run_powershell_json",
    "value": [
@@ -185,6 +278,20 @@
  ],
  "network": [
   {
+   "calls": [
+    {
+     "args": [
+      "$procs = @{}; Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $procs[$_.Id] = $_.ProcessName }; Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object LocalPort, LocalAddress, @{N='ProcessName';E={if($procs[[int]$_.OwningProcess]){$procs[[int]$_.OwningProcess]}else{'Unknown'}}} | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled } | Select-Object -ExpandProperty TcpipNetbiosOptions | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.network.run_powershell_json",
    "value": [
@@ -247,6 +354,20 @@
    ]
   },
   {
+   "calls": [
+    {
+     "args": [
+      "$v = (Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient' -Name 'EnableMulticast' -ErrorAction SilentlyContinue).EnableMulticast; if ($null -eq $v) { 'NOTSET' } else { $v }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "(Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Get-NetIPAddress -AddressFamily IPv6 -ErrorAction SilentlyContinue | Measure-Object).Count"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.network.run_powershell",
    "value": [
@@ -257,6 +378,26 @@
  ],
  "os_info": [
   {
+   "calls": [
+    {
+     "args": [
+      "Get-CimInstance Win32_OperatingSystem | Select-Object Caption, BuildNumber, Version, ProductType | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "Get-CimInstance Win32_ComputerSystem | Select-Object PartOfDomain, Domain, Workgroup | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "try { Get-Tpm | Select-Object TpmPresent, TpmReady, ManufacturerVersion | ConvertTo-Json -Compress } catch { '{\"TpmPresent\":null,\"TpmReady\":null,\"ManufacturerVersion\":null}' }"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.os_info.run_powershell_json",
    "value": [
@@ -279,6 +420,20 @@
    ]
   },
   {
+   "calls": [
+    {
+     "args": [
+      "[int](New-TimeSpan -Start (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalDays"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "try { [string](Confirm-SecureBootUEFI) } catch [System.PlatformNotSupportedException] { 'UNSUPPORTED' } catch [System.UnauthorizedAccessException] { 'ACCESSDENIED' } catch { 'ACCESSDENIED' }"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.os_info.run_powershell",
    "value": [
@@ -294,6 +449,38 @@
  ],
  "powershell": [
   {
+   "calls": [
+    {
+     "args": [
+      "Get-ExecutionPolicy -Scope LocalMachine"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "$v = (Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging' -ErrorAction SilentlyContinue).EnableScriptBlockLogging; if ($null -eq $v) { 'NOTSET' } else { [string]$v }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "$v = (Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging' -ErrorAction SilentlyContinue).EnableModuleLogging; if ($null -eq $v) { 'NOTSET' } else { [string]$v }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "$ExecutionContext.SessionState.LanguageMode"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "try { (Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2Root -ErrorAction SilentlyContinue).State } catch { 'UNAVAILABLE' }"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.powershell.run_powershell",
    "value": [
@@ -307,6 +494,14 @@
  ],
  "rdp": [
   {
+   "calls": [
+    {
+     "args": [
+      "$ts  = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server'; $rdp = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp'; $pol = 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services'; @{ fDenyTSConnections       = (Get-ItemProperty $ts  -ErrorAction SilentlyContinue).fDenyTSConnections; UserAuthentication       = (Get-ItemProperty $rdp -ErrorAction SilentlyContinue).UserAuthentication; PortNumber               = (Get-ItemProperty $rdp -ErrorAction SilentlyContinue).PortNumber; PolicyDenyTSConnections  = (Get-ItemProperty $pol -ErrorAction SilentlyContinue).fDenyTSConnections; PolicyUserAuthentication = (Get-ItemProperty $pol -ErrorAction SilentlyContinue).UserAuthentication } | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "return_value",
    "target": "apotrope.checks.rdp.run_powershell_json",
    "value": {
@@ -320,6 +515,20 @@
  ],
  "services": [
   {
+   "calls": [
+    {
+     "args": [
+      "Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Running' } | Select-Object Name, DisplayName, @{N='Status';E={$_.Status.ToString()}} | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object {     $_.PathName -and     $_.PathName.Trim() -notmatch '^\"' -and     $_.PathName.Trim() -notmatch '^[A-Za-z]:\\\\Windows\\\\' -and     $_.PathName.Trim() -match '^[A-Za-z]:\\\\.+ .+\\.(exe|dll)' } | Select-Object Name, DisplayName, PathName | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.services.run_powershell_json",
    "value": [
@@ -330,6 +539,14 @@
  ],
  "smb": [
   {
+   "calls": [
+    {
+     "args": [
+      "try { Get-SmbServerConfiguration | Select-Object EnableSMB1Protocol, RequireSecuritySignature, EnableSecuritySignature, EncryptData | ConvertTo-Json -Compress } catch { '{\"EnableSMB1Protocol\":null,\"RequireSecuritySignature\":null,\"EnableSecuritySignature\":null,\"EncryptData\":null}' }"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "return_value",
    "target": "apotrope.checks.smb.run_powershell_json",
    "value": {
@@ -342,6 +559,20 @@
  ],
  "startup": [
   {
+   "calls": [
+    {
+     "args": [
+      "Get-CimInstance Win32_StartupCommand -ErrorAction SilentlyContinue | Select-Object Name, Command, Location, User | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {     $_.TaskPath -notlike '\\Microsoft\\*' -and     $_.State -ne 'Disabled' } | Select-Object TaskName, TaskPath, @{N='RunAs';E={$_.Principal.UserId}}, @{N='State';E={$_.State.ToString()}} | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.startup.run_powershell_json",
    "value": [
@@ -438,6 +669,14 @@
  ],
  "uac": [
   {
+   "calls": [
+    {
+     "args": [
+      "$k = Get-ItemProperty -LiteralPath 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -ErrorAction SilentlyContinue; @{ EnableLUA                    = $k.EnableLUA; ConsentPromptBehaviorAdmin   = $k.ConsentPromptBehaviorAdmin; ConsentPromptBehaviorUser    = $k.ConsentPromptBehaviorUser; PromptOnSecureDesktop        = $k.PromptOnSecureDesktop; EnableVirtualization         = $k.EnableVirtualization } | ConvertTo-Json -Compress"
+     ],
+     "kwargs": {}
+    }
+   ],
    "kind": "return_value",
    "target": "apotrope.checks.uac.run_powershell_json",
    "value": {
@@ -451,6 +690,28 @@
  ],
  "updates": [
   {
+   "calls": [
+    {
+     "args": [
+      "$hf = Get-HotFix | Where-Object { $_.InstalledOn -ne $null } | Sort-Object InstalledOn -Descending | Select-Object -First 1; if ($hf) { $hf.InstalledOn.ToString('yyyy-MM-dd') } else { 'NONE' }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "$s = Get-Service -Name wuauserv -ErrorAction SilentlyContinue; if ($s) { \"$($s.StartType)|$($s.Status)\" }"
+     ],
+     "kwargs": {}
+    },
+    {
+     "args": [
+      "try { $s = New-Object -ComObject Microsoft.Update.Session; $r = $s.CreateUpdateSearcher().Search(\"IsInstalled=0 and IsHidden=0 and Type='Software'\"); $r.Updates.Count } catch { 'UNAVAILABLE' }"
+     ],
+     "kwargs": {
+      "timeout": 60
+     }
+    }
+   ],
    "kind": "side_effect",
    "target": "apotrope.checks.updates.run_powershell",
    "value": [

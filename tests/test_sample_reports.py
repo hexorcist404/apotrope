@@ -194,20 +194,61 @@ def _frozen_datetime(iso: str) -> type:
 
 @lru_cache(maxsize=None)
 def _generated_rows(module_name: str) -> tuple[dict[str, str], ...]:
-    """Run the real check module against the reconstructed machine."""
+    """Run the real check module against the reconstructed machine.
+
+    The mocked helpers do not merely hand back canned data — every spec pins
+    the exact call arguments the module made when the spec was captured, and
+    the recorded calls must match them, in order, completely. Without that, a
+    check whose *query* rots (asks the machine the wrong question) would keep
+    generating perfect rows: the mock answers any question with the same data,
+    so the guard would stay green while every real scan changed behaviour.
+    A pinned-call mismatch is query drift; update sample_machine.json
+    deliberately, the same as any other drift.
+    """
     module = importlib.import_module(f"apotrope.checks.{module_name}")
+    recorded: list[tuple[dict, mock.Mock]] = []
     with contextlib.ExitStack() as stack:
         for spec in MACHINE[module_name]:
             target, kind, value = spec["target"], spec["kind"], spec["value"]
             if kind == "frozen_datetime":
                 stack.enter_context(mock.patch(target, _frozen_datetime(value)))
-            elif kind == "side_effect":
-                stack.enter_context(
-                    mock.patch(target, mock.Mock(side_effect=list(value)))
-                )
+                continue
+            if kind == "side_effect":
+                stub = mock.Mock(side_effect=list(value))
+            elif kind == "return_value":
+                stub = mock.Mock(return_value=value)
             else:
-                stack.enter_context(mock.patch(target, mock.Mock(return_value=value)))
+                raise ValueError(
+                    f"unknown mock kind {kind!r} for {target} — the harness "
+                    "must fail on a spec it does not understand, not improvise"
+                )
+            if "calls" not in spec:
+                raise ValueError(
+                    f"{target} has no pinned calls — every mocked helper must "
+                    "declare the exact arguments the module is expected to pass"
+                )
+            if kind == "side_effect" and len(spec["calls"]) != len(value):
+                raise ValueError(
+                    f"{target} supplies {len(value)} payload(s) for "
+                    f"{len(spec['calls'])} pinned call(s) — every supplied "
+                    "response must be consumed"
+                )
+            stack.enter_context(mock.patch(target, stub))
+            recorded.append((spec, stub))
         rows = module.run()
+
+    for spec, stub in recorded:
+        expected = [
+            mock.call(*c["args"], **c["kwargs"]) for c in spec["calls"]
+        ]
+        assert stub.call_args_list == expected, (
+            f"{spec['target']} was not called with the pinned arguments.\n"
+            f"  expected: {expected}\n"
+            f"  recorded: {stub.call_args_list}\n"
+            "A mismatch means the check's query changed (or calls were added, "
+            "dropped, or reordered) — update tests/sample_machine.json "
+            "deliberately, the same as any other drift."
+        )
 
     generated = []
     for r in rows:
@@ -277,6 +318,52 @@ def test_the_real_checks_reproduce_every_published_row(module_name: str) -> None
         f"docs/ rows for {category!r} are not what {module_name}.run() emits. "
         f"Refresh the fixture from source, then regenerate: {REGENERATE}"
     )
+
+
+@contextlib.contextmanager
+def _uncached_generation():
+    """Clear the generation cache around a test that perturbs its inputs."""
+    _generated_rows.cache_clear()
+    try:
+        yield
+    finally:
+        _generated_rows.cache_clear()
+
+
+def test_a_corrupted_query_fails_generation() -> None:
+    """The mocks answer questions; the guard must check which question was asked.
+
+    Without pinned call arguments, a check whose PowerShell query rots keeps
+    generating perfect rows — the mock hands back the canned data whatever the
+    module asks — and the guard stays green while every real scan changes
+    behaviour.
+    """
+    from apotrope.checks import encryption
+
+    with _uncached_generation():
+        with mock.patch.object(encryption, "_PS_BITLOCKER", "CORRUPT QUERY"):
+            with pytest.raises(AssertionError, match="pinned arguments"):
+                _generated_rows("encryption")
+
+
+def test_an_unknown_mock_kind_is_rejected() -> None:
+    """A spec the harness does not understand must fail, not improvise."""
+    bogus = [{"target": "apotrope.checks.uac.run_powershell_json",
+              "kind": "bogus", "value": {}, "calls": []}]
+    with _uncached_generation():
+        with mock.patch.dict(MACHINE, {"uac": bogus}):
+            with pytest.raises(ValueError, match="unknown mock kind"):
+                _generated_rows("uac")
+
+
+def test_an_unconsumed_payload_is_rejected() -> None:
+    """Supplying answers nothing asks for is the same rot in the other direction."""
+    spec = [dict(s) for s in MACHINE["services"]]
+    spec[0] = {**spec[0], "value": [*spec[0]["value"], {"extra": "payload"}]}
+    with _uncached_generation():
+        with mock.patch.dict(MACHINE, {"services": spec}):
+            with pytest.raises(ValueError, match="must be consumed"):
+                _generated_rows("services")
 
 
 # ── Branding, rendering, persona ────────────────────────────────────────────

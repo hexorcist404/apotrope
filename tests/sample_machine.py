@@ -14,10 +14,18 @@ the output. Change what a check emits and the guard fails naming the field;
 regenerate the sample and it passes again. The payloads only need touching when
 a check starts *consuming* different machine data.
 
-Each patch spec is ``{"target": <module-level name>, "kind": ..., "value": ...}``
-where kind is ``return_value``, ``side_effect`` (payloads in call order), or
-``frozen_datetime`` (an ISO instant the harness turns into a pinned datetime
-class).
+Each patch spec is ``{"target": <module-level name>, "kind": ..., "value": ...,
+"calls": [...]}`` where kind is ``return_value``, ``side_effect`` (payloads in
+call order), or ``frozen_datetime`` (an ISO instant the harness turns into a
+pinned datetime class).
+
+``calls`` pins the exact arguments the module passed on every call — the
+PowerShell query text itself — captured from the source at reconstruction time.
+The harness requires the recorded calls to match them, in order, completely
+(an empty list means "must never be called"). Without that, a check whose
+*query* rots would keep generating perfect rows: the mock answers any question
+with the same canned data. A pinned-call mismatch is query drift; update this
+spec deliberately, the same as any other drift.
 """
 
 from __future__ import annotations

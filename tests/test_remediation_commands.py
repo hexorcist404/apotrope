@@ -68,6 +68,25 @@ def test_commented_reboot_is_not_flagged_destructive() -> None:
     assert not [v for v in lint_commands(ok) if v.rule == "destructive-command"]
 
 
+def test_backtick_split_destructive_name_is_flagged() -> None:
+    # Outside the named escape sequences, a backtick before a character IS that
+    # character to PowerShell's tokenizer: Restart-`Computer executes exactly as
+    # Restart-Computer while reading past any pattern matching the raw text.
+    planted = [
+        Command("fake.py", 1, "Restart-`Computer -Force"),
+        Command("fake.py", 2, "Clear-Tp`m"),
+    ]
+    destructive = [v for v in lint_commands(planted) if v.rule == "destructive-command"]
+    assert len(destructive) == 2
+
+
+def test_a_real_escape_sequence_is_not_misread_as_a_word() -> None:
+    # `n IS a newline, so "shutdow`n" executes as "shutdow" + newline — treating
+    # it as the word "shutdown" would be a false positive.
+    ok = [Command("fake.py", 1, "shutdow`n /r")]
+    assert not [v for v in lint_commands(ok) if v.rule == "destructive-command"]
+
+
 class TestLocalizedFirewallSelectorRule:
     """Regression guard: -DisplayGroup must never come back."""
 

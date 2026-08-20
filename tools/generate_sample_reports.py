@@ -8,13 +8,17 @@ v0.1.12 two releases later.
 
 ``tools/fixtures/sample_report.json`` is now that input — a sanitized
 ``AuditReport`` in exactly the shape ``Reporter.generate_json_report`` writes and
-``compare.load_baseline`` reads. This script renders both reports from it, so a
-release only has to run one command to bring the public samples current.
+``compare.load_baseline`` reads. This script *renders* both reports from it; it
+does not decide whether the fixture itself is current. That is the job of
+``tests/test_sample_reports.py``, which runs the real check modules against the
+reconstructed sample machine (``tests/sample_machine.py``) and fails when any
+published row no longer equals what the source emits. The refresh flow is:
+that guard names the drifted field, the fixture is updated to the generated
+value, and this script re-renders.
 
-The fixture's PASS/INFO rows carry a uniform placeholder severity: the technical
-template renders severity only for FAIL/WARN, so the original values for the
-other 47 rows are not present in either published artifact. Nothing renders or
-scores them, and a uniform value keeps the stable per-category sort a no-op.
+Every field on every row is real data, severity included — the fixture holds
+exactly what the check modules emit for the sample machine, verified by
+generation rather than recovered from the rendered HTML.
 
 Usage:  python tools/generate_sample_reports.py [--output-dir PATH]
 Exit code 0 == both reports were written.

@@ -118,7 +118,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rather than patched again. Running the real code leaves nothing to slip past:
   a source change that moves any published field — wording, severity, a
   command, the CIS mapping — fails the guard naming the field, and the fix is
-  to regenerate the sample.
+  to regenerate the sample. The mocked helpers also pin the exact arguments of
+  every call — the PowerShell query text itself — so a check whose *query*
+  changes fails the guard too, rather than being handed the canned answer
+  regardless of what it asked.
 
   Severity is part of that: it drives the score, and 47 rows had arrived from
   the HTML recovery carrying a uniform `INFO` stand-in because the report
