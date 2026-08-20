@@ -306,6 +306,20 @@ class TestAuditpolEnableShapeRule:
         planted = [Command("fake.py", 1, quoted)]
         assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
 
+    @pytest.mark.parametrize("quote", ['"', "'"])
+    def test_quoted_set_token_does_not_hide_a_disable(self, quote: str) -> None:
+        # Quote-stripping applies to every token, not only switch values:
+        # `auditpol "/set"` executes exactly as `auditpol /set`. Matching the
+        # raw text let a quoted "/set" carry a disable past the detector.
+        cmd = self._DISABLE.replace("/set", f"{quote}/set{quote}")
+        planted = [Command("fake.py", 1, cmd)]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
+
+    def test_quoted_set_token_with_the_enable_shape_is_clean(self) -> None:
+        # Dequoted it IS the blessed form, and that is what executes.
+        cmd = self._ENABLE.replace("/set", '"/set"')
+        assert not lint_commands([Command("fake.py", 1, cmd)])
+
     def test_an_unrecognised_auditpol_set_line_is_flagged(self) -> None:
         # Fails closed: anything that is not exactly the enable shape.
         planted = [Command("fake.py", 1, "auditpol /set /category:* /success:enable")]

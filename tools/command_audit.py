@@ -698,13 +698,23 @@ _NEW_ITEM_FORCE = re.compile(r"\bNew-Item\b.*?-Force\b", re.IGNORECASE | re.DOTA
 # /success:"disable" and /success:'disable' have the same effect and read past a
 # deny-list. Permit only the complete enabling shape instead, and flag every
 # other active auditpol /set line whatever it says.
+#
+# The same quote-stripping applies to EVERY token, not just the switch values —
+# `auditpol "/set" ...` executes exactly as `auditpol /set ...` does. So both
+# patterns run against a dequoted copy of the line (see _dequoted), never the
+# raw text; matching the raw text let a quoted "/set" carry a disable straight
+# past the detector.
 _AUDITPOL_SET = re.compile(r"\bauditpol\b[^\n]*\s/set\b", re.IGNORECASE)
 _AUDITPOL_ENABLE_SHAPE = re.compile(
-    r"^\s*auditpol\s+/set\s+/subcategory:(?P<q>[\"']?)[^\"']+(?P=q)"
-    r"\s+/success:(?P<q2>[\"']?)enable(?P=q2)"
-    r"\s+/failure:(?P<q3>[\"']?)enable(?P=q3)\s*$",
+    r"^\s*auditpol\s+/set\s+/subcategory:[^/]+?"
+    r"\s+/success:enable\s+/failure:enable\s*$",
     re.IGNORECASE,
 )
+
+
+def _dequoted(line: str) -> str:
+    """The line as a native program receives it: PowerShell strips the quotes."""
+    return line.replace('"', "").replace("'", "")
 
 
 _CLM_METHOD_CALL = re.compile(r"\[[\w.]+\]::[\w.]*\w+\s*\(")
@@ -900,7 +910,8 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 text,
             ))
         for line in _logical_lines(text):
-            if _AUDITPOL_SET.search(line) and not _AUDITPOL_ENABLE_SHAPE.match(line.strip()):
+            dequoted = _dequoted(line)
+            if _AUDITPOL_SET.search(dequoted) and not _AUDITPOL_ENABLE_SHAPE.match(dequoted.strip()):
                 violations.append(Violation(
                     cmd.module, cmd.line, "auditpol-not-the-enable-shape",
                     "is an auditpol /set line that is not exactly "
