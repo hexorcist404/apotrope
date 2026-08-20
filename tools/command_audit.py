@@ -243,7 +243,7 @@ _RESULT_CALLS = ("CheckResult", "RiskyService")
 
 #: Positional slots on CheckResult(category, check_name, status, severity,
 #: description, details, ...).
-_POSITIONAL = {1: "check_name", 2: "status", 4: "description", 5: "details"}
+_POSITIONAL = {1: "check_name", 2: "status", 3: "severity", 4: "description", 5: "details"}
 
 #: Ceiling on branch enumeration per call. Four independent conditions is
 #: already more than anything here, and without a cap a future call with a dozen
@@ -265,6 +265,9 @@ class ResultTemplate:
     line: int
     check_name: str | None
     status: str | None
+    #: Verified like the text fields: it drives the score, so a source
+    #: change here silently staled the published report and its number.
+    severity: str | None
     #: Not a field the sample must keep current — it belongs to the scanned
     #: machine. It is collected because it is the only thing that says WHICH
     #: outcome produced a row when several share a name and status: AutoPlay
@@ -275,6 +278,11 @@ class ResultTemplate:
     remediation: str | None
     command: str | None
     unresolved: frozenset[str]
+    #: Placeholder names the resolver invented for a sub-expression it could
+    #: not read — `obj.mount()` collapses to `{mount}` and is then
+    #: indistinguishable from a real `mount` variable. Tracked so a name
+    #: collision elsewhere can never make one look bindable.
+    opaque: frozenset[str]
 
 
 def _as_enum(node: ast.expr, scope: dict[str, ast.expr], depth: int = 0) -> str | None:
@@ -312,6 +320,27 @@ def _decide(test: ast.expr, scope: dict[str, ast.expr]) -> bool | None:
     if isinstance(op, (ast.IsNot, ast.NotEq)):
         return left != right
     return None
+
+
+def _opaque_placeholders(node: ast.AST) -> set[str]:
+    """Placeholder names standing in for a sub-expression, not a variable.
+
+    `_placeholder` names an Attribute or method call after its final attribute,
+    so `obj.mount()` renders as `{mount}`. That is the resolver giving up, but
+    it is spelled exactly like a genuine runtime value — and if anything else in
+    the same result binds `mount`, the opaque one silently inherits the binding
+    and stops being checked.
+    """
+    names: set[str] = set()
+    for sub in ast.walk(node):
+        if not isinstance(sub, ast.FormattedValue):
+            continue
+        value = sub.value
+        if isinstance(value, ast.Attribute):
+            names.add(value.attr)
+        elif isinstance(value, ast.Call) and isinstance(value.func, ast.Attribute):
+            names.add(value.func.attr)
+    return names
 
 
 def _atoms(test: ast.expr, scope: dict[str, ast.expr] | None = None, depth: int = 0) -> list[str]:
@@ -510,7 +539,7 @@ def collect_result_templates() -> list[ResultTemplate]:
                 if len(call.args) > idx:
                     fields[name] = call.args[idx]
             for kw in call.keywords:
-                if kw.arg in ("check_name", "status", "details", *RESULT_TEXT_FIELDS):
+                if kw.arg in ("check_name", "status", "severity", "details", *RESULT_TEXT_FIELDS):
                     fields[kw.arg] = kw.value
 
             locals_ = _enclosing_locals(tree, call)
@@ -546,8 +575,9 @@ def collect_result_templates() -> list[ResultTemplate]:
                 if len(conds) > _MAX_CONDITIONS:
                     # Fail closed rather than enumerate a combinatorial blow-up.
                     templates.append(ResultTemplate(
-                        path.name, call.lineno, None, None, None, None, None, None,
-                        frozenset(("check_name", "status", "details", *RESULT_TEXT_FIELDS)),
+                        path.name, call.lineno, None, None, None, None, None, None, None,
+                        frozenset(("check_name", "status", "severity", "details", *RESULT_TEXT_FIELDS)),
+                        frozenset(),
                     ))
                     continue
 
@@ -556,29 +586,34 @@ def collect_result_templates() -> list[ResultTemplate]:
                     truth = {k: bool(bits >> i & 1) for i, k in enumerate(keys)}
                     resolved: dict[str, str | None] = {}
                     unresolved: set[str] = set()
-                    for name in ("check_name", "status", "details", *RESULT_TEXT_FIELDS):
+                    opaque: set[str] = set()
+                    for name in ("check_name", "status", "severity", "details", *RESULT_TEXT_FIELDS):
                         field_expr = fields.get(name)
                         if field_expr is None:
                             resolved[name] = None
                             continue
                         picked = _pick(field_expr, truth, scope)
-                        if name == "status":
+                        if name in ("status", "severity"):
                             value = _status_of(picked)
                         else:
                             value = _resolve(picked, consts)
                         if value is None:
                             unresolved.add(name)
+                        else:
+                            opaque |= _opaque_placeholders(picked)
                         resolved[name] = value
                     templates.append(ResultTemplate(
                         module=path.name,
                         line=call.lineno,
                         check_name=resolved["check_name"],
                         status=resolved["status"],
+                        severity=resolved["severity"],
                         details=resolved["details"],
                         description=resolved["description"],
                         remediation=resolved["remediation"],
                         command=resolved["command"],
                         unresolved=frozenset(unresolved),
+                        opaque=frozenset(opaque),
                     ))
     return templates
 
@@ -658,12 +693,17 @@ _NEW_ITEM_FORCE = re.compile(r"\bNew-Item\b.*?-Force\b", re.IGNORECASE | re.DOTA
 # This matters more here than in ordinary code: Apotrope scores a machine in
 # Constrained Language as a hardened PASS, so remediation that needs full
 # language fails on exactly the hosts the tool has just praised.
-# Remediation exists to increase coverage. An auditpol line that turns success
-# or failure auditing off reduces it, which is the opposite of the finding it
-# claims to fix — and it reads almost identically to the enabling form, so a
-# copy-edit slip produces a command that looks right and silences the log.
-_AUDITPOL_DISABLES = re.compile(
-    r"\bauditpol\b[^\n]*/(?:success|failure):disable\b", re.IGNORECASE
+# Remediation exists to increase coverage. Denying the literal ":disable" is
+# fail-open: PowerShell strips quotes before invoking a native program, so
+# /success:"disable" and /success:'disable' have the same effect and read past a
+# deny-list. Permit only the complete enabling shape instead, and flag every
+# other active auditpol /set line whatever it says.
+_AUDITPOL_SET = re.compile(r"\bauditpol\b[^\n]*\s/set\b", re.IGNORECASE)
+_AUDITPOL_ENABLE_SHAPE = re.compile(
+    r"^\s*auditpol\s+/set\s+/subcategory:(?P<q>[\"']?)[^\"']+(?P=q)"
+    r"\s+/success:(?P<q2>[\"']?)enable(?P=q2)"
+    r"\s+/failure:(?P<q3>[\"']?)enable(?P=q3)\s*$",
+    re.IGNORECASE,
 )
 
 
@@ -860,12 +900,14 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 text,
             ))
         for line in _logical_lines(text):
-            if _AUDITPOL_DISABLES.search(line):
+            if _AUDITPOL_SET.search(line) and not _AUDITPOL_ENABLE_SHAPE.match(line.strip()):
                 violations.append(Violation(
-                    cmd.module, cmd.line, "auditpol-disables-auditing",
-                    "turns auditing off. Remediation for an audit-policy finding must "
-                    "enable the subcategory it reports, not silence it — /success:enable "
-                    "/failure:enable",
+                    cmd.module, cmd.line, "auditpol-not-the-enable-shape",
+                    "is an auditpol /set line that is not exactly "
+                    "`auditpol /set /subcategory:'<name>' /success:enable /failure:enable`. "
+                    "Remediation for an audit-policy finding must enable the subcategory it "
+                    "reports, and quoting hides a disable from any deny-list — PowerShell "
+                    "strips the quotes before auditpol ever sees them",
                     text,
                 ))
                 break

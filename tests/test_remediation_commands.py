@@ -16,6 +16,8 @@ cmdlet it invokes.
 
 from __future__ import annotations
 
+import pytest
+
 import sys
 from pathlib import Path
 
@@ -278,7 +280,7 @@ class TestRiskyServiceInventory:
         assert lint_commands(planted) == []
 
 
-class TestAuditpolDisablesRule:
+class TestAuditpolEnableShapeRule:
     """Remediation exists to increase coverage, not reduce it.
 
     The disabling form reads almost identically to the enabling one, so a
@@ -291,24 +293,40 @@ class TestAuditpolDisablesRule:
 
     def test_disabling_command_is_flagged(self) -> None:
         planted = [Command("fake.py", 1, self._DISABLE)]
-        assert [v for v in lint_commands(planted) if v.rule == "auditpol-disables-auditing"]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
+
+    @pytest.mark.parametrize("quote", ['"', "'"])
+    def test_quoted_disable_is_flagged(self, quote: str) -> None:
+        # PowerShell strips quotes before invoking a native program, so this
+        # disables auditing exactly as the bare form does — and a deny-list
+        # looking for a literal ":disable" reads straight past it.
+        quoted = self._ENABLE.replace(
+            "/success:enable", f"/success:{quote}disable{quote}"
+        )
+        planted = [Command("fake.py", 1, quoted)]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
+
+    def test_an_unrecognised_auditpol_set_line_is_flagged(self) -> None:
+        # Fails closed: anything that is not exactly the enable shape.
+        planted = [Command("fake.py", 1, "auditpol /set /category:* /success:enable")]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
 
     def test_partial_disable_is_flagged(self) -> None:
         half = self._ENABLE.replace("/failure:enable", "/failure:disable")
         planted = [Command("fake.py", 1, half)]
-        assert [v for v in lint_commands(planted) if v.rule == "auditpol-disables-auditing"]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
 
     def test_enabling_command_is_clean(self) -> None:
         assert not lint_commands([Command("fake.py", 1, self._ENABLE)])
 
     def test_commented_disable_is_not_flagged(self) -> None:
         planted = [Command("fake.py", 1, "# " + self._DISABLE)]
-        assert not [v for v in lint_commands(planted) if v.rule == "auditpol-disables-auditing"]
+        assert not [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
 
     def test_no_shipped_command_disables_auditing(self) -> None:
         violations = [
             v for v in lint_commands(collect_commands())
-            if v.rule == "auditpol-disables-auditing"
+            if v.rule == "auditpol-not-the-enable-shape"
         ]
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
 

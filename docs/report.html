@@ -1531,13 +1531,13 @@ if ($LASTEXITCODE -ne 0) { throw &#34;reg.exe add failed ($LASTEXITCODE)&#34; }"
         </div>
         
         
-        <div class="frow is-warn" data-status="WARN" data-text="audit policy hardening the following subcategories have auditing disabled: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;sensitive privilege use&#39; /success:enable /failure:enable">
+        <div class="frow is-warn" data-status="WARN" data-text="audit policy hardening not all expected audit subcategories are confirmed logging: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;sensitive privilege use&#39; /success:enable /failure:enable">
           <button class="fhead is-open">
             <span class="spill spill-warn">WARN</span>
             <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
             <span class="fname">
               <b>Audit Policy</b>
-              <div class="fsnip">The following subcategories have auditing disabled: Sensitive Privilege Use</div>
+              <div class="fsnip">Not all expected audit subcategories are confirmed logging: Sensitive Privilege Use</div>
             </span>
             <span class="fright">
               <span class="cis">CIS 17.1.1</span>
@@ -1546,7 +1546,7 @@ if ($LASTEXITCODE -ne 0) { throw &#34;reg.exe add failed ($LASTEXITCODE)&#34; }"
           </button>
           <div class="fbody">
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks that key audit policy subcategories log Success/Failure events.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">The following subcategories have auditing disabled: Sensitive Privilege Use. Security-relevant events may not be recorded.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Not all expected audit subcategories are confirmed logging: Sensitive Privilege Use. Security-relevant events may not be recorded.</span></div>
             
             <div class="fld"><span class="k">Remediation</span>
               <div class="rem">

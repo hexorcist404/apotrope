@@ -47,7 +47,6 @@ from apotrope import checks as checks_pkg
 from apotrope import cis_map
 from apotrope.checks import misc
 from apotrope.compare import load_baseline
-from apotrope.models import Status
 from apotrope.scoring import calculate_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
@@ -69,6 +68,64 @@ from generate_sample_reports import (
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 REGENERATE = "python tools/generate_sample_reports.py"
+
+#: The exact checks the published sample shows. Pinned so one vanishing is a
+#: failure rather than a quietly shorter report.
+EXPECTED_CHECK_NAMES = (
+    'Audit Policy',
+    'AutoPlay Disabled',
+    'BitLocker — C:',
+    'BitLocker — G:',
+    'Built-in Administrator Account',
+    'Defender Real-Time Protection',
+    'Defender Signature Age',
+    'Defender Tamper Protection',
+    'Domain Membership',
+    'Firewall — Domain Default Inbound Action',
+    'Firewall — Domain Profile Enabled',
+    'Firewall — Private Default Inbound Action',
+    'Firewall — Private Profile Enabled',
+    'Firewall — Public Default Inbound Action',
+    'Firewall — Public Profile Enabled',
+    'Guest Account',
+    'IPv6 Status',
+    'LLMNR Disabled',
+    'Last Windows Update',
+    'Listening Ports — Summary',
+    'Local Administrators',
+    'NetBIOS over TCP/IP',
+    'OS End-of-Support Status',
+    'OS Version',
+    'Password Policy — Account Lockout',
+    'Password Policy — Complexity',
+    'Password Policy — Minimum Length',
+    'Pending Windows Updates',
+    'PowerShell Constrained Language Mode',
+    'PowerShell Execution Policy',
+    'PowerShell Module Logging',
+    'PowerShell Script Block Logging',
+    'PowerShell v2',
+    'RDP Enabled',
+    'Registered AV Products',
+    'Risky Services',
+    'SMB Encryption',
+    'SMB Signing Required',
+    'SMBv1 Disabled',
+    'Scheduled Tasks',
+    'Screen Lock Timeout',
+    'Secure Boot',
+    'Speculative Execution Mitigations',
+    'Startup Programs',
+    'System Uptime',
+    'TPM Status',
+    'UAC Admin Consent Behavior',
+    'UAC Enabled',
+    'UAC Secure Desktop',
+    'UAC Standard User Behavior',
+    'Unquoted Service Paths',
+    'WinRM Status',
+    'Windows Update Service',
+)
 
 
 # A resolved literal keeps `{placeholder}` wherever the value is only known at
@@ -115,6 +172,10 @@ def _match(literal: str | None, rendered: str, bound: dict[str, str] | None = No
 # never a bare wildcard — an approved wildcard is the same hole under a nicer
 # name.
 
+class _AuditDetailsError(ValueError):
+    """Details that misc.py could not have produced for a WARN outcome."""
+
+
 def _audit_subcategories(details: str) -> tuple[list[str], list[str]]:
     """Split the reported subcategories into (confirmed disabled, unreported).
 
@@ -125,13 +186,30 @@ def _audit_subcategories(details: str) -> tuple[list[str], list[str]]:
     change the operator did not ask for. Treated as disabled, a legitimate
     missing-only row with no command is rejected while a command that switches
     on the unreported one is accepted.
+
+    Searching for those names anywhere in free-form prose is fail-open twice
+    over: text `misc.py` cannot emit still parses, and prose naming nothing at
+    all yields two empty lists, which then reads as a legitimate "everything was
+    unreported" outcome. The rendered shape is fixed, so it is matched whole and
+    every entry in it has to be one of the known names.
     """
+    prefix = "Not all expected audit subcategories are confirmed logging: "
+    suffix = ". Security-relevant events may not be recorded."
+    if not (details.startswith(prefix) and details.endswith(suffix)):
+        raise _AuditDetailsError(f"not the shape misc.py renders: {details!r}")
+
+    entries = [e.strip() for e in details[len(prefix):-len(suffix)].split(", ") if e.strip()]
+    if not entries:
+        raise _AuditDetailsError("names no subcategory at all")
+    if len(entries) != len(set(entries)):
+        raise _AuditDetailsError(f"repeats an entry: {entries}")
+
     disabled, unreported = [], []
-    for name in misc._EXPECTED_AUDIT:
-        if f"{name} (not reported)" in details:
-            unreported.append(name)
-        elif name in details:
-            disabled.append(name)
+    for entry in entries:
+        name = entry[: -len(" (not reported)")] if entry.endswith(" (not reported)") else entry
+        if name not in misc._EXPECTED_AUDIT:
+            raise _AuditDetailsError(f"unknown subcategory {name!r}")
+        (unreported if entry.endswith(" (not reported)") else disabled).append(name)
     return disabled, unreported
 
 
@@ -146,7 +224,10 @@ def _validate_audit_policy_command(row) -> str | None:
     have to be pinned too, so the template is matched whole with only the
     subcategory substituted.
     """
-    disabled, _ = _audit_subcategories(row["details"])
+    try:
+        disabled, _ = _audit_subcategories(row["details"])
+    except _AuditDetailsError as exc:
+        return str(exc)
     lines = [ln for ln in row["command"].splitlines() if ln.strip()]
 
     targeted = []
@@ -174,7 +255,10 @@ def _validate_audit_policy_remediation(row) -> str | None:
     fully determined by what details report, so there is nothing to be lenient
     about.
     """
-    disabled, unreported = _audit_subcategories(row["details"])
+    try:
+        disabled, unreported = _audit_subcategories(row["details"])
+    except _AuditDetailsError as exc:
+        return str(exc)
 
     if disabled and unreported:
         fix = misc._FIX_AUDIT_MIXED.format(unreported=", ".join(unreported))
@@ -194,9 +278,15 @@ def _validate_audit_policy_remediation(row) -> str | None:
 
 #: (check_name, field) -> validator. Every entry names a function; there is no
 #: form of this table that approves a field without checking it.
+#: (check_name, status, field) -> validator. Status is part of the key on
+#: purpose: the Audit Policy WARN outcome builds its command and remediation
+#: at scan time and needs one, but the PASS and INFO outcomes are ordinary
+#: static text. Running the validators for every status accepted a WARN row
+#: relabelled PASS while still carrying its WARN command, and rejected the
+#: PASS and INFO results misc.py really emits.
 VALIDATORS = {
-    ("Audit Policy", "command"): _validate_audit_policy_command,
-    ("Audit Policy", "remediation"): _validate_audit_policy_remediation,
+    ("Audit Policy", "WARN", "command"): _validate_audit_policy_command,
+    ("Audit Policy", "WARN", "remediation"): _validate_audit_policy_remediation,
 }
 
 
@@ -286,31 +376,27 @@ def test_fixture_holds_the_sanitized_persona() -> None:
     assert report.error_count == 0, "the published sample must not show failed checks"
 
 
-def test_fixture_severity_placeholders_are_confined_to_unrendered_rows() -> None:
-    """Only FAIL/WARN severities are real; PASS/INFO carry a uniform placeholder.
+def test_every_severity_is_one_its_check_can_emit() -> None:
+    """Severity is real data now, not a placeholder.
 
-    The technical template renders severity for FAIL/WARN only, so the original
-    values for the other rows are absent from both published artifacts and were
-    not recoverable. A uniform placeholder keeps the per-category sort
-    (status, severity) stable, which is what reproduces the committed row order.
+    The fixture was recovered from HTML that renders severity only for
+    FAIL/WARN, so 47 rows arrived carrying a uniform INFO stand-in. Severity
+    drives the score, so leaving them unverified let a source change stale the
+    published report and its number. They now hold what their outcome emits —
+    and putting the real values back left both rendered reports byte-identical,
+    which is what the committed row order was always sorted by.
     """
-    report = load_baseline(str(FIXTURE))
-
-    placeholders = {
-        r.severity for r in report.results if r.status in (Status.PASS, Status.INFO)
-    }
-    assert len(placeholders) == 1, (
-        f"PASS/INFO rows must share one placeholder severity, found {placeholders}. "
-        "Mixed values reorder rows inside a category and break generation parity."
+    report = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    placeholders = [
+        r["check_name"] for r in report["results"]
+        if r["status"] in ("PASS", "INFO") and r["severity"] == "INFO"
+    ]
+    # INFO severity is legitimate for some checks; a wholesale block of them is
+    # the old stand-in coming back.
+    assert len(placeholders) < 10, (
+        f"{len(placeholders)} PASS/INFO rows carry INFO severity — the recovered "
+        f"placeholder is back: {placeholders}"
     )
-
-    # The rendered severities are real data and must stay varied — if these ever
-    # collapse to the placeholder too, the fixture has lost the only severities
-    # the reports actually show.
-    rendered = {
-        r.severity for r in report.results if r.status in (Status.FAIL, Status.WARN)
-    }
-    assert len(rendered) > 1, "FAIL/WARN severities look overwritten, not recovered"
 
 
 def _fixture_commands() -> list[command_audit.Command]:
@@ -387,7 +473,7 @@ def _verify_row(row) -> str | None:
     # outcome's remediation.
     if len(candidates) > 1:
         for field in command_audit.RESULT_TEXT_FIELDS:
-            if VALIDATORS.get((row["check_name"], field)):
+            if VALIDATORS.get((row["check_name"], row["status"], field)):
                 continue
             if len({getattr(t, field) for t, _ in candidates}) > 1:
                 lines = sorted(f"{t.module}:{t.line}" for t, _ in candidates)
@@ -399,8 +485,20 @@ def _verify_row(row) -> str | None:
     problems = []
     for template, bound in candidates:
         failed = None
+        # Severity drives the score, so a source change here staled the
+        # published report and its number while every other check stayed green.
+        # Compared across the matched outcomes rather than against one, because
+        # a check may pick its severity from runtime state this cannot see —
+        # encryption.py takes HIGH for the OS drive and MEDIUM for any other.
+        emitted = {t.severity for t, _ in candidates if t.severity is not None}
+        if emitted and row["severity"] not in emitted:
+            problems.append(
+                f"severity: row says {row['severity']} but "
+                f"{template.module}:{template.line} emits {sorted(emitted)}"
+            )
+            continue
         for field in command_audit.RESULT_TEXT_FIELDS:
-            validator = VALIDATORS.get((row["check_name"], field))
+            validator = VALIDATORS.get((row["check_name"], row["status"], field))
             if validator is not None:
                 failed = validator(row)
                 if failed:
@@ -416,7 +514,10 @@ def _verify_row(row) -> str | None:
             # text at all, which is the wildcard hole under a friendlier name.
             # Fail closed unless the check name or details pin it.
             literal = getattr(template, field) or ""
-            loose = sorted(set(_ANY_PLACEHOLDER.findall(literal)) - set(bound))
+            loose = sorted(
+                (set(_ANY_PLACEHOLDER.findall(literal)) - set(bound))
+                | (set(_ANY_PLACEHOLDER.findall(literal)) & template.opaque)
+            )
             if loose:
                 failed = (
                     f"{field}: {', '.join(loose)} bound by neither the check name "
@@ -693,6 +794,7 @@ def test_a_placeholder_nothing_binds_is_not_treated_as_a_runtime_value() -> None
     # accounts.py emits `Disable-LocalUser -SID '{sid}'` on its enabled branch;
     # nothing in the check name or details binds {sid}.
     row["status"] = "WARN"
+    row["severity"] = "LOW"   # what accounts.py emits on the enabled branch
     row["details"] = "Built-in Administrator account is enabled (renamed to 'x')."
     row["remediation"] = (
         "Consider disabling the built-in Administrator account if it is not in active use."
@@ -700,3 +802,25 @@ def test_a_placeholder_nothing_binds_is_not_treated_as_a_runtime_value() -> None
     row["command"] = "Disable-LocalUser -SID 'ANYTHING-AT-ALL'"
     why = _verify_row(row)
     assert why is not None and "bound by neither" in why, why
+
+
+def test_the_sample_contains_exactly_the_expected_checks() -> None:
+    """Status totals do not prove the right checks are present.
+
+    Swapping one row for a duplicate of another leaves 53 rows, the same
+    per-status counts, and every row individually verifiable — the sample would
+    simply stop showing a check while every guard stayed green.
+    """
+    report = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    names = [r["check_name"] for r in report["results"]]
+
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    assert not duplicates, f"the sample repeats a check: {duplicates}"
+    assert len(names) == sum(EXPECTED_COUNTS.values())
+
+    # Pinned so a check disappearing from the sample is a failure, not a
+    # silently shorter report.
+    assert sorted(names) == sorted(EXPECTED_CHECK_NAMES), {
+        "missing": sorted(set(EXPECTED_CHECK_NAMES) - set(names)),
+        "unexpected": sorted(set(names) - set(EXPECTED_CHECK_NAMES)),
+    }

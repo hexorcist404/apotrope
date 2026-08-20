@@ -126,6 +126,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   never by an approved wildcard. Nothing is exempt: the requirement is zero
   unverified fields, not a list of the ones we gave up on.
 
+  Severity is verified too: it drives the score, and 47 rows had arrived from
+  the HTML recovery carrying a uniform `INFO` stand-in because the report
+  renders severity only for FAIL/WARN. They now hold what their outcome
+  emits, and restoring the real values left both rendered reports
+  byte-identical — which is what the committed row order was always sorted
+  by. The set of checks the sample shows is pinned as well, since status
+  totals do not notice one being swapped for a duplicate of another.
+
   Fourteen mutations of a published row are asserted to be rejected, plus
   targeted cases for the wildcard and binding rules: swapping two commands
   inside one module, blanking a field, a command enabling a subcategory the
