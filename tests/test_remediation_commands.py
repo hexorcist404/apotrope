@@ -87,6 +87,61 @@ def test_a_real_escape_sequence_is_not_misread_as_a_word() -> None:
     assert not [v for v in lint_commands(ok) if v.rule == "destructive-command"]
 
 
+def test_the_editions_disagree_on_backtick_e_and_both_readings_are_matched() -> None:
+    # Windows PowerShell 5.1 has no `e escape, so Restart-Comput`er executes
+    # there as Restart-Computer (measured); PowerShell 7 reads `e as ESC and
+    # refuses the same input. A single normalization misreads one edition —
+    # the deny rules must match the 5.1 reading here.
+    planted = [Command("fake.py", 1, "Restart-Comput`er -Force")]
+    assert [v for v in lint_commands(planted) if v.rule == "destructive-command"]
+
+
+def test_a_ps7_unicode_escape_is_resolved_before_matching() -> None:
+    # `u{52} decodes to R on PowerShell 7 only, so `u{52}estart-Computer
+    # executes there as Restart-Computer (measured) — the 7 reading must
+    # catch it even though 5.1 would choke on the same text.
+    planted = [Command("fake.py", 1, "`u{52}estart-Computer -Force")]
+    assert [v for v in lint_commands(planted) if v.rule == "destructive-command"]
+
+
+def test_a_comment_ending_in_a_backtick_does_not_hide_the_next_line() -> None:
+    # To PowerShell the trailing backtick is part of the comment and the next
+    # line still executes (measured on 5.1). Folding continuations before
+    # dropping comments would glue the reboot into the comment and never lint it.
+    planted = [Command("fake.py", 1, "# preparation notes `\nRestart-Computer -Force")]
+    assert [v for v in lint_commands(planted) if v.rule == "destructive-command"]
+
+
+class TestBacktickBan:
+    """No shipped remediation needs a backtick, so none may carry one.
+
+    The escape sets differ between editions — `e continues a word on Windows
+    PowerShell 5.1 and is ESC on PowerShell 7, `u{...} decodes only on 7 — so
+    no single reading of an escaped command is what every operator runs. The
+    deny rules match both readings as defense in depth; this rule removes the
+    ambiguity at the source.
+    """
+
+    def test_a_backtick_outside_a_comment_is_flagged(self) -> None:
+        planted = [Command("fake.py", 1, "Write-Host `u{48}ello")]
+        assert [v for v in lint_commands(planted) if v.rule == "backtick-in-command"]
+
+    def test_a_continuation_backtick_is_flagged_too(self) -> None:
+        planted = [Command("fake.py", 1, "Set-ItemProperty -Path X `\n  -Name Y -Value 1")]
+        assert [v for v in lint_commands(planted) if v.rule == "backtick-in-command"]
+
+    def test_a_backtick_inside_a_comment_is_not_flagged(self) -> None:
+        planted = [Command("fake.py", 1, "Set-ItemProperty -Path X -Name Y -Value 1\n# uses `e")]
+        assert not [v for v in lint_commands(planted) if v.rule == "backtick-in-command"]
+
+    def test_no_shipped_command_contains_a_backtick(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "backtick-in-command"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
 class TestLocalizedFirewallSelectorRule:
     """Regression guard: -DisplayGroup must never come back."""
 
@@ -288,8 +343,46 @@ class TestRegAddExitCodeRule:
     def test_the_error_message_is_not_read_as_an_invocation(self) -> None:
         # The throw message says "reg.exe add failed" — a substring match would
         # count it as a second, unchecked invocation and flag every compliant
-        # command in the tree.
+        # command in the tree. In the message, the preceding token is `throw`,
+        # not a command separator, which is what the rule keys on.
         planted = [Command("fake.py", 1, self._ADD + "\n" + self._CHECK)]
+        assert not [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_a_wrong_polarity_check_is_not_a_guard(self) -> None:
+        # `-eq 0` inverts the guard: it throws on success and blesses failure.
+        planted = [Command(
+            "fake.py", 1, self._ADD + "\nif ($LASTEXITCODE -eq 0) { throw }",
+        )]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_a_logging_only_mention_is_not_a_guard(self) -> None:
+        # Printing the exit code informs nobody who did not already read it —
+        # the command block must stop on failure, not narrate it.
+        planted = [Command(
+            "fake.py", 1, self._ADD + "\nWrite-Host $LASTEXITCODE",
+        )]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_a_commented_guard_is_not_a_guard(self) -> None:
+        planted = [Command("fake.py", 1, self._ADD + "\n# " + self._CHECK)]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_a_guard_in_a_trailing_comment_is_not_a_guard(self) -> None:
+        planted = [Command("fake.py", 1, self._ADD + "  # " + self._CHECK)]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_a_semicolon_prefixed_invocation_is_detected(self) -> None:
+        # The invocation pattern matches command positions, not just line
+        # starts — `x; reg add ...` is as real an invocation as one on its own line.
+        planted = [Command("fake.py", 1, "Write-Output starting; " + self._ADD)]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_an_invocation_nested_in_a_block_is_detected(self) -> None:
+        planted = [Command("fake.py", 1, "if ($enable) { " + self._ADD + " }")]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_a_same_line_guard_is_clean(self) -> None:
+        planted = [Command("fake.py", 1, self._ADD + "; " + self._CHECK)]
         assert not [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
 
     def test_no_shipped_reg_add_lacks_an_exit_check(self) -> None:
@@ -390,6 +483,13 @@ class TestAuditpolEnableShapeRule:
         # `u is not a named escape sequence, so a`uditpol executes exactly as
         # auditpol — detection must run on the unescaped text.
         cmd = self._DISABLE.replace("auditpol", "a`uditpol", 1)
+        planted = [Command("fake.py", 1, cmd)]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
+
+    def test_an_edition_split_escape_does_not_hide_the_set_token(self) -> None:
+        # On Windows PowerShell 5.1 there is no `e escape, so /s`et executes
+        # as /set there — the 5.1 reading must surface it.
+        cmd = self._DISABLE.replace("/set", "/s`et")
         planted = [Command("fake.py", 1, cmd)]
         assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
 
