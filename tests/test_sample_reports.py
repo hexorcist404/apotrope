@@ -356,6 +356,16 @@ def test_an_unknown_mock_kind_is_rejected() -> None:
                 _generated_rows("uac")
 
 
+def test_a_spec_without_pinned_calls_is_rejected() -> None:
+    """A mock with no ``calls`` key would accept any query — refuse the spec."""
+    spec = [dict(s) for s in MACHINE["uac"]]
+    del spec[0]["calls"]
+    with _uncached_generation():
+        with mock.patch.dict(MACHINE, {"uac": spec}):
+            with pytest.raises(ValueError, match="no pinned calls"):
+                _generated_rows("uac")
+
+
 def test_an_unconsumed_payload_is_rejected() -> None:
     """Supplying answers nothing asks for is the same rot in the other direction."""
     spec = [dict(s) for s in MACHINE["services"]]

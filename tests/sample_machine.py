@@ -11,8 +11,10 @@ pinning "now" to the persona's own ``scan_timestamp``
 This file is the drift alarm's other half: ``tests/test_sample_reports.py``
 runs every module against these inputs and requires the published rows to equal
 the output. Change what a check emits and the guard fails naming the field;
-regenerate the sample and it passes again. The payloads only need touching when
-a check starts *consuming* different machine data.
+regenerate the sample and it passes again. The specs need touching when a check
+starts *consuming* different machine data — or *asking* for it differently:
+the pinned calls below are part of the spec, so a changed query or call order
+is a deliberate update here, not a harness detail.
 
 Each patch spec is ``{"target": <module-level name>, "kind": ..., "value": ...,
 "calls": [...]}`` where kind is ``return_value``, ``side_effect`` (payloads in

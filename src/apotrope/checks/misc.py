@@ -78,10 +78,10 @@ _EXPECTED_AUDIT = (
 # linted and PowerShell-parsed even though the emitted command is assembled
 # with a join it cannot resolve statically. Inline the format string into
 # _check_audit_policy and the command leaves the inventory entirely.
-# The three remediation wordings, kept at module level rather than inline so the
-# static resolver in tools/command_audit.py can see each branch. Inline, they are
-# assignments to a local inside an if/elif/else, which it cannot follow — and an
-# unresolvable field is one the published sample cannot be checked against.
+# The three remediation wordings for the audit-policy outcomes, one per branch.
+# Module level keeps the outcome-to-wording mapping importable by name:
+# tests/test_sample_reports.py builds its wrong-wording rejection cases from
+# these exact constants, so a reworded branch changes the test inputs with it.
 _FIX_AUDIT_DISABLED = (
     "Enable audit logging for the subcategories confirmed disabled so "
     "security-relevant events are recorded."
