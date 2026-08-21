@@ -347,6 +347,20 @@ def _ps_unescaped(text: str) -> str:
     return _PS_ESCAPED_CHAR.sub(r"\1", _PS_ESCAPE_SEQ.sub(" ", text))
 
 
+# reg.exe reports failure through the exit code, not a PowerShell error, so a
+# reg add with no $LASTEXITCODE check makes a denied write indistinguishable
+# from a successful one. NOTE: this cannot live behind the _REGISTRY_HIVE gate
+# — reg.exe takes "HKLM\..." with no colon, which that pattern does not match.
+# Anchored to command position (optionally via & or a path) rather than
+# searched: the shipped exit-code checks *mention* "reg.exe add failed" inside
+# their own throw message, and a bare substring match reads the error text as
+# a second invocation.
+_REG_ADD = re.compile(
+    r"^\s*(?:&\s*)?(?:\S*[\\/])?reg(?:\.exe)?\s+add\b", re.IGNORECASE
+)
+_LASTEXITCODE = re.compile(r"\$LASTEXITCODE\b", re.IGNORECASE)
+
+
 _CLM_METHOD_CALL = re.compile(r"\[[\w.]+\]::[\w.]*\w+\s*\(")
 
 # A BitLocker recovery password the operator never sees is worse than no
@@ -462,11 +476,21 @@ def _logical_lines(text: str) -> list[str]:
 
 
 def lint_commands(commands: list[Command]) -> list[Violation]:
-    """Return every structural defect found across *commands* (empty == all clean)."""
+    """Return every structural defect found across *commands* (empty == all clean).
+
+    Detection runs on the text as PowerShell would execute it: comments
+    dropped, backtick continuations folded, backtick escapes resolved. Matching
+    the raw text instead lets ``Restart-`Computer`` or ``audi`tpol`` read past
+    a deny rule while executing identically. Permitting patterns stay narrow —
+    the auditpol enable shape refuses any line still carrying a backtick, since
+    the canonical template has none and escape tricks only ever obscure.
+    """
     violations: list[Violation] = []
     for cmd in commands:
         text = cmd.text
-        active = "\n".join(_uncommented_lines(text))
+        active = _ps_unescaped(
+            "\n".join(_uncommented_lines(_CONTINUATION.sub(" ", text)))
+        )
 
         if "Get-CimInstance" in active and _CIM_METHOD.search(active):
             violations.append(Violation(
@@ -492,7 +516,7 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 "<...> placeholder is parsed as a redirection operator by PowerShell",
                 text,
             ))
-        if _DESTRUCTIVE.search(_ps_unescaped(active)):
+        if _DESTRUCTIVE.search(active):
             violations.append(Violation(
                 cmd.module, cmd.line, "destructive-command",
                 "destructive/unattended command (TPM clear, reboot, shutdown, volume "
@@ -500,7 +524,7 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 "— backtick-splitting the name does not help, the tokenizer resolves it",
                 text,
             ))
-        if _REMOTE_LOCKOUT.search(_ps_unescaped(active)):
+        if _REMOTE_LOCKOUT.search(active):
             violations.append(Violation(
                 cmd.module, cmd.line, "remote-access-lockout",
                 "actively severs a remote-access path the operator may be connected "
@@ -541,20 +565,26 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 text,
             ))
         for line in _logical_lines(text):
-            dequoted = _dequoted(line)
-            if _AUDITPOL_SET.search(dequoted) and not _AUDITPOL_ENABLE_SHAPE.match(dequoted.strip()):
+            # Detect on the executed form (unescaped + dequoted) so neither
+            # quoting nor backtick-splitting hides an auditpol /set line.
+            # Permit only lines with NO backticks: the canonical template has
+            # none, so an escape on a "canonical" line is obfuscation by
+            # definition and fails closed rather than being normalized clean.
+            detected = _dequoted(_ps_unescaped(line))
+            canonical = "`" not in line and _AUDITPOL_ENABLE_SHAPE.match(_dequoted(line).strip())
+            if _AUDITPOL_SET.search(detected) and not canonical:
                 violations.append(Violation(
                     cmd.module, cmd.line, "auditpol-not-the-enable-shape",
                     "is an auditpol /set line that is not exactly "
                     "`auditpol /set /subcategory:'<name>' /success:enable /failure:enable`. "
                     "Remediation for an audit-policy finding must enable the subcategory it "
-                    "reports, and quoting hides a disable from any deny-list — PowerShell "
-                    "strips the quotes before auditpol ever sees them",
+                    "reports, and quoting or backtick-escaping hides a disable from any "
+                    "deny-list — PowerShell resolves both before auditpol ever runs",
                     text,
                 ))
                 break
         for line in _logical_lines(text):
-            if _CLM_METHOD_CALL.search(line):
+            if _CLM_METHOD_CALL.search(_ps_unescaped(line)):
                 violations.append(Violation(
                     cmd.module, cmd.line, "constrained-language-method-call",
                     "invokes a .NET method, which PowerShell Constrained Language Mode "
@@ -567,7 +597,7 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 ))
                 break
         if _REGISTRY_HIVE.search(active):
-            for line in _uncommented_lines(text):
+            for line in map(_ps_unescaped, _logical_lines(text)):
                 if _SILENCED_REGISTRY_MUTATION.search(line):
                     violations.append(Violation(
                         cmd.module, cmd.line, "silenced-registry-mutation",
@@ -578,7 +608,7 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                         text,
                     ))
                     break
-            for line in _logical_lines(text):
+            for line in map(_ps_unescaped, _logical_lines(text)):
                 if _NEW_ITEM_FORCE.search(line):
                     violations.append(Violation(
                         cmd.module, cmd.line, "registry-new-item-force",
@@ -592,6 +622,22 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                         text,
                     ))
                     break
+        executed_lines = [
+            _dequoted(_ps_unescaped(ln)) for ln in _logical_lines(text) if ln.strip()
+        ]
+        for index, line in enumerate(executed_lines):
+            if not _REG_ADD.search(line):
+                continue
+            following = executed_lines[index + 1] if index + 1 < len(executed_lines) else ""
+            if not _LASTEXITCODE.search(following):
+                violations.append(Violation(
+                    cmd.module, cmd.line, "reg-add-unchecked-exit-code",
+                    "reg add reports failure through the exit code, not a PowerShell "
+                    "error, so without an immediate `if ($LASTEXITCODE -ne 0) { throw "
+                    "... }` a denied write is indistinguishable from a successful one",
+                    text,
+                ))
+                break
         if _LOCALIZED_FW_SELECTOR.search(active):
             violations.append(Violation(
                 cmd.module, cmd.line, "localized-firewall-selector",

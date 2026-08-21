@@ -253,6 +253,53 @@ class TestRegistryNewItemForceRule:
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
 
 
+class TestRegAddExitCodeRule:
+    """A `reg add` with no exit-code check hides its own failure.
+
+    reg.exe reports a denied or malformed write through the exit code, not a
+    PowerShell error, so without an immediate `$LASTEXITCODE` check the
+    operator sees the same silence for success and failure. Every shipped
+    registry write pairs the add with `if ($LASTEXITCODE -ne 0) { throw ... }`
+    on the very next line; this rule keeps future ones honest.
+    """
+
+    _ADD = 'reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Foo" /v Enabled /t REG_DWORD /d 1 /f'
+    _CHECK = 'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }'
+
+    def test_unchecked_reg_add_is_flagged(self) -> None:
+        planted = [Command("fake.py", 1, self._ADD)]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_bare_reg_add_without_exe_is_flagged(self) -> None:
+        planted = [Command("fake.py", 1, self._ADD.replace("reg.exe", "reg"))]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_an_immediate_exit_check_is_clean(self) -> None:
+        planted = [Command("fake.py", 1, self._ADD + "\n" + self._CHECK)]
+        assert not lint_commands(planted)
+
+    def test_a_check_two_lines_later_is_flagged(self) -> None:
+        # $LASTEXITCODE holds the LAST native exit code; anything that runs in
+        # between can overwrite it, so only the immediately following line
+        # counts as a check.
+        planted = [Command("fake.py", 1, self._ADD + "\nWrite-Output done\n" + self._CHECK)]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_the_error_message_is_not_read_as_an_invocation(self) -> None:
+        # The throw message says "reg.exe add failed" — a substring match would
+        # count it as a second, unchecked invocation and flag every compliant
+        # command in the tree.
+        planted = [Command("fake.py", 1, self._ADD + "\n" + self._CHECK)]
+        assert not [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_no_shipped_reg_add_lacks_an_exit_check(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "reg-add-unchecked-exit-code"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
 class TestRiskyServiceInventory:
     """The risky-service commands must stay inside the inventory.
 
@@ -338,6 +385,31 @@ class TestAuditpolEnableShapeRule:
         # Dequoted it IS the blessed form, and that is what executes.
         cmd = self._ENABLE.replace("/set", '"/set"')
         assert not lint_commands([Command("fake.py", 1, cmd)])
+
+    def test_an_escaped_executable_name_does_not_hide_a_disable(self) -> None:
+        # `u is not a named escape sequence, so a`uditpol executes exactly as
+        # auditpol — detection must run on the unescaped text.
+        cmd = self._DISABLE.replace("auditpol", "a`uditpol", 1)
+        planted = [Command("fake.py", 1, cmd)]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
+
+    def test_a_backtick_inside_the_enable_shape_fails_closed(self) -> None:
+        # Even when the unescaped form reads as the blessed enable, a line
+        # containing a backtick is not the canonical shape — it is only
+        # accepted verbatim, with nothing for an escape to smuggle past.
+        cmd = self._ENABLE.replace("/success:enable", "/succe`ss:enable")
+        planted = [Command("fake.py", 1, cmd)]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
+
+    def test_a_tab_escape_breaks_the_word_and_is_clean(self) -> None:
+        # `t IS a tab: audi`tpol executes as "audi<TAB>pol", which is not
+        # auditpol. Reading it as the word would be a false positive.
+        cmd = "audi`t" + self._DISABLE.removeprefix("audit")
+        assert not [
+            v
+            for v in lint_commands([Command("fake.py", 1, cmd)])
+            if v.rule == "auditpol-not-the-enable-shape"
+        ]
 
     def test_an_unrecognised_auditpol_set_line_is_flagged(self) -> None:
         # Fails closed: anything that is not exactly the enable shape.
