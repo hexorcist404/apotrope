@@ -68,16 +68,23 @@ _RISKY_PORTS: dict[int, tuple[str, Status, Severity, str]] = {
 # Out-Null means the operator sees a clean prompt, never reboots, NBT-NS keeps
 # answering, and Apotrope reports the host remediated on a machine where
 # Responder-style relay still works.
+#
+# $adapter captures the pipeline object because switch REBINDS $_ to the value
+# being tested: inside the branches $_ is the numeric ReturnValue, so
+# $_.Description there is empty and every adapter reports anonymously — on a
+# mixed success/failure machine the operator cannot tell which adapter still
+# needs attention.
 _CMD_NETBIOS_DISABLE = (
     "Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' | "
     "ForEach-Object {\n"
-    "    $r = Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios "
+    "    $adapter = $_\n"
+    "    $r = Invoke-CimMethod -InputObject $adapter -MethodName SetTcpipNetbios "
     "-Arguments @{ TcpipNetbiosOptions = 2 }\n"
     "    switch ($r.ReturnValue) {\n"
-    "        0 { \"$($_.Description): NetBIOS disabled\" }\n"
-    "        1 { Write-Warning \"$($_.Description): disabled, REBOOT REQUIRED\" }\n"
+    "        0 { \"$($adapter.Description): NetBIOS disabled\" }\n"
+    "        1 { Write-Warning \"$($adapter.Description): disabled, REBOOT REQUIRED\" }\n"
     "        default { Write-Warning "
-    "\"$($_.Description): failed, ReturnValue=$($r.ReturnValue)\" }\n"
+    "\"$($adapter.Description): failed, ReturnValue=$($r.ReturnValue)\" }\n"
     "    }\n"
     "}"
 )

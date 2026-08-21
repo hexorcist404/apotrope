@@ -373,7 +373,7 @@
       "description": "Checks whether NetBIOS over TCP/IP is disabled on all network adapters.",
       "details": "2 adapter(s) inherit NetBIOS setting from DHCP. If the DHCP server does not explicitly disable NetBIOS, it may be active.",
       "remediation": "Explicitly disable NetBIOS on all adapters rather than relying on DHCP.",
-      "command": "Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' | ForEach-Object {\n    $r = Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }\n    switch ($r.ReturnValue) {\n        0 { \"$($_.Description): NetBIOS disabled\" }\n        1 { Write-Warning \"$($_.Description): disabled, REBOOT REQUIRED\" }\n        default { Write-Warning \"$($_.Description): failed, ReturnValue=$($r.ReturnValue)\" }\n    }\n}",
+      "command": "Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' | ForEach-Object {\n    $adapter = $_\n    $r = Invoke-CimMethod -InputObject $adapter -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }\n    switch ($r.ReturnValue) {\n        0 { \"$($adapter.Description): NetBIOS disabled\" }\n        1 { Write-Warning \"$($adapter.Description): disabled, REBOOT REQUIRED\" }\n        default { Write-Warning \"$($adapter.Description): failed, ReturnValue=$($r.ReturnValue)\" }\n    }\n}",
       "check_duration": 0.0,
       "cis_reference": ""
     },

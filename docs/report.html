@@ -1654,11 +1654,12 @@ if ($LASTEXITCODE -ne 0) { throw &#34;reg.exe add failed ($LASTEXITCODE)&#34; }"
         
         
         <div class="frow is-warn" data-status="WARN" data-text="netbios over tcp/ip network 2 adapter(s) inherit netbios setting from dhcp. if the dhcp server does not explicitly disable netbios, it may be active.  get-ciminstance win32_networkadapterconfiguration -filter &#39;ipenabled=true&#39; | foreach-object {
-    $r = invoke-cimmethod -inputobject $_ -methodname settcpipnetbios -arguments @{ tcpipnetbiosoptions = 2 }
+    $adapter = $_
+    $r = invoke-cimmethod -inputobject $adapter -methodname settcpipnetbios -arguments @{ tcpipnetbiosoptions = 2 }
     switch ($r.returnvalue) {
-        0 { &#34;$($_.description): netbios disabled&#34; }
-        1 { write-warning &#34;$($_.description): disabled, reboot required&#34; }
-        default { write-warning &#34;$($_.description): failed, returnvalue=$($r.returnvalue)&#34; }
+        0 { &#34;$($adapter.description): netbios disabled&#34; }
+        1 { write-warning &#34;$($adapter.description): disabled, reboot required&#34; }
+        default { write-warning &#34;$($adapter.description): failed, returnvalue=$($r.returnvalue)&#34; }
     }
 }">
           <button class="fhead is-open">
@@ -1682,18 +1683,19 @@ if ($LASTEXITCODE -ne 0) { throw &#34;reg.exe add failed ($LASTEXITCODE)&#34; }"
                 <div class="rem-note">Explicitly disable NetBIOS on all adapters rather than relying on DHCP.</div>
                 
                 <div class="code" data-cmd="Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object {
-    $r = Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }
+    $adapter = $_
+    $r = Invoke-CimMethod -InputObject $adapter -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }
     switch ($r.ReturnValue) {
-        0 { &#34;$($_.Description): NetBIOS disabled&#34; }
-        1 { Write-Warning &#34;$($_.Description): disabled, REBOOT REQUIRED&#34; }
-        default { Write-Warning &#34;$($_.Description): failed, ReturnValue=$($r.ReturnValue)&#34; }
+        0 { &#34;$($adapter.Description): NetBIOS disabled&#34; }
+        1 { Write-Warning &#34;$($adapter.Description): disabled, REBOOT REQUIRED&#34; }
+        default { Write-Warning &#34;$($adapter.Description): failed, ReturnValue=$($r.ReturnValue)&#34; }
     }
 }">
                   <div class="code-bar">
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object {</div><div class="cl-x"><span class="ps">PS&gt;</span>    $r = Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }</div><div class="cl-x"><span class="ps">PS&gt;</span>    switch ($r.ReturnValue) {</div><div class="cl-x"><span class="ps">PS&gt;</span>        0 { &#34;$($_.Description): NetBIOS disabled&#34; }</div><div class="cl-x"><span class="ps">PS&gt;</span>        1 { Write-Warning &#34;$($_.Description): disabled, REBOOT REQUIRED&#34; }</div><div class="cl-x"><span class="ps">PS&gt;</span>        default { Write-Warning &#34;$($_.Description): failed, ReturnValue=$($r.ReturnValue)&#34; }</div><div class="cl-x"><span class="ps">PS&gt;</span>    }</div><div class="cl-x"><span class="ps">PS&gt;</span>}</div></pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object {</div><div class="cl-x"><span class="ps">PS&gt;</span>    $adapter = $_</div><div class="cl-x"><span class="ps">PS&gt;</span>    $r = Invoke-CimMethod -InputObject $adapter -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }</div><div class="cl-x"><span class="ps">PS&gt;</span>    switch ($r.ReturnValue) {</div><div class="cl-x"><span class="ps">PS&gt;</span>        0 { &#34;$($adapter.Description): NetBIOS disabled&#34; }</div><div class="cl-x"><span class="ps">PS&gt;</span>        1 { Write-Warning &#34;$($adapter.Description): disabled, REBOOT REQUIRED&#34; }</div><div class="cl-x"><span class="ps">PS&gt;</span>        default { Write-Warning &#34;$($adapter.Description): failed, ReturnValue=$($r.ReturnValue)&#34; }</div><div class="cl-x"><span class="ps">PS&gt;</span>    }</div><div class="cl-x"><span class="ps">PS&gt;</span>}</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 

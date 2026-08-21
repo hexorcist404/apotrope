@@ -145,6 +145,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rejected by construction: a mutated row cannot equal what the real code
   emits.
 
+- **The NetBIOS remediation reports each adapter by name again.** The
+  per-adapter reporting added in 0.2.0 had a scoping defect: `switch` rebinds
+  `$_` to the value being tested, so `$_.Description` inside its branches read
+  the numeric `ReturnValue`, not the adapter, and rendered blank (measured on
+  Windows PowerShell 5.1). On a mixed success/failure machine every line came
+  out anonymous — precisely the machine where knowing *which* adapter still
+  needs a reboot matters. The pipeline object is now captured in `$adapter`
+  before the switch, and both published sample reports carry the corrected
+  command.
+
 ---
 
 ## [0.2.0] - 2026-07-27
