@@ -381,9 +381,38 @@ class TestRegAddExitCodeRule:
         planted = [Command("fake.py", 1, "if ($enable) { " + self._ADD + " }")]
         assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
 
-    def test_a_same_line_guard_is_clean(self) -> None:
+    def test_a_same_line_guard_is_no_longer_blessed(self) -> None:
+        # Same-line acceptance is what made a guard-shaped STRING pass once
+        # quotes were stripped for detection. No shipped command uses the
+        # layout, so it is not permitted at all: invocation alone on its
+        # line, guard opening the next.
         planted = [Command("fake.py", 1, self._ADD + "; " + self._CHECK)]
-        assert not [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_a_guard_shaped_string_on_the_same_line_is_not_a_guard(self) -> None:
+        # 'reg.exe add ...; "if ($LASTEXITCODE -ne 0) { throw }"' — the string
+        # only prints. Dequote-before-correlate read it as a real guard.
+        planted = [Command("fake.py", 1, self._ADD + '; "' + self._CHECK + '"')]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_a_guard_shaped_string_as_the_next_line_is_not_a_guard(self) -> None:
+        # The whole next line is a quoted string: it prints the guard text and
+        # executes no if. Raw correlation sees the quote, not `if`.
+        planted = [Command("fake.py", 1, self._ADD + '\n"' + self._CHECK + '"')]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_an_intervening_command_before_the_guard_is_flagged(self) -> None:
+        # ping overwrites $LASTEXITCODE; the guard then checks ping, not reg.
+        planted = [Command(
+            "fake.py", 1, self._ADD + "; ping localhost; " + self._CHECK,
+        )]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
+
+    def test_an_unreachable_nested_guard_is_flagged(self) -> None:
+        planted = [Command(
+            "fake.py", 1, self._ADD + "; if ($false) { " + self._CHECK + " }",
+        )]
+        assert [v for v in lint_commands(planted) if v.rule == "reg-add-unchecked-exit-code"]
 
     def test_no_shipped_reg_add_lacks_an_exit_check(self) -> None:
         violations = [
@@ -474,10 +503,35 @@ class TestAuditpolEnableShapeRule:
         planted = [Command("fake.py", 1, cmd)]
         assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
 
-    def test_quoted_set_token_with_the_enable_shape_is_clean(self) -> None:
-        # Dequoted it IS the blessed form, and that is what executes.
+    def test_a_quoted_set_token_fails_closed_even_with_the_enable_shape(self) -> None:
+        # This executes as the blessed form — but the permit is the exact
+        # shipped text, matched raw, not anything that happens to execute
+        # like it. Accepting normalized variants is how the splices below
+        # got in; quote games are rejected wholesale instead.
         cmd = self._ENABLE.replace("/set", '"/set"')
-        assert not lint_commands([Command("fake.py", 1, cmd)])
+        planted = [Command("fake.py", 1, cmd)]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
+
+    @pytest.mark.parametrize("separator", [";", "|", "&"])
+    def test_a_spliced_statement_inside_the_name_is_flagged(self, separator: str) -> None:
+        # A permissive name class ([^/]+) swallowed statement separators, so
+        # this matched the "canonical" shape while auditpol received an
+        # incomplete command and the spliced statement ran on its own.
+        cmd = (
+            f"auditpol /set /subcategory:Logon{separator} Write-Output unexpected "
+            "/success:enable /failure:enable"
+        )
+        planted = [Command("fake.py", 1, cmd)]
+        assert [v for v in lint_commands(planted) if v.rule == "auditpol-not-the-enable-shape"]
+
+    def test_the_source_template_placeholder_is_canonical(self) -> None:
+        # The inventory entry is the unresolved template; it must stay clean.
+        cmd = "auditpol /set /subcategory:'{subcategory}' /success:enable /failure:enable"
+        assert not [
+            v
+            for v in lint_commands([Command("fake.py", 1, cmd)])
+            if v.rule == "auditpol-not-the-enable-shape"
+        ]
 
     def test_an_escaped_executable_name_does_not_hide_a_disable(self) -> None:
         # `u is not a named escape sequence, so a`uditpol executes exactly as
@@ -556,6 +610,26 @@ class TestConstrainedLanguageRule:
 
     def test_static_property_read_is_not_flagged(self) -> None:
         planted = [Command("fake.py", 1, "$v = [System.Environment]::OSVersion.Version")]
+        assert not [v for v in lint_commands(planted)
+                    if v.rule == "constrained-language-method-call"]
+
+    def test_a_registry_object_instance_method_is_flagged(self) -> None:
+        # CLM blocks instance invocation on non-allowed types too:
+        # (Get-Item HKLM:...).GetValue(...) fails with the same error as the
+        # static form, because RegistryKey is not an allowed type. Measured —
+        # and shipped, in the unquoted-service-path command this rule missed.
+        planted = [Command(
+            "fake.py", 1,
+            "$img = (Get-Item -LiteralPath $key).GetValue("
+            "'ImagePath', $null, 'DoNotExpandEnvironmentNames')",
+        )]
+        assert [v for v in lint_commands(planted)
+                if v.rule == "constrained-language-method-call"]
+
+    def test_a_string_method_is_not_flagged(self) -> None:
+        # System.String IS an allowed type — .Trim() runs under Constrained
+        # Language (measured). Flagging it would outlaw working commands.
+        planted = [Command("fake.py", 1, "$fixed = '\"' + $img.Trim() + '\"'")]
         assert not [v for v in lint_commands(planted)
                     if v.rule == "constrained-language-method-call"]
 

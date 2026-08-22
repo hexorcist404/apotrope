@@ -318,13 +318,22 @@ _NEW_ITEM_FORCE = re.compile(r"\bNew-Item\b.*?-Force\b", re.IGNORECASE | re.DOTA
 # other active auditpol /set line whatever it says.
 #
 # The same quote-stripping applies to EVERY token, not just the switch values —
-# `auditpol "/set" ...` executes exactly as `auditpol /set ...` does. So both
-# patterns run against a dequoted copy of the line (see _dequoted), never the
-# raw text; matching the raw text let a quoted "/set" carry a disable straight
-# past the detector.
+# `auditpol "/set" ...` executes exactly as `auditpol /set ...` does. So the
+# DETECTION pattern runs against a dequoted copy of the line (see _dequoted);
+# matching the raw text let a quoted "/set" carry a disable straight past it.
+#
+# The PERMIT pattern is the opposite: it matches the RAW line only, and the
+# subcategory charset admits nothing but a single-quoted name (letters,
+# digits, spaces, hyphens) or the source template's '{subcategory}'
+# placeholder. A permissive name class ([^/]+) let statement separators ride
+# inside the "name" — `/subcategory:Logon; Write-Output unexpected
+# /success:enable...` matched the shape while auditpol received an incomplete
+# command and the spliced statement ran separately. The tight charset excludes
+# ; | & ` and quote games by construction: the only accepted line IS the
+# shipped text.
 _AUDITPOL_SET = re.compile(r"\bauditpol\b[^\n]*\s/set\b", re.IGNORECASE)
 _AUDITPOL_ENABLE_SHAPE = re.compile(
-    r"^\s*auditpol\s+/set\s+/subcategory:[^/]+?"
+    r"^\s*auditpol\s+/set\s+/subcategory:'(?:[A-Za-z0-9 \-]+|\{subcategory\})'"
     r"\s+/success:enable\s+/failure:enable\s*$",
     re.IGNORECASE,
 )
@@ -387,38 +396,56 @@ _LASTEXITCODE_GUARD = re.compile(
 
 
 def _reg_add_unguarded(text: str) -> bool:
-    """True if any reg add invocation in *text* lacks its immediate guard.
+    """True if any reg add invocation in *text* lacks its canonical guard.
 
-    Invocations are found on dequoted logical lines (a quoted token like
-    ``reg "add"`` executes identically) in both editions' readings. Each one
-    must be followed by the complete guard shape before the next invocation —
-    in the rest of its own line (ignoring anything after a ``#``; a commented
-    guard is not a guard) or at the start of the very next line.
+    Invocations are DETECTED on dequoted logical lines (a quoted token like
+    ``reg "add"`` executes identically) in both editions' readings. The guard
+    is CORRELATED against raw text only, and only one layout is accepted —
+    the one every shipped command uses: the invocation is the only statement
+    on its line, and the very next raw logical line begins with the complete
+    ``if ($LASTEXITCODE -ne 0) { throw ... }``. Anything looser has a
+    demonstrated bypass: dequoting before correlation turned the *string*
+    ``"if ($LASTEXITCODE -ne 0) { throw }"`` — which only prints — into a
+    guard, and searching the rest of the line accepted an intervening
+    command that overwrites $LASTEXITCODE, or a guard nested somewhere
+    unreachable. The raw next line of a quoted string starts with its quote,
+    never with ``if``.
     """
-    lines = [_dequoted(ln) for ln in _logical_lines(text) if ln.strip()]
-    for index, line in enumerate(lines):
-        matches: list[re.Match[str]] = []
-        matched_reading = line
-        for reading in _executed_readings(line):
-            matches = list(_REG_ADD.finditer(reading))
-            if matches:
+    raw_lines = [ln for ln in _logical_lines(text) if ln.strip()]
+    for index, raw_line in enumerate(raw_lines):
+        match = None
+        matched_reading = ""
+        for reading in _executed_readings(_dequoted(raw_line)):
+            match = _REG_ADD.search(reading)
+            if match:
                 matched_reading = reading
                 break
-        if not matches:
+        if not match:
             continue
-        next_line = lines[index + 1] if index + 1 < len(lines) else ""
-        for pos, match in enumerate(matches):
-            end = matches[pos + 1].start() if pos + 1 < len(matches) else len(matched_reading)
-            segment = matched_reading[match.end():end].split("#", 1)[0]
-            if _LASTEXITCODE_GUARD.search(segment):
-                continue
-            if pos == len(matches) - 1 and _LASTEXITCODE_GUARD.match(next_line.lstrip()):
-                continue
+        remainder = matched_reading[match.end():]
+        if not re.fullmatch(r"[^;{}()|&#]*", remainder):
+            return True  # spliced statement, second invocation, or trailing junk
+        next_raw = raw_lines[index + 1] if index + 1 < len(raw_lines) else ""
+        if not _LASTEXITCODE_GUARD.match(next_raw.lstrip()):
             return True
     return False
 
 
 _CLM_METHOD_CALL = re.compile(r"\[[\w.]+\]::[\w.]*\w+\s*\(")
+
+# Constrained Language blocks method INVOCATION on non-allowed types, not just
+# static [Type]::Method() calls: (Get-Item HKLM:...).GetValue(...) fails with
+# the same MethodInvocationNotSupportedInConstrainedLanguage (measured on 5.1)
+# because Microsoft.Win32.RegistryKey is not an allowed type. String methods
+# (.Trim(), .TrimStart(), ...) ARE legal — System.String is allowed — so a
+# blanket instance-call ban would flag working commands. This is the curated
+# registry-object method class, not a CLM emulator: the receivers our
+# commands can actually produce whose methods CLM refuses.
+_CLM_REGISTRY_METHOD = re.compile(
+    r"\.\s*(?:GetValue|SetValue|GetValueNames|GetValueKind|OpenSubKey"
+    r"|CreateSubKey|DeleteSubKey(?:Tree)?|DeleteValue|GetSubKeyNames)\s*\(",
+    re.IGNORECASE,
+)
 
 # A BitLocker recovery password the operator never sees is worse than no
 # encryption advice at all. Enable-BitLocker / Add-BitLockerKeyProtector return a
@@ -560,7 +587,9 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
         if "`" in stripped:
             violations.append(Violation(
                 cmd.module, cmd.line, "backtick-in-command",
-                "contains a backtick outside a comment. Backtick escapes are "
+                "contains a backtick outside a whole-line comment (inline and "
+                "block comments count as active text here — the conservative "
+                "direction). Backtick escapes are "
                 "edition-dependent — `e is a word character on Windows PowerShell "
                 "5.1 and ESC on PowerShell 7, `u{...} decodes only on 7 — so no "
                 "single reading of an escaped command is what every operator runs. "
@@ -645,15 +674,14 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
         for line in _logical_lines(text):
             # Detect on the executed forms (both editions' unescaping, then
             # dequoted) so neither quoting nor backtick-splitting hides an
-            # auditpol /set line. Permit only lines with NO backticks: the
-            # canonical template has none, so an escape on a "canonical" line
-            # is obfuscation by definition and fails closed rather than being
-            # normalized clean.
+            # auditpol /set line. Permit against the RAW line only: the
+            # canonical shape is the exact shipped text, so quoting tricks,
+            # escapes, and spliced statements all fail closed rather than
+            # being normalized into acceptance.
             detected_set = any(
                 _AUDITPOL_SET.search(_dequoted(r)) for r in _executed_readings(line)
             )
-            canonical = "`" not in line and _AUDITPOL_ENABLE_SHAPE.match(_dequoted(line).strip())
-            if detected_set and not canonical:
+            if detected_set and not _AUDITPOL_ENABLE_SHAPE.match(line):
                 violations.append(Violation(
                     cmd.module, cmd.line, "auditpol-not-the-enable-shape",
                     "is an auditpol /set line that is not exactly "
@@ -665,7 +693,10 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 ))
                 break
         for line in _logical_lines(text):
-            if any(_CLM_METHOD_CALL.search(r) for r in _executed_readings(line)):
+            if any(
+                _CLM_METHOD_CALL.search(r) or _CLM_REGISTRY_METHOD.search(r)
+                for r in _executed_readings(line)
+            ):
                 violations.append(Violation(
                     cmd.module, cmd.line, "constrained-language-method-call",
                     "invokes a .NET method, which PowerShell Constrained Language Mode "
@@ -711,10 +742,11 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 cmd.module, cmd.line, "reg-add-unchecked-exit-code",
                 "reg add reports failure through the exit code, not a PowerShell "
                 "error, so a denied write with no check is indistinguishable from "
-                "a successful one. Every reg add must be followed — same line or "
-                "the very next one, before anything can overwrite $LASTEXITCODE — "
-                "by the complete guard `if ($LASTEXITCODE -ne 0) { throw ... }`. "
-                "A wrong-polarity test, a log line, or a comment does not count",
+                "a successful one. The invocation must be the only statement on "
+                "its line and the very next line must begin with the complete "
+                "guard `if ($LASTEXITCODE -ne 0) { throw ... }` — unquoted: a "
+                "guard-shaped string only prints, a spliced statement overwrites "
+                "$LASTEXITCODE, and a nested or commented guard may never run",
                 text,
             ))
         if any(_LOCALIZED_FW_SELECTOR.search(r) for r in readings):
