@@ -155,3 +155,44 @@ def test_a_real_failure_is_not_swallowed(command):
     assert "reg.exe add failed" in (result.stderr + result.stdout), (
         "the exit-code check did not fire; a denied write would look like success"
     )
+
+
+# ── Unquoted-service-path reader ─────────────────────────────────────────────
+
+#: The shipped Unquoted Service Paths command — the only remediation that READS
+#: a REG_EXPAND_SZ. It must do so unexpanded (writing an expanded value back
+#: bakes the resolved path in) and under Constrained Language Mode (the
+#: .GetValue() form it replaced was refused exactly there).
+UNQUOTED_PATH_COMMAND = next(
+    c.text for c in collect_commands()
+    if "reg.exe query" in c.text and "ImagePath" in c.text
+)
+
+
+def test_unquoted_path_reader_runs_under_constrained_language():
+    # Schedule ships on every supported Windows with an unexpanded
+    # %SystemRoot% ImagePath, and the command only prints — its writes are
+    # commented — so running it against the real key is a read.
+    script = (
+        "$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage'\n"
+        + UNQUOTED_PATH_COMMAND.replace("$svc = 'ExampleService'", "$svc = 'Schedule'")
+    )
+    result = _powershell(script)
+    assert result.returncode == 0, result.stderr
+    assert "current: %" in result.stdout.lower(), (
+        f"expected the unexpanded value; the read expanded it or failed: {result.stdout!r}"
+    )
+
+
+def test_the_getvalue_form_it_replaced_is_refused_there():
+    # Counter-example so the test above cannot pass vacuously: the .NET method
+    # call this command used to make really is blocked under Constrained
+    # Language — RegistryKey is not an allowed type.
+    script = (
+        "$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage'\n"
+        r"(Get-Item -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\Schedule')"
+        ".GetValue('ImagePath', $null, 'DoNotExpandEnvironmentNames')"
+    )
+    result = _powershell(script)
+    assert result.returncode != 0
+    assert "MethodInvocationNotSupportedInConstrainedLanguage" in result.stderr
