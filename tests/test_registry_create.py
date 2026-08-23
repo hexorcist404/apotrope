@@ -196,3 +196,59 @@ def test_the_getvalue_form_it_replaced_is_refused_there():
     result = _powershell(script)
     assert result.returncode != 0
     assert "MethodInvocationNotSupportedInConstrainedLanguage" in result.stderr
+
+
+def _armed_unquoted_path_command(root: str) -> str:
+    """The shipped command, retargeted at a throwaway HKCU key with its
+    commented writes made live — value names, parsing, kind selection and the
+    exit-code check are exactly what ships."""
+    return (
+        UNQUOTED_PATH_COMMAND
+        .replace("$svc = 'ExampleService'", "$svc = 'ProbeSvc'")
+        .replace("HKLM\\SYSTEM\\CurrentControlSet\\Services", f"HKCU\\{root}")
+        .replace("HKLM:\\SYSTEM\\CurrentControlSet\\Services", f"HKCU:\\{root}")
+        .replace("# New-ItemProperty", "New-ItemProperty")
+    )
+
+
+@pytest.mark.parametrize(
+    ("seed_kind", "seed_value", "expected_value"),
+    [
+        pytest.param(
+            "String",
+            r"C:\Program Files\Probe\probe.exe -run",
+            r'"C:\Program Files\Probe\probe.exe" -run',
+            id="REG_SZ-stays-REG_SZ",
+        ),
+        pytest.param(
+            "ExpandString",
+            r"%SystemRoot%\probe.exe -run",
+            r'"%SystemRoot%\probe.exe" -run',
+            id="REG_EXPAND_SZ-stays-unexpanded",
+        ),
+    ],
+)
+def test_the_write_preserves_the_original_value_kind(
+    seed_kind, seed_value, expected_value, temp_root
+):
+    # Converting a REG_SZ to REG_EXPAND_SZ silently turns on %variable%
+    # expansion for a boot-start service — the writes must keep the kind the
+    # value already had, and an ExpandString value must round-trip unexpanded.
+    key = f"{temp_root}\\ProbeSvc"
+    seed = (
+        f"New-Item -Path 'HKCU:\\{key}' -Force | Out-Null\n"
+        f"$k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('{key}', $true)\n"
+        f"$k.SetValue('ImagePath', '{seed_value}', '{seed_kind}')\n"
+        "$k.Close()"
+    )
+    assert _powershell(seed).returncode == 0
+    result = _powershell(_armed_unquoted_path_command(temp_root))
+    assert result.returncode == 0, result.stderr
+    probe = _powershell(
+        f"$k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('{key}')\n"
+        "$k.GetValueKind('ImagePath').ToString()\n"
+        "$k.GetValue('ImagePath', $null, 'DoNotExpandEnvironmentNames')"
+    )
+    kind, value = probe.stdout.strip().splitlines()
+    assert kind == seed_kind, f"the write changed the value kind: {seed_kind} -> {kind}"
+    assert value == expected_value

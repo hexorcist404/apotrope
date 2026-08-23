@@ -211,6 +211,10 @@ def _check_unquoted_paths() -> list[CheckResult]:
             "'^\\s*ImagePath\\s+REG_(EXPAND_)?SZ\\s+' } | Select-Object -First 1\n"
             "if (-not $line) { throw \"no ImagePath value line in reg.exe output for $svc\" }\n"
             "$img = $line -replace '^\\s*ImagePath\\s+REG_(EXPAND_)?SZ\\s+', ''\n"
+            "# The write must keep the ORIGINAL kind: converting a REG_SZ to\n"
+            "# REG_EXPAND_SZ silently turns on %variable% expansion for a\n"
+            "# boot-start service, which is a semantics change nobody asked for.\n"
+            "$kind = if ($line -match 'REG_EXPAND_SZ') { 'ExpandString' } else { 'String' }\n"
             "Write-Host \"current: $img\"\n"
             "if ($img.TrimStart() -notmatch '^\"' -and "
             "$img -match '^(?<exe>.*?\\.exe)(?<args>.*)$') {\n"
@@ -218,9 +222,9 @@ def _check_unquoted_paths() -> list[CheckResult]:
             "    Write-Host \"proposed: $fixed\"\n"
             "    # Back the original up before changing it, then apply:\n"
             "    # New-ItemProperty -Path $key -Name ImagePath_ApotropeBackup "
-            "-PropertyType ExpandString -Value $img -Force | Out-Null\n"
+            "-PropertyType $kind -Value $img -Force | Out-Null\n"
             "    # New-ItemProperty -Path $key -Name ImagePath "
-            "-PropertyType ExpandString -Value $fixed -Force | Out-Null\n"
+            "-PropertyType $kind -Value $fixed -Force | Out-Null\n"
             "}"
         ),
     )]

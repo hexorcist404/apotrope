@@ -145,6 +145,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rejected by construction: a mutated row cannot equal what the real code
   emits.
 
+- **The Unquoted Service Paths remediation runs on hardened hosts and keeps
+  the value's registry kind.** Its ImagePath read was
+  `(Get-Item ...).GetValue(...)` — a .NET method call that Constrained
+  Language Mode refuses (`MethodInvocationNotSupportedInConstrainedLanguage`,
+  measured on Windows PowerShell 5.1), so the command failed on exactly the
+  hardened machines Apotrope scores as a PASS. It now reads via `reg.exe
+  query`, which also preserves the reason `GetValue` had been chosen: the
+  stored value comes back **unexpanded**, so a `%SystemRoot%` path is never
+  rewritten as its resolved form. The parse matches the complete value line —
+  name, type column, then data — so a service whose *name* contains
+  "ImagePath" cannot select a header line, and an absent value throws instead
+  of yielding null.
+
+  The prescribed writes also stopped hardcoding `ExpandString`: applying them
+  to a `REG_SZ` value silently converted it to `REG_EXPAND_SZ`, turning on
+  `%variable%` expansion for a boot-start service (measured — a seeded
+  `String` value came back `ExpandString`). The write now carries the kind
+  the value already had. Windows tests execute the real command under forced
+  Constrained Language against a live service, and again with the writes
+  armed against a throwaway key, asserting both kinds round-trip unchanged
+  and unexpanded.
+
 - **The NetBIOS remediation reports each adapter by name again.** The
   per-adapter reporting added in 0.2.0 had a scoping defect: `switch` rebinds
   `$_` to the value being tested, so `$_.Description` inside its branches read
