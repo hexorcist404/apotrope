@@ -422,6 +422,51 @@ class TestRegAddExitCodeRule:
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
 
 
+class TestUnrecognizedRegInvocation:
+    """PowerShell can spell an invocation more ways than a guard can follow.
+
+    `& ('reg.exe') add ...` and `reg.exe --% add ...` both run reg exactly
+    like the plain form while evading the exit-code correlation above — the
+    write can fail with a nonzero native exit code and PowerShell still exits
+    0. Enumerating spellings is the matcher trap; a reg-add-looking line that
+    is not the one blessed shape is refused outright instead.
+    """
+
+    def test_a_call_operator_spelling_is_refused(self) -> None:
+        planted = [Command("fake.py", 1, "& ('reg.exe') add \"HKLM\\S\\X\" /v A /f")]
+        assert [v for v in lint_commands(planted)
+                if v.rule == "reg-add-unrecognized-invocation"]
+
+    def test_a_stop_parsing_spelling_is_refused(self) -> None:
+        planted = [Command("fake.py", 1, 'reg.exe --% add "HKLM\\S\\X" /v A /f')]
+        hits = {v.rule for v in lint_commands(planted)}
+        assert "reg-add-unrecognized-invocation" in hits
+        assert "stop-parsing-token" in hits
+
+    def test_the_stop_parsing_token_is_refused_anywhere(self) -> None:
+        # Not only near reg: --% changes parsing for the rest of ANY native
+        # line, which defeats every text rule in the file at once.
+        planted = [Command("fake.py", 1, "netsh --% advfirewall set allprofiles state on")]
+        assert [v for v in lint_commands(planted) if v.rule == "stop-parsing-token"]
+
+    def test_the_guard_line_mentioning_reg_add_is_exempt(self) -> None:
+        # The shipped guards' own throw text says "reg.exe add failed" — the
+        # exemption is the guard shape opening the line, nothing looser.
+        planted = [Command(
+            "fake.py", 1,
+            'reg.exe add "HKLM\\S\\X" /v A /t REG_DWORD /d 1 /f\n'
+            'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }',
+        )]
+        assert not lint_commands(planted)
+
+    def test_no_shipped_command_uses_an_unrecognized_spelling(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule in ("reg-add-unrecognized-invocation", "stop-parsing-token")
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
 class TestRiskyServiceInventory:
     """The risky-service commands must stay inside the inventory.
 

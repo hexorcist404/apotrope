@@ -394,6 +394,23 @@ _LASTEXITCODE_GUARD = re.compile(
     r"if\s*\(\s*\$LASTEXITCODE\s+-ne\s+0\s*\)\s*\{\s*throw\b", re.IGNORECASE
 )
 
+# PowerShell has more ways to spell an invocation than the pattern above can
+# enumerate — `& ('reg.exe') add ...` runs reg exactly like the plain form
+# while the parenthesis breaks the adjacency the pattern relies on. Chasing
+# the invocation grammar is the matcher trap again; instead, a line that
+# LOOKS like a reg add but did not match the one blessed spelling is refused
+# outright. Guard lines are exempt: the shipped throw messages themselves
+# say "reg.exe add failed".
+_REG_WORD = re.compile(r"\breg(?:\.exe)?\b", re.IGNORECASE)
+_ADD_WORD = re.compile(r"\badd\b", re.IGNORECASE)
+
+# --% tells PowerShell to stop parsing: everything after it goes to the
+# native command verbatim, with different quoting and expansion rules. That
+# defeats every text-based rule in this file at once — the argument-level
+# analogue of a backtick escape, and banned the same way. Nothing shipped
+# uses it.
+_STOP_PARSING = re.compile(r"(?<!\S)--%(?!\S)")
+
 
 def _reg_add_unguarded(text: str) -> bool:
     """True if any reg add invocation in *text* lacks its canonical guard.
@@ -737,6 +754,33 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                         text,
                     ))
                     break
+        if any(_STOP_PARSING.search(r) for r in readings):
+            violations.append(Violation(
+                cmd.module, cmd.line, "stop-parsing-token",
+                "contains --%, PowerShell's stop-parsing token: everything after "
+                "it reaches the native command verbatim under different quoting "
+                "and expansion rules, which defeats every text-based rule here "
+                "at once. No shipped command needs it — quote arguments normally",
+                text,
+            ))
+        for line in _logical_lines(text):
+            if _LASTEXITCODE_GUARD.match(line.lstrip()):
+                continue  # the shipped guards' own throw text says "reg.exe add failed"
+            if any(
+                _REG_WORD.search(r) and _ADD_WORD.search(r) and not _REG_ADD.search(r)
+                for r in map(_dequoted, _executed_readings(line))
+            ):
+                violations.append(Violation(
+                    cmd.module, cmd.line, "reg-add-unrecognized-invocation",
+                    "looks like a reg add but is not spelled the one blessed way "
+                    "(`reg.exe add ...` opening its own line). PowerShell has more "
+                    "invocation spellings than a guard-checker can correlate — "
+                    "`& ('reg.exe') add` and `reg.exe --% add` both run reg while "
+                    "evading exit-code correlation — so unrecognized shapes are "
+                    "refused outright rather than trusted",
+                    text,
+                ))
+                break
         if _reg_add_unguarded(text):
             violations.append(Violation(
                 cmd.module, cmd.line, "reg-add-unchecked-exit-code",
