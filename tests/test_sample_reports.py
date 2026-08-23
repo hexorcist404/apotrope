@@ -429,6 +429,32 @@ def test_committed_reports_match_what_the_fixture_renders(tmp_path: Path) -> Non
         )
 
 
+def test_the_frozen_clocks_match_the_published_scan_timestamp() -> None:
+    """The mocked clocks and the report header must be the same instant.
+
+    ``scan_timestamp`` renders in both reports' headers; the ``frozen_datetime``
+    specs decide what the time-derived rows say (the last-update date, the
+    end-of-support day count). They are separate literals that happen to agree,
+    and nothing else compares them: editing only the timestamp leaves every
+    other check green while the header contradicts the rows it heads. That
+    exact contradiction was already published once — the v0.1.12 sample carried
+    a 16 July capture under a 13 July header, which is what round 9 found.
+    """
+    published = json.loads(FIXTURE.read_text(encoding="utf-8"))["scan_timestamp"]
+    clocks = {
+        spec["value"]
+        for specs in MACHINE.values()
+        for spec in specs
+        if spec["kind"] == "frozen_datetime"
+    }
+    assert clocks, "no frozen clocks found — the binding below would be vacuous"
+    assert clocks == {published}, (
+        f"the mocked clocks {sorted(clocks)} do not all equal the published "
+        f"scan_timestamp {published!r}; the header would contradict the "
+        "time-derived rows"
+    )
+
+
 def test_fixture_holds_the_sanitized_persona() -> None:
     """The fixture must keep describing the published sample machine."""
     report = load_baseline(str(FIXTURE))
