@@ -1,5 +1,5 @@
 {
-  "_note": "Sanitized sample scan of the WORKSTATION-07 persona. Every field on every row, severity included, is real data: tests/test_sample_reports.py runs the actual check modules against the reconstructed machine in tests/sample_machine.py and requires each published row to equal the output exactly. When that guard names a drifted field, update it here to the generated value, then re-render with 'python tools/generate_sample_reports.py'.",
+  "_note": "Sanitized sample scan of the WORKSTATION-07 persona. Every source-owned field on every row, severity included, is real data: tests/test_sample_reports.py runs the actual check modules against the reconstructed machine in tests/sample_machine.py and requires each published row to equal the output exactly. The one exception is check_duration, which the scanner stamps at scan time rather than the check emitting it; every row stores 0.0 and the guard does not compare it. When that guard names a drifted field, update it here to the generated value, then re-render with 'python tools/generate_sample_reports.py'.",
   "hostname": "WORKSTATION-07",
   "os_version": "10.0.26200",
   "scan_timestamp": "2026-07-13T15:30:00+00:00",

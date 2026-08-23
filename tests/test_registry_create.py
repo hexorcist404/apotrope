@@ -8,9 +8,12 @@ nothing about the language mode they need. Both gaps have bitten this command:
 * ``[Registry]::…CreateSubKey()`` parses perfectly and is refused outright by
   Constrained Language Mode — which Apotrope itself scores as a hardened PASS.
 
-These tests run the **real command text** against a throwaway ``HKCU`` path,
-with only the hive and key retargeted. Windows-only, and they reach a real
-PowerShell — hence ``allow_subprocess``.
+These tests run the **real command text**. The write tests retarget it at a
+throwaway ``HKCU`` path, rewriting only the hive and key; the two Constrained
+Language tests for the unquoted-service-path reader instead run it unmodified
+against the live ``HKLM`` Schedule service, which is a **read** — that
+command's writes ship commented out, and the readback is what they assert.
+Windows-only, and they reach a real PowerShell — hence ``allow_subprocess``.
 """
 
 from __future__ import annotations
