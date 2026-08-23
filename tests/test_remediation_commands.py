@@ -433,9 +433,12 @@ class TestUnrecognizedRegInvocation:
     """
 
     def test_a_call_operator_spelling_is_refused(self) -> None:
+        # Refused by the call-operator ban: the executable name lives inside a
+        # string here, so a name-based rule cannot see it — which is exactly
+        # why the construct itself is banned rather than its spellings listed.
         planted = [Command("fake.py", 1, "& ('reg.exe') add \"HKLM\\S\\X\" /v A /f")]
         assert [v for v in lint_commands(planted)
-                if v.rule == "reg-add-unrecognized-invocation"]
+                if v.rule == "call-operator-invocation"]
 
     def test_a_stop_parsing_spelling_is_refused(self) -> None:
         planted = [Command("fake.py", 1, 'reg.exe --% add "HKLM\\S\\X" /v A /f')]
@@ -463,6 +466,66 @@ class TestUnrecognizedRegInvocation:
         violations = [
             v for v in lint_commands(collect_commands())
             if v.rule in ("reg-add-unrecognized-invocation", "stop-parsing-token")
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
+class TestCallOperatorBan:
+    """`&` is how every indirect invocation is spelled, and nothing ships one.
+
+    A call operator lets the executable name be a variable or a computed
+    string, which no static guard can correlate with an exit-code check.
+    Rather than enumerate the spellings — the mistake this PR spent six rounds
+    unwinding — the construct is refused outright, as backticks and `--%` are.
+    """
+
+    @pytest.mark.parametrize(
+        ("label", "text"),
+        [
+            ("variable", "$e = 'reg.exe'\n& $e add \"HKXX\\S\" /v A /f"),
+            ("split literal", "& ('re' + 'g.exe') add \"HKXX\\S\" /v A /f"),
+            (
+                "auditpol via variable",
+                "$a = 'auditpol'\n& $a /set /subcategory:'Logon' /success:disable",
+            ),
+        ],
+    )
+    def test_indirect_invocations_are_flagged(self, label: str, text: str) -> None:
+        planted = [Command("fake.py", 1, text)]
+        assert [v for v in lint_commands(planted)
+                if v.rule == "call-operator-invocation"], label
+
+    def test_a_guard_prefix_no_longer_hides_what_follows_it(self) -> None:
+        # The exemption used to skip the whole line, so anything appended after
+        # the guard with a semicolon was never inspected.
+        planted = [Command(
+            "fake.py", 1,
+            "$e = 'reg.exe'\n"
+            'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed" }; & $e add "HKXX\\S" /v A /f',
+        )]
+        assert lint_commands(planted)
+
+    def test_an_ampersand_in_prose_is_not_an_invocation(self) -> None:
+        # 'Virus & threat protection' appears in shipped comment text, and a
+        # message string may legitimately contain one too. The rule reads the
+        # code-only view, so neither is mistaken for the operator.
+        for text in (
+            "Set-ItemProperty -Path X -Name Y -Value 1\n# Virus & threat protection",
+            "Write-Host 'Virus & threat protection is disabled'",
+        ):
+            assert not [v for v in lint_commands([Command("fake.py", 1, text)])
+                        if v.rule == "call-operator-invocation"], text
+
+    def test_stderr_redirection_is_not_an_invocation(self) -> None:
+        # 2>&1 contains an ampersand that is part of a redirection operator.
+        planted = [Command("fake.py", 1, "reg.exe query 'HKLM\\X' 2>&1 | Out-Null")]
+        assert not [v for v in lint_commands(planted)
+                    if v.rule == "call-operator-invocation"]
+
+    def test_no_shipped_command_uses_the_call_operator(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "call-operator-invocation"
         ]
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
 

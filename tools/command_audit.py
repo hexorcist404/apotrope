@@ -344,6 +344,20 @@ def _dequoted(line: str) -> str:
     return line.replace('"', "").replace("'", "")
 
 
+# Quoted spans, either style. Blanking their CONTENTS (not just the quote
+# characters, which is what _dequoted does) gives a code-only view: string
+# data cannot be mistaken for syntax. The shipped exit-code guards throw
+# messages that say "reg.exe add failed", which is why the rules below need a
+# view where that text is not there — the alternative, exempting any line
+# starting with a guard, hid whatever was appended after it with a semicolon.
+_STRING_LITERAL = re.compile(r"'[^'\n]*'|\"[^\"\n]*\"")
+
+
+def _code_only(text: str) -> str:
+    """*text* with the contents of every quoted string blanked out."""
+    return _STRING_LITERAL.sub(lambda m: m.group(0)[0] * len(m.group(0)), text)
+
+
 # PowerShell's named escape sequences resolve to control characters, so for
 # matching purposes they are word breaks — "shutdow`n" executes as "shutdow"
 # followed by a newline, and reading it as the word "shutdown" would be a
@@ -410,6 +424,14 @@ _ADD_WORD = re.compile(r"\badd\b", re.IGNORECASE)
 # analogue of a backtick escape, and banned the same way. Nothing shipped
 # uses it.
 _STOP_PARSING = re.compile(r"(?<!\S)--%(?!\S)")
+
+# PowerShell's call operator. Every indirect invocation spelling that evades
+# exit-code correlation needs it — `& $exe add ...`, `& ('re' + 'g.exe') add`,
+# `& ('audit' + 'pol') /set ...` — so the construct itself is refused rather
+# than its abuses enumerated, the same move as the backtick and --% bans.
+# Matched on the code-only view, so an ampersand inside a message string is
+# not mistaken for the operator, and `2>&1` redirection is excluded.
+_CALL_OPERATOR = re.compile(r"(?<![>&])&(?!&)")
 
 
 def _reg_add_unguarded(text: str) -> bool:
@@ -763,12 +785,23 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 "at once. No shipped command needs it — quote arguments normally",
                 text,
             ))
+        if any(_CALL_OPERATOR.search(_code_only(r)) for r in readings):
+            violations.append(Violation(
+                cmd.module, cmd.line, "call-operator-invocation",
+                "invokes through PowerShell's call operator (&). Every indirect "
+                "spelling that evades exit-code correlation needs it — `& $exe "
+                "add ...`, `& ('re' + 'g.exe') add ...` — and no shipped "
+                "remediation has any use for it. Name the executable directly",
+                text,
+            ))
         for line in _logical_lines(text):
-            if _LASTEXITCODE_GUARD.match(line.lstrip()):
-                continue  # the shipped guards' own throw text says "reg.exe add failed"
+            # Scanned on the code-only view rather than exempting lines that
+            # begin with a guard: the exemption skipped whatever was appended
+            # after the guard with a semicolon, while blanking string contents
+            # removes the guards' own "reg.exe add failed" message instead.
             if any(
                 _REG_WORD.search(r) and _ADD_WORD.search(r) and not _REG_ADD.search(r)
-                for r in map(_dequoted, _executed_readings(line))
+                for r in map(_code_only, _executed_readings(line))
             ):
                 violations.append(Violation(
                     cmd.module, cmd.line, "reg-add-unrecognized-invocation",
