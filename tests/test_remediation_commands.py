@@ -470,6 +470,69 @@ class TestUnrecognizedRegInvocation:
         assert not violations, [f"{v.module}:{v.line}" for v in violations]
 
 
+class TestExecutionBrokerBan:
+    """A broker's child command is string data nothing here can check.
+
+    `Start-Process -FilePath reg.exe -ArgumentList 'add ...'` runs the write
+    while the text rules see no invocation and the parse tree sees only
+    Start-Process — the child lives inside an argument PowerShell never parses.
+    A failed write exits non-zero inside the wrapper, which exits 0: exactly
+    the silent failure the exit-code guard exists to prevent. Unlike the
+    backtick and `--%` bans, this is an ordinary way to write PowerShell, not
+    an obfuscation — which is why it has to fail closed rather than be trusted.
+    """
+
+    @pytest.mark.parametrize(
+        ("label", "text"),
+        [
+            ("start-process wrapper",
+             "Start-Process -FilePath reg.exe -ArgumentList 'add HKXX\\S /v A /f' -Wait"),
+            ("start-process positional exe",
+             "Start-Process 'reg.exe' -ArgumentList 'add HKXX\\S /v A /f'"),
+            ("invoke-expression", "Invoke-Expression 'reg.exe add HKXX\\S /v A /f'"),
+            ("iex alias", "iex 'reg.exe add HKXX\\S /v A /f'"),
+            ("invoke-command",
+             "Invoke-Command -ScriptBlock { reg.exe add 'HKXX\\S' /v A /f }"),
+            ("cmd /c", "cmd.exe /c 'reg add HKXX\\S /v A /f'"),
+            ("cmd /k", "cmd /k 'reg add HKXX\\S /v A /f'"),
+            ("nested powershell", "powershell.exe -Command 'reg.exe add HKXX\\S /v A /f'"),
+            ("nested pwsh", "pwsh -c 'reg.exe add HKXX\\S /v A /f'"),
+            ("encoded command", "powershell.exe -EncodedCommand ZgBvAG8A"),
+            ("broker after a semicolon", "Write-Host hi; iex 'reg.exe add HKXX\\S /v A /f'"),
+        ],
+    )
+    def test_brokers_are_flagged(self, label: str, text: str) -> None:
+        planted = [Command("fake.py", 1, text)]
+        assert [v for v in lint_commands(planted) if v.rule == "execution-broker"], label
+
+    def test_start_process_on_a_uri_is_clean(self) -> None:
+        # updates.py ships this: a protocol handler that opens the Windows
+        # Update settings page. It carries no child command — no -ArgumentList,
+        # no executable — so it is not a broker, and the rule must say so or
+        # the shipped inventory breaks.
+        planted = [Command("fake.py", 1, "Start-Process 'ms-settings:windowsupdate'")]
+        assert not lint_commands(planted)
+
+    def test_a_registry_path_naming_powershell_is_not_a_nested_shell(self) -> None:
+        # powershell.py writes to HKLM\...\Windows\PowerShell\ScriptBlockLogging.
+        # A bare word match would read that quoted path as a nested shell;
+        # detection runs on the code-only view, where string contents are gone.
+        planted = [Command(
+            "fake.py", 1,
+            'reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell'
+            '\\ScriptBlockLogging" /v EnableScriptBlockLogging /t REG_DWORD /d 1 /f\n'
+            'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }',
+        )]
+        assert not lint_commands(planted)
+
+    def test_no_shipped_command_uses_a_broker(self) -> None:
+        violations = [
+            v for v in lint_commands(collect_commands())
+            if v.rule == "execution-broker"
+        ]
+        assert not violations, [f"{v.module}:{v.line}" for v in violations]
+
+
 class TestCallOperatorBan:
     """`&` is how every indirect invocation is spelled, and nothing ships one.
 

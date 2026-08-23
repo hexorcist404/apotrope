@@ -413,8 +413,9 @@ _LASTEXITCODE_GUARD = re.compile(
 # while the parenthesis breaks the adjacency the pattern relies on. Chasing
 # the invocation grammar is the matcher trap again; instead, a line that
 # LOOKS like a reg add but did not match the one blessed spelling is refused
-# outright. Guard lines are exempt: the shipped throw messages themselves
-# say "reg.exe add failed".
+# outright. The search runs on the code-only view, so the shipped guards'
+# own throw text ("reg.exe add failed") is blanked along with every other
+# string literal rather than the guard lines being exempted wholesale.
 _REG_WORD = re.compile(r"\breg(?:\.exe)?\b", re.IGNORECASE)
 _ADD_WORD = re.compile(r"\badd\b", re.IGNORECASE)
 
@@ -432,6 +433,37 @@ _STOP_PARSING = re.compile(r"(?<!\S)--%(?!\S)")
 # Matched on the code-only view, so an ampersand inside a message string is
 # not mistaken for the operator, and `2>&1` redirection is excluded.
 _CALL_OPERATOR = re.compile(r"(?<![>&])&(?!&)")
+
+# Execution brokers: cmdlets and shells that take another command as STRING
+# DATA and run it. Their child is opaque to everything here — the text rules
+# see no invocation, and PowerShell's parser sees only the broker, with the
+# real command inside an argument it never parses. A failed child write exits
+# non-zero while the wrapper exits 0, which is precisely the silent failure
+# the exit-code guard exists to prevent. Nothing shipped uses any of these, so
+# they are refused rather than their payloads inspected — the same move as the
+# backtick, --% and call-operator bans.
+#
+# Anchored to command positions and matched on the code-only view, which
+# matters for more than tidiness: two shipped commands write to
+# HKLM\SOFTWARE\...\Windows\PowerShell\..., and a bare word match would flag
+# that registry path as a nested shell. Blanking string contents removes it.
+_EXECUTION_BROKER = re.compile(
+    r"(?:^|[;{(|]|&)\s*(?:"
+    r"Invoke-Expression\b|iex\b|Invoke-Command\b"
+    r"|cmd(?:\.exe)?\s+/[ck]\b"
+    r"|(?:powershell|pwsh)(?:\.exe)?\s+-"
+    r")",
+    re.IGNORECASE,
+)
+
+# Start-Process is the one broker a shipped command needs: updates.py opens
+# the Windows Update settings page with Start-Process 'ms-settings:...', a URI
+# protocol handler that carries no child command at all. So the cmdlet is
+# detected on the code-only view and then judged on the DEQUOTED line: an
+# -ArgumentList or an .exe target means it is launching a program with
+# arguments this lint cannot see; a bare URI means it is not.
+_START_PROCESS = re.compile(r"(?:^|[;{(|]|&)\s*Start-Process\b", re.IGNORECASE)
+_START_PROCESS_LAUNCHES_PROGRAM = re.compile(r"-ArgumentList\b|\.exe\b", re.IGNORECASE)
 
 
 def _reg_add_unguarded(text: str) -> bool:
@@ -785,6 +817,27 @@ def lint_commands(commands: list[Command]) -> list[Violation]:
                 "at once. No shipped command needs it — quote arguments normally",
                 text,
             ))
+        for line in _logical_lines(text):
+            code = [_code_only(r) for r in _executed_readings(line)]
+            dequoted = [_dequoted(r) for r in _executed_readings(line)]
+            broker = any(_EXECUTION_BROKER.search(r) for r in code) or (
+                any(_START_PROCESS.search(r) for r in code)
+                and any(_START_PROCESS_LAUNCHES_PROGRAM.search(r) for r in dequoted)
+            )
+            if broker:
+                violations.append(Violation(
+                    cmd.module, cmd.line, "execution-broker",
+                    "runs another command through an execution broker "
+                    "(Invoke-Expression/iex, Invoke-Command, cmd /c, a nested "
+                    "PowerShell, or Start-Process with arguments). The child "
+                    "command is string data: no rule here and no parse tree can "
+                    "tie it to an exit-code check, so a failed native write "
+                    "leaves the wrapper exiting 0. Invoke the program directly. "
+                    "(Start-Process on a URI such as 'ms-settings:windowsupdate' "
+                    "carries no child command and is fine.)",
+                    text,
+                ))
+                break
         if any(_CALL_OPERATOR.search(_code_only(r)) for r in readings):
             violations.append(Violation(
                 cmd.module, cmd.line, "call-operator-invocation",
