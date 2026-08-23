@@ -172,51 +172,108 @@ def test_every_auditpol_invocation_is_the_enable_shape(analysis) -> None:
         )
 
 
-# ── Negative controls ────────────────────────────────────────────────────────
+#: Commands that take another command as string data and run it. Their child
+#: is invisible to every check in this file — the tree shows the broker, and
+#: the real command sits inside an argument PowerShell never parses.
+#: Start-Process is judged on its arguments instead: updates.py legitimately
+#: opens a URI with it, which carries no child command.
+_BROKERS = frozenset(
+    {"invoke-expression", "iex", "invoke-command", "cmd", "cmd.exe",
+     "powershell", "powershell.exe", "pwsh", "pwsh.exe"}
+)
+
+
+def _is_broker(cmd: dict) -> bool:
+    name = (cmd["name"] or "").lower()
+    if name in _BROKERS:
+        return True
+    if name != "start-process":
+        return False
+    return any(
+        "-argumentlist" == e.lower() or e.lower().strip("'\"").endswith(".exe")
+        for e in cmd["elements"][1:]
+    )
+
+
+def test_no_command_runs_through_an_execution_broker(analysis) -> None:
+    brokers = [
+        (cid, cmd["name"], cmd["elements"])
+        for cid, item in analysis.items()
+        for cmd in item["commands"]
+        if _is_broker(cmd)
+    ]
+    assert not brokers, brokers
+
+
+# ── Controls ─────────────────────────────────────────────────────────────────
 #
-# The exact strings that passed the text lint in earlier rounds. If the
-# assertions above cannot reject these, they are not testing anything.
+# Four negative controls — the exact strings that passed the text lint in
+# earlier rounds — and one positive control, so the assertions above cannot
+# pass vacuously. All of them are parsed in ONE PowerShell process alongside
+# each other: a process launch dominates the runtime of this file, and
+# spawning one per case cost ~70s on the CI Windows runner.
 
-_INDIRECT = [
-    pytest.param("$e = 'reg.exe'\n& $e add \"HKXX\\S\" /v A /f", id="variable-name"),
-    pytest.param("& ('re' + 'g.exe') add \"HKXX\\S\" /v A /f", id="split-literal"),
-    pytest.param(
-        "& ('audit' + 'pol') /set /subcategory:'Logon' /success:disable /failure:disable",
-        id="split-literal-auditpol",
+_CONTROLS = {
+    "indirect-variable-name": "$e = 'reg.exe'\n& $e add \"HKXX\\S\" /v A /f",
+    "indirect-split-literal": "& ('re' + 'g.exe') add \"HKXX\\S\" /v A /f",
+    "indirect-split-literal-auditpol": (
+        "& ('audit' + 'pol') /set /subcategory:'Logon' /success:disable /failure:disable"
     ),
-]
+    "unguarded-add-after-guard-prefix": (
+        'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed" }\n'
+        'reg.exe add "HKXX\\S" /v A /f'
+    ),
+    "broker-start-process": (
+        "Start-Process -FilePath reg.exe -ArgumentList 'add HKXX\\S /v A /f' -Wait"
+    ),
+    "broker-invoke-expression": "Invoke-Expression 'reg.exe add HKXX\\S /v A /f'",
+    "broker-nested-powershell": "powershell.exe -Command 'reg.exe add HKXX\\S /v A /f'",
+    # The positive control: the shipped layout must SATISFY the guard check.
+    "guarded-add": (
+        'reg.exe add "HKLM\\S" /v A /t REG_DWORD /d 1 /f\n'
+        'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }'
+    ),
+}
 
 
-@pytest.mark.parametrize("text", _INDIRECT)
-def test_the_parser_rejects_indirect_invocations(text) -> None:
-    item = _parse([{"id": "probe", "text": text}])["probe"]
+@pytest.fixture(scope="module")
+def controls() -> dict[str, dict]:
+    """Every control case, parsed in a single PowerShell process."""
+    return _parse([{"id": cid, "text": text} for cid, text in _CONTROLS.items()])
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["indirect-variable-name", "indirect-split-literal", "indirect-split-literal-auditpol"],
+)
+def test_the_parser_rejects_indirect_invocations(controls, case) -> None:
     assert any(
         cmd["invocationOperator"] != "Unknown"
         or cmd["headType"] != "StringConstantExpressionAst"
-        for cmd in item["commands"]
+        for cmd in controls[case]["commands"]
     ), "an indirect invocation was seen as a direct one"
 
 
-def test_the_parser_sees_an_unguarded_add_after_a_guard_prefix() -> None:
-    # `<guard>; reg.exe add ...` — the text lint exempted the whole line for a
-    # while. In the tree the appended command is its own statement with no
-    # following guard.
-    text = (
-        'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed" }\n'
-        'reg.exe add "HKXX\\S" /v A /f'
-    )
-    item = _parse([{"id": "probe", "text": text}])["probe"]
+def test_the_parser_sees_an_unguarded_add_after_a_guard_prefix(controls) -> None:
+    # `<guard>` then `reg.exe add ...` — the text lint exempted the whole line
+    # for a while. In the tree the add is its own statement with no guard after.
+    item = controls["unguarded-add-after-guard-prefix"]
     adds = [c for c in item["commands"] if (c["name"] or "").lower() == "reg.exe"]
     assert adds and not any(c["guardedNext"] for c in adds)
 
 
-def test_a_guarded_add_is_recognised_as_guarded() -> None:
-    # The positive half: the shipped layout must satisfy the same check, or
-    # the test above would pass for the wrong reason.
-    text = (
-        'reg.exe add "HKLM\\S" /v A /t REG_DWORD /d 1 /f\n'
-        'if ($LASTEXITCODE -ne 0) { throw "reg.exe add failed ($LASTEXITCODE)" }'
+@pytest.mark.parametrize(
+    "case", ["broker-start-process", "broker-invoke-expression", "broker-nested-powershell"]
+)
+def test_the_broker_check_rejects_wrappers(controls, case) -> None:
+    assert any(_is_broker(cmd) for cmd in controls[case]["commands"]), (
+        "a wrapped child command was not recognised as brokered"
     )
-    item = _parse([{"id": "probe", "text": text}])["probe"]
+
+
+def test_a_guarded_add_is_recognised_as_guarded(controls) -> None:
+    # The positive control: the shipped layout must satisfy the same check, or
+    # the negative ones would pass for the wrong reason.
+    item = controls["guarded-add"]
     adds = [c for c in item["commands"] if (c["name"] or "").lower() == "reg.exe"]
     assert adds and all(c["guardedNext"] for c in adds)
