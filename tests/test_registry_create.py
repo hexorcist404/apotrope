@@ -226,6 +226,16 @@ def _armed_unquoted_path_command(root: str) -> str:
             r'"%SystemRoot%\probe.exe" -run',
             id="REG_EXPAND_SZ-stays-unexpanded",
         ),
+        pytest.param(
+            # The kind must come from reg.exe's TYPE COLUMN, never from the
+            # value data. A legitimate REG_SZ path is free to contain the other
+            # type's name; reading the whole line rewrote this one as
+            # REG_EXPAND_SZ and switched on %variable% expansion.
+            "String",
+            r"C:\Program Files\REG_EXPAND_SZ Tools\app.exe -run",
+            r'"C:\Program Files\REG_EXPAND_SZ Tools\app.exe" -run',
+            id="REG_SZ-data-naming-the-other-type",
+        ),
     ],
 )
 def test_the_write_preserves_the_original_value_kind(
