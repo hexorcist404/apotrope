@@ -112,13 +112,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   each check module consumed, with the clock frozen at the persona's own scan
   instant — and `tests/test_sample_reports.py` runs the *real* check functions
   against them, requiring every published row to equal the output exactly, on
-  every field. An earlier version of the guard instead re-derived what the
-  checks could emit by interpreting their source; successive reviews kept
-  finding text that slipped past that partial interpreter, so it was replaced
-  rather than patched again. Running the real code leaves nothing to slip past:
-  a source change that moves any published field — wording, severity, a
-  command, the CIS mapping — fails the guard naming the field, and the fix is
-  to regenerate the sample. The mocked helpers also pin the exact arguments of
+  every source-owned field. The one exception is `check_duration`, which the
+  scanner stamps at scan time rather than the check emitting it: every row
+  stores 0.0 and the guard does not compare it. An earlier version of the
+  guard instead re-derived what the checks could emit by interpreting their
+  source; successive reviews kept finding text that slipped past that partial
+  interpreter, so it was replaced rather than patched again. Running the real
+  code leaves nothing to slip past: a source change that moves any published
+  field the check owns — wording, severity, a command, the CIS mapping —
+  fails the guard naming the field, and the fix is to regenerate the sample. The mocked helpers also pin the exact arguments of
   every call — the PowerShell query text itself — so a check whose *query*
   changes fails the guard too, rather than being handed the canned answer
   regardless of what it asked.
