@@ -1142,6 +1142,17 @@ secedit /configure /db &#34;$env:TEMP\pwcomplexity.sdb&#34; /cfg $inf /areas SEC
 if (get-command enable-bitlocker -erroraction silentlycontinue) {
     enable-bitlocker -mountpoint &#39;g:&#39; -encryptionmethod xtsaes256 -usedspaceonly -recoverypasswordprotector -skiphardwaretest
     if (&#39;g:&#39; -eq $env:systemdrive) { add-bitlockerkeyprotector -mountpoint &#39;g:&#39; -tpmprotector } else { enable-bitlockerautounlock -mountpoint &#39;g:&#39; }
+
+    # save this before you reboot. the recovery password is the only
+    # way back in once the key stops being released automatically. the
+    # cmdlets above return a volume object whose default table shows the
+    # protector types but not the password, and it cannot be read back
+    # from the recovery prompt itself.
+    $rp = (get-bitlockervolume -mountpoint &#39;g:&#39;).keyprotector | where-object keyprotectortype -eq &#39;recoverypassword&#39;
+    $rp | format-list keyprotectorid, recoverypassword
+    # domain- or entra-joined? escrow it centrally as well:
+    # backup-bitlockerkeyprotector -mountpoint &#39;g:&#39; -keyprotectorid $rp.keyprotectorid
+    # backuptoaad-bitlockerkeyprotector -mountpoint &#39;g:&#39; -keyprotectorid $rp.keyprotectorid
 } else {
     write-warning &#39;bitlocker is unavailable on this windows edition.&#39;
 }">
@@ -1169,6 +1180,17 @@ if (get-command enable-bitlocker -erroraction silentlycontinue) {
 if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
     Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest
     if (&#39;G:&#39; -eq $env:SystemDrive) { Add-BitLockerKeyProtector -MountPoint &#39;G:&#39; -TpmProtector } else { Enable-BitLockerAutoUnlock -MountPoint &#39;G:&#39; }
+
+    # SAVE THIS BEFORE YOU REBOOT. The recovery password is the only
+    # way back in once the key stops being released automatically. The
+    # cmdlets above return a volume object whose default table shows the
+    # protector TYPES but not the password, and it cannot be read back
+    # from the recovery prompt itself.
+    $rp = (Get-BitLockerVolume -MountPoint &#39;G:&#39;).KeyProtector | Where-Object KeyProtectorType -eq &#39;RecoveryPassword&#39;
+    $rp | Format-List KeyProtectorId, RecoveryPassword
+    # Domain- or Entra-joined? Escrow it centrally as well:
+    # Backup-BitLockerKeyProtector -MountPoint &#39;G:&#39; -KeyProtectorId $rp.KeyProtectorId
+    # BackupToAAD-BitLockerKeyProtector -MountPoint &#39;G:&#39; -KeyProtectorId $rp.KeyProtectorId
 } else {
     Write-Warning &#39;BitLocker is unavailable on this Windows edition.&#39;
 }">
@@ -1176,7 +1198,7 @@ if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-c"># BitLocker requires Windows Pro/Enterprise/Education (absent on Home).</div><div class="cl-x"><span class="ps">PS&gt;</span>if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {</div><div class="cl-x"><span class="ps">PS&gt;</span>    Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest</div><div class="cl-x"><span class="ps">PS&gt;</span>    if (&#39;G:&#39; -eq $env:SystemDrive) { Add-BitLockerKeyProtector -MountPoint &#39;G:&#39; -TpmProtector } else { Enable-BitLockerAutoUnlock -MountPoint &#39;G:&#39; }</div><div class="cl-x"><span class="ps">PS&gt;</span>} else {</div><div class="cl-x"><span class="ps">PS&gt;</span>    Write-Warning &#39;BitLocker is unavailable on this Windows edition.&#39;</div><div class="cl-x"><span class="ps">PS&gt;</span>}</div></pre>
+                  <pre class="code-cmd"><div class="cl-c"># BitLocker requires Windows Pro/Enterprise/Education (absent on Home).</div><div class="cl-x"><span class="ps">PS&gt;</span>if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {</div><div class="cl-x"><span class="ps">PS&gt;</span>    Enable-BitLocker -MountPoint &#39;G:&#39; -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest</div><div class="cl-x"><span class="ps">PS&gt;</span>    if (&#39;G:&#39; -eq $env:SystemDrive) { Add-BitLockerKeyProtector -MountPoint &#39;G:&#39; -TpmProtector } else { Enable-BitLockerAutoUnlock -MountPoint &#39;G:&#39; }</div><div class="cl-b"> </div><div class="cl-c">    # SAVE THIS BEFORE YOU REBOOT. The recovery password is the only</div><div class="cl-c">    # way back in once the key stops being released automatically. The</div><div class="cl-c">    # cmdlets above return a volume object whose default table shows the</div><div class="cl-c">    # protector TYPES but not the password, and it cannot be read back</div><div class="cl-c">    # from the recovery prompt itself.</div><div class="cl-x"><span class="ps">PS&gt;</span>    $rp = (Get-BitLockerVolume -MountPoint &#39;G:&#39;).KeyProtector | Where-Object KeyProtectorType -eq &#39;RecoveryPassword&#39;</div><div class="cl-x"><span class="ps">PS&gt;</span>    $rp | Format-List KeyProtectorId, RecoveryPassword</div><div class="cl-c">    # Domain- or Entra-joined? Escrow it centrally as well:</div><div class="cl-c">    # Backup-BitLockerKeyProtector -MountPoint &#39;G:&#39; -KeyProtectorId $rp.KeyProtectorId</div><div class="cl-c">    # BackupToAAD-BitLockerKeyProtector -MountPoint &#39;G:&#39; -KeyProtectorId $rp.KeyProtectorId</div><div class="cl-x"><span class="ps">PS&gt;</span>} else {</div><div class="cl-x"><span class="ps">PS&gt;</span>    Write-Warning &#39;BitLocker is unavailable on this Windows edition.&#39;</div><div class="cl-x"><span class="ps">PS&gt;</span>}</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1470,7 +1492,8 @@ if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
         
         
         
-        <div class="frow is-warn" data-status="WARN" data-text="autoplay disabled hardening autoplay is partially disabled (nodrivetypeautorun = 158). some drive types may still trigger autoplay. cis 18.10.8.3 set-itemproperty -path &#39;hklm:\software\microsoft\windows\currentversion\policies\explorer&#39; -name nodrivetypeautorun -value 255 -type dword -force">
+        <div class="frow is-warn" data-status="WARN" data-text="autoplay disabled hardening autoplay is partially disabled (nodrivetypeautorun = 158). some drive types may still trigger autoplay. cis 18.10.8.3 reg.exe add &#34;hklm\software\microsoft\windows\currentversion\policies\explorer&#34; /v nodrivetypeautorun /t reg_dword /d 255 /f
+if ($lastexitcode -ne 0) { throw &#34;reg.exe add failed ($lastexitcode)&#34; }">
           <button class="fhead is-open">
             <span class="spill spill-warn">WARN</span>
             <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
@@ -1491,12 +1514,13 @@ if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
               <div class="rem">
                 <div class="rem-note">Disable AutoPlay for all drive types so the remaining drive types can no longer auto-execute content.</div>
                 
-                <div class="code" data-cmd="Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force">
+                <div class="code" data-cmd="reg.exe add &#34;HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#34; /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f
+if ($LASTEXITCODE -ne 0) { throw &#34;reg.exe add failed ($LASTEXITCODE)&#34; }">
                   <div class="code-bar">
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>Set-ItemProperty -Path &#39;HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#39; -Name NoDriveTypeAutoRun -Value 255 -Type DWord -Force</div></pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>reg.exe add &#34;HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer&#34; /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f</div><div class="cl-x"><span class="ps">PS&gt;</span>if ($LASTEXITCODE -ne 0) { throw &#34;reg.exe add failed ($LASTEXITCODE)&#34; }</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1507,13 +1531,13 @@ if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
         </div>
         
         
-        <div class="frow is-warn" data-status="WARN" data-text="audit policy hardening the following subcategories have auditing disabled: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;logon&#39; /success:enable /failure:enable">
+        <div class="frow is-warn" data-status="WARN" data-text="audit policy hardening not all expected audit subcategories are confirmed logging: sensitive privilege use. security-relevant events may not be recorded. cis 17.1.1 auditpol /set /subcategory:&#39;sensitive privilege use&#39; /success:enable /failure:enable">
           <button class="fhead is-open">
             <span class="spill spill-warn">WARN</span>
             <span class="fsevcell"><span class="fsev" style="color:#ffb23d;border:1px solid #ffb23d;background:transparent">MEDIUM</span></span>
             <span class="fname">
               <b>Audit Policy</b>
-              <div class="fsnip">The following subcategories have auditing disabled: Sensitive Privilege Use</div>
+              <div class="fsnip">Not all expected audit subcategories are confirmed logging: Sensitive Privilege Use</div>
             </span>
             <span class="fright">
               <span class="cis">CIS 17.1.1</span>
@@ -1522,18 +1546,18 @@ if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
           </button>
           <div class="fbody">
             <div class="fld"><span class="k">Checks</span><span class="vv">Checks that key audit policy subcategories log Success/Failure events.</span></div>
-            <div class="fld"><span class="k">Found</span><span class="vv">The following subcategories have auditing disabled: Sensitive Privilege Use. Security-relevant events may not be recorded.</span></div>
+            <div class="fld"><span class="k">Found</span><span class="vv">Not all expected audit subcategories are confirmed logging: Sensitive Privilege Use. Security-relevant events may not be recorded.</span></div>
             
             <div class="fld"><span class="k">Remediation</span>
               <div class="rem">
-                <div class="rem-note">Enable audit logging for the key subcategories that currently have auditing disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</div>
+                <div class="rem-note">Enable audit logging for the subcategories confirmed disabled so security-relevant events are recorded. This can also be configured via Group Policy (secpol.msc → Advanced Audit Policy Configuration).</div>
                 
-                <div class="code" data-cmd="auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable">
+                <div class="code" data-cmd="auditpol /set /subcategory:&#39;Sensitive Privilege Use&#39; /success:enable /failure:enable">
                   <div class="code-bar">
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>auditpol /set /subcategory:&#39;Logon&#39; /success:enable /failure:enable</div></pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>auditpol /set /subcategory:&#39;Sensitive Privilege Use&#39; /success:enable /failure:enable</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
@@ -1629,7 +1653,14 @@ if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
         
         
         
-        <div class="frow is-warn" data-status="WARN" data-text="netbios over tcp/ip network 2 adapter(s) inherit netbios setting from dhcp. if the dhcp server does not explicitly disable netbios, it may be active.  get-ciminstance win32_networkadapterconfiguration -filter &#39;ipenabled=true&#39; | foreach-object { invoke-cimmethod -inputobject $_ -methodname settcpipnetbios -arguments @{ tcpipnetbiosoptions = 2 } | out-null }">
+        <div class="frow is-warn" data-status="WARN" data-text="netbios over tcp/ip network 2 adapter(s) inherit netbios setting from dhcp. if the dhcp server does not explicitly disable netbios, it may be active.  get-ciminstance win32_networkadapterconfiguration -filter &#39;ipenabled=true&#39; | foreach-object {
+    $r = invoke-cimmethod -inputobject $_ -methodname settcpipnetbios -arguments @{ tcpipnetbiosoptions = 2 }
+    switch ($r.returnvalue) {
+        0 { &#34;$($_.description): netbios disabled&#34; }
+        1 { write-warning &#34;$($_.description): disabled, reboot required&#34; }
+        default { write-warning &#34;$($_.description): failed, returnvalue=$($r.returnvalue)&#34; }
+    }
+}">
           <button class="fhead is-open">
             <span class="spill spill-warn">WARN</span>
             <span class="fsevcell"><span class="fsev" style="color:#44e0e6;border:1px solid #44e0e6;background:transparent">LOW</span></span>
@@ -1650,12 +1681,19 @@ if (Get-Command Enable-BitLocker -ErrorAction SilentlyContinue) {
               <div class="rem">
                 <div class="rem-note">Explicitly disable NetBIOS on all adapters rather than relying on DHCP.</div>
                 
-                <div class="code" data-cmd="Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 } | Out-Null }">
+                <div class="code" data-cmd="Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object {
+    $r = Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }
+    switch ($r.ReturnValue) {
+        0 { &#34;$($_.Description): NetBIOS disabled&#34; }
+        1 { Write-Warning &#34;$($_.Description): disabled, REBOOT REQUIRED&#34; }
+        default { Write-Warning &#34;$($_.Description): failed, ReturnValue=$($r.ReturnValue)&#34; }
+    }
+}">
                   <div class="code-bar">
                     <span class="code-tag"><span class="shield">⛨</span> Elevated PowerShell · run as Administrator</span>
                     <button class="copy" type="button">⧉ Copy</button>
                   </div>
-                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 } | Out-Null }</div></pre>
+                  <pre class="code-cmd"><div class="cl-x"><span class="ps">PS&gt;</span>Get-CimInstance Win32_NetworkAdapterConfiguration -Filter &#39;IPEnabled=True&#39; | ForEach-Object {</div><div class="cl-x"><span class="ps">PS&gt;</span>    $r = Invoke-CimMethod -InputObject $_ -MethodName SetTcpipNetbios -Arguments @{ TcpipNetbiosOptions = 2 }</div><div class="cl-x"><span class="ps">PS&gt;</span>    switch ($r.ReturnValue) {</div><div class="cl-x"><span class="ps">PS&gt;</span>        0 { &#34;$($_.Description): NetBIOS disabled&#34; }</div><div class="cl-x"><span class="ps">PS&gt;</span>        1 { Write-Warning &#34;$($_.Description): disabled, REBOOT REQUIRED&#34; }</div><div class="cl-x"><span class="ps">PS&gt;</span>        default { Write-Warning &#34;$($_.Description): failed, ReturnValue=$($r.ReturnValue)&#34; }</div><div class="cl-x"><span class="ps">PS&gt;</span>    }</div><div class="cl-x"><span class="ps">PS&gt;</span>}</div></pre>
                   <div class="code-warn">⚠ Review before running — these commands run elevated and can change system settings, or require a reboot or maintenance window.</div>
                 </div>
                 
