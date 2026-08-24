@@ -497,6 +497,29 @@ class TestExecutionBrokerBan:
             ("cmd /k", "cmd /k 'reg add HKXX\\S /v A /f'"),
             ("nested powershell", "powershell.exe -Command 'reg.exe add HKXX\\S /v A /f'"),
             ("nested pwsh", "pwsh -c 'reg.exe add HKXX\\S /v A /f'"),
+            # Same programs reached by another name. Matching spellings loses;
+            # the name is normalized (prefix and .exe stripped) before it is
+            # classified, so these collapse onto the entries above.
+            ("start-process positional args", "Start-Process reg 'add HKXX\\S /v A /f'"),
+            ("saps alias", "saps reg 'add HKXX\\S /v A /f'"),
+            ("start alias", "start reg 'add HKXX\\S /v A /f'"),
+            ("icm alias", "icm -FilePath C:\\temp\\fix.ps1"),
+            ("module-qualified start-process",
+             "Microsoft.PowerShell.Management\\Start-Process reg 'add HKXX\\S /v A /f'"),
+            ("module-qualified invoke-expression",
+             "Microsoft.PowerShell.Utility\\Invoke-Expression 'reg.exe add HKXX\\S /v A /f'"),
+            ("full-path cmd",
+             "C:\\Windows\\System32\\cmd.exe /c 'reg.exe add HKXX\\S /v A /f'"),
+            ("full-path powershell",
+             "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe "
+             "-Command 'reg.exe add HKXX\\S /v A /f'"),
+            ("forward-slash path", "C:/Windows/System32/cmd.exe /c 'reg add HKXX\\S /v A /f'"),
+            # The permit is the reviewed command — not the URI scheme, not an
+            # alias carrying it, not the same line with more on it.
+            ("a different settings page", "Start-Process 'ms-settings:privacy-webcam'"),
+            ("alias carrying the shipped URI", "saps 'ms-settings:windowsupdate'"),
+            ("shipped URI with extra arguments",
+             "Start-Process 'ms-settings:windowsupdate' -WindowStyle Hidden"),
             ("encoded command", "powershell.exe -EncodedCommand ZgBvAG8A"),
             ("broker after a semicolon", "Write-Host hi; iex 'reg.exe add HKXX\\S /v A /f'"),
         ],
@@ -504,6 +527,16 @@ class TestExecutionBrokerBan:
     def test_brokers_are_flagged(self, label: str, text: str) -> None:
         planted = [Command("fake.py", 1, text)]
         assert [v for v in lint_commands(planted) if v.rule == "execution-broker"], label
+
+    @pytest.mark.parametrize(
+        "text", ["Start-Service -Name W32Time", "Start-Sleep -Seconds 5"]
+    )
+    def test_other_start_cmdlets_are_not_the_alias(self, text: str) -> None:
+        # `start` is a real Start-Process alias, but Start-Service and
+        # Start-Sleep merely begin with the same letters. Normalization works
+        # on whole command tokens, so neither is swept up.
+        assert not [v for v in lint_commands([Command("fake.py", 1, text)])
+                    if v.rule == "execution-broker"]
 
     def test_start_process_on_a_uri_is_clean(self) -> None:
         # updates.py ships this: a protocol handler that opens the Windows
