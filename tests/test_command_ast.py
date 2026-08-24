@@ -98,7 +98,18 @@ $out | ConvertTo-Json -Depth 8 -Compress
 
 
 def _parse(entries: list[dict[str, str]]) -> dict[str, dict]:
-    """Return {id: analysis} for each {'id', 'text'} entry, via PowerShell."""
+    """Return {id: analysis} for each {'id', 'text'} entry, via PowerShell.
+
+    The result is keyed by id, so a duplicate id would silently collapse two
+    commands into one and shrink what every assertion in this module covers —
+    the quiet coverage loss the whole guard exists to prevent. All three id
+    invariants live here so every caller inherits them.
+    """
+    submitted = [entry["id"] for entry in entries]
+    assert len(set(submitted)) == len(submitted), (
+        "duplicate ids submitted: "
+        f"{sorted({i for i in submitted if submitted.count(i) > 1})}"
+    )
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", _ANALYZER],
         input=json.dumps(entries), capture_output=True, text=True, check=False,
@@ -107,14 +118,29 @@ def _parse(entries: list[dict[str, str]]) -> dict[str, dict]:
     parsed = json.loads(result.stdout)
     if isinstance(parsed, dict):  # ConvertTo-Json unwraps a single element
         parsed = [parsed]
-    return {item["id"]: item for item in parsed}
+
+    analysed = {item["id"]: item for item in parsed}
+    assert len(parsed) == len(entries), (
+        f"parsed {len(parsed)} commands from {len(entries)} submitted"
+    )
+    assert set(analysed) == set(submitted), (
+        f"ids came back changed: missing {set(submitted) - set(analysed)}, "
+        f"unexpected {set(analysed) - set(submitted)}"
+    )
+    return analysed
 
 
 @pytest.fixture(scope="module")
 def analysis() -> dict[str, dict]:
-    """Every shipped command, parsed once — one PowerShell process for all 48."""
+    """Every shipped command, parsed once — one PowerShell process for all 48.
+
+    Ids carry an ordinal because ``module:line`` is not unique: a conditional
+    command expression (``A if cond else B``, as rdp.py uses) resolves to two
+    commands on the same source line.
+    """
     entries = [
-        {"id": f"{c.module}:{c.line}", "text": c.text} for c in collect_commands()
+        {"id": f"{c.module}:{c.line}#{ordinal}", "text": c.text}
+        for ordinal, c in enumerate(collect_commands())
     ]
     assert len(entries) >= 30, f"inventory collapsed to {len(entries)} commands"
     return _parse(entries)
@@ -178,20 +204,31 @@ def test_every_auditpol_invocation_is_the_enable_shape(analysis) -> None:
 #: Start-Process is judged on its arguments instead: updates.py legitimately
 #: opens a URI with it, which carries no child command.
 _BROKERS = frozenset(
-    {"invoke-expression", "iex", "invoke-command", "cmd", "cmd.exe",
-     "powershell", "powershell.exe", "pwsh", "pwsh.exe"}
+    {"invoke-expression", "iex", "invoke-command", "icm", "cmd",
+     "powershell", "pwsh", "start-process", "saps", "start"}
 )
 
 
+def _normalized_command(token: str) -> str:
+    """A command name reduced to the program it runs (see command_audit)."""
+    base = token.replace("/", "\\").rsplit("\\", 1)[-1].lower()
+    return base[:-4] if base.endswith(".exe") else base
+
+
 def _is_broker(cmd: dict) -> bool:
-    name = (cmd["name"] or "").lower()
-    if name in _BROKERS:
-        return True
-    if name != "start-process":
+    # Same normalization the text lint uses: an alias, a module qualifier
+    # (Microsoft.PowerShell.Management\Start-Process) and a full path
+    # (C:\Windows\System32\cmd.exe) all name the same program, so the name is
+    # reduced before it is classified rather than matched spelling by spelling.
+    raw = cmd["name"] or ""
+    if _normalized_command(raw) not in _BROKERS:
         return False
-    return any(
-        "-argumentlist" == e.lower() or e.lower().strip("'\"").endswith(".exe")
-        for e in cmd["elements"][1:]
+    # The one reviewed launcher, permitted only as its literal shipped form:
+    # not an alias, not another Settings page, and with nothing else on it.
+    return not (
+        raw == "Start-Process"
+        and [e.strip() for e in cmd["elements"]]
+        == ["Start-Process", "'ms-settings:windowsupdate'"]
     )
 
 
@@ -228,6 +265,18 @@ _CONTROLS = {
     ),
     "broker-invoke-expression": "Invoke-Expression 'reg.exe add HKXX\\S /v A /f'",
     "broker-nested-powershell": "powershell.exe -Command 'reg.exe add HKXX\\S /v A /f'",
+    # Spellings that reach the same programs by other names.
+    "broker-module-qualified": (
+        "Microsoft.PowerShell.Management\\Start-Process reg 'add HKXX\\S /v A /f'"
+    ),
+    "broker-full-path-cmd": "C:\\Windows\\System32\\cmd.exe /c 'reg.exe add HKXX\\S /v A /f'",
+    "broker-alias-saps": "saps reg 'add HKXX\\S /v A /f'",
+    "broker-alias-icm": "icm -FilePath C:\\temp\\fix.ps1",
+    # The permit is the reviewed command, not the URI scheme or an alias.
+    "broker-other-settings-uri": "Start-Process 'ms-settings:privacy-webcam'",
+    "broker-alias-with-shipped-uri": "saps 'ms-settings:windowsupdate'",
+    # The shipped launcher itself, which must NOT be treated as a broker.
+    "permitted-uri-launch": "Start-Process 'ms-settings:windowsupdate'",
     # The positive control: the shipped layout must SATISFY the guard check.
     "guarded-add": (
         'reg.exe add "HKLM\\S" /v A /t REG_DWORD /d 1 /f\n'
@@ -263,12 +312,41 @@ def test_the_parser_sees_an_unguarded_add_after_a_guard_prefix(controls) -> None
 
 
 @pytest.mark.parametrize(
-    "case", ["broker-start-process", "broker-invoke-expression", "broker-nested-powershell"]
+    "case",
+    [
+        "broker-start-process",
+        "broker-invoke-expression",
+        "broker-nested-powershell",
+        "broker-module-qualified",
+        "broker-full-path-cmd",
+        "broker-alias-saps",
+        "broker-alias-icm",
+        "broker-other-settings-uri",
+        "broker-alias-with-shipped-uri",
+    ],
 )
 def test_the_broker_check_rejects_wrappers(controls, case) -> None:
     assert any(_is_broker(cmd) for cmd in controls[case]["commands"]), (
         "a wrapped child command was not recognised as brokered"
     )
+
+
+def test_the_shipped_uri_launcher_is_not_a_broker(controls) -> None:
+    # The positive half of the broker check: the one reviewed launcher must
+    # pass, or the assertions above would be satisfied by rejecting everything.
+    assert not any(
+        _is_broker(cmd) for cmd in controls["permitted-uri-launch"]["commands"]
+    )
+
+
+def test_duplicate_ids_are_rejected_rather_than_collapsed() -> None:
+    # Keying by id means two entries sharing one would silently become a
+    # single analysed command, shrinking coverage without any test failing.
+    with pytest.raises(AssertionError, match="duplicate ids"):
+        _parse([
+            {"id": "dup", "text": 'reg.exe add "HKXX\\S" /v A /f'},
+            {"id": "dup", "text": "Write-Host fine"},
+        ])
 
 
 def test_a_guarded_add_is_recognised_as_guarded(controls) -> None:
