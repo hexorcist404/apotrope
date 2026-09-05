@@ -1,6 +1,6 @@
 # Apotrope
 
-> Apotrope is a portable, offline Windows security posture auditor. A single executable (or `pip install apotrope`) audits the local machine against CIS Microsoft Windows Benchmark controls, scores it 0-100 with an A-F grade, and writes a self-contained HTML report. It is read-only, makes no network connections, and has no agent, telemetry, or license key.
+> Apotrope is a portable, offline Windows security posture auditor. A single executable (or `pip install apotrope`) audits the local machine, scores it 0-100 with an A-F grade, maps applicable findings to CIS Microsoft Windows Benchmark recommendations, and writes a self-contained HTML report. It is read-only, makes no network connections, and has no agent, telemetry, or license key.
 
 ## Key facts
 

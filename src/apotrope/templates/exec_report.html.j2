@@ -296,7 +296,7 @@ hr.rule { border: none; border-top: 1px solid var(--rule); margin: 14pt 0; }
     {% set pass_pct = ((pass_count * 100 / total_checks) | round | int) if total_checks else 0 %}
     <div class="tiles">
       <div class="tile accent"><div class="k">Overall score</div><div class="v tnum">{{ score }}<small>/100</small></div><div class="note">Grade {{ grade_letter }} — {{ grade_label }}</div></div>
-      <div class="tile"><div class="k">Controls passed</div><div class="v tnum">{{ pass_count }}<small>/{{ total_checks }}</small></div><div class="note">{{ pass_pct }}% compliant</div></div>
+      <div class="tile"><div class="k">Controls passed</div><div class="v tnum">{{ pass_count }}<small>/{{ total_checks }}</small></div><div class="note">{{ pass_pct }}% of checks passed</div></div>
       <div class="tile"><div class="k">Open findings</div><div class="v tnum">{{ open_total }}</div><div class="note">{{ fail_count }} failed · {{ warn_count }} warning{{ 's' if warn_count != 1 }}</div></div>
       <div class="tile"><div class="k">High-severity</div><div class="v tnum">{{ p1_count }}</div><div class="note">Priority-1 item{{ 's' if p1_count != 1 }}</div></div>
     </div>
@@ -393,7 +393,7 @@ hr.rule { border: none; border-top: 1px solid var(--rule); margin: 14pt 0; }
     <div class="sec-h"><span class="n">A</span><h2>Attestation — controls passed</h2><span class="tag">{{ pass_count }} control{{ 's' if pass_count != 1 }}</span></div>
 
     {% if attestation_groups %}
-    <p class="muted" style="font-size:9.6pt;margin-bottom:10pt;">The following controls were evaluated and passed. This record can serve as evidence of the endpoint's compliant configuration at the time of assessment.</p>
+    <p class="muted" style="font-size:9.6pt;margin-bottom:10pt;">The following controls were evaluated and passed. This is a record of which checks passed at the time of assessment.</p>
 
     <table class="attest">
       <thead>
