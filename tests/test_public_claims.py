@@ -292,9 +292,10 @@ REQUIRED_FRAGMENTS = [
     ("docs/vs-harden-windows-security/index.html", "CIS references where applicable", 1),
     (
         "docs/vs-harden-windows-security/index.html",
-        "Failed and warning checks ship with a copy-paste PowerShell fix",
+        "Failed and warning checks include remediation guidance, with copy-paste PowerShell commands where applicable.",
         2,
     ),
+    ("docs/vs-harden-windows-security/index.html", "ship with a copy-paste PowerShell fix", 0),
     ("docs/vs-harden-windows-security/index.html", "Every finding ships with", 0),
     ("src/apotrope/templates/exec_report.html.j2", "% of checks passed", 1),
     ("src/apotrope/templates/exec_report.html.j2", RECORD_SENTENCE, 1),
