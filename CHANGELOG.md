@@ -7,6 +7,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Public copy and the executive report now describe the score as Apotrope's
+  own 0–100 posture metric.** CIS Benchmark recommendation IDs are shown on
+  applicable findings — not every check has a CIS mapping — and remediation is
+  described as provided for failed and warning checks. The executive report's
+  "% compliant" and "compliant configuration" wording is replaced with
+  pass-count language. No scoring logic changed. A public-claims lint
+  (`tools/public_claims.py`, `tests/test_public_claims.py`) now guards this
+  wording: ten prohibited phrasings, one path-bound exception for the sentence
+  whose subject is CIS-CAT, and exact-count assertions on the approved copy.
+
 ### Fixed
 
 - **Four shipped remediation commands are now covered by the lint and the

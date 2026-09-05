@@ -2,8 +2,8 @@
 
 **Portable Windows security posture auditor. A Lynis for Windows.** A single
 executable (or `pip install apotrope`, MIT-licensed) that runs entirely on the
-machine it audits, talks to no network, and is read-only. It checks 50+ controls
-across 14 categories against CIS Microsoft Windows Benchmarks (Windows 11 v5.0.0,
+machine it audits, talks to no network, and is read-only. It runs 50+ checks
+across 14 categories and maps applicable findings to CIS Microsoft Windows Benchmark recommendations (Windows 11 v5.0.0,
 Windows 10 v4.0.0), scores the box 0 to 100, and hands back a scored terminal
 report or a self-contained HTML report you can send to someone who wasn't in the
 room.
@@ -389,8 +389,7 @@ INFO and ERROR results do not affect the score.
 
 Where applicable, findings are mapped to CIS Microsoft Windows Benchmark control
 IDs. These references appear as blue badges in the HTML report's detailed findings
-section, making Apotrope useful for compliance documentation and audit
-preparation. Mappings are based on the CIS Microsoft Windows 11 Enterprise
+section, making Apotrope useful as supporting evidence for audits. Mappings are based on the CIS Microsoft Windows 11 Enterprise
 Benchmark v5.0.0 and CIS Microsoft Windows 10 Enterprise Benchmark v4.0.0.
 The correct version is selected automatically based on the OS build number at
 scan time.
@@ -549,8 +548,9 @@ either direction, so you will hear about it before release rather than after.
 
 Different job. [Harden Windows Security](https://github.com/HotCakeX/Harden-Windows-Security)
 changes your machine to a hardened baseline — it's excellent at that. Apotrope
-never changes anything; it's a read-only assessor that scores any box against
-CIS Benchmarks. Audit with Apotrope, harden with Harden Windows Security or
+never changes anything; it's a read-only assessor that gives any box its own 0–100
+posture score and cites CIS Benchmark recommendations on applicable findings.
+Audit with Apotrope, harden with Harden Windows Security or
 Group Policy, then re-audit. They compose.
 
 ### How do I verify that my download is legitimate?

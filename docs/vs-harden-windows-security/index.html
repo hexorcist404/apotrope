@@ -15,7 +15,7 @@
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="Apotrope" />
   <meta property="og:title" content="Apotrope vs Harden Windows Security (HotCakeX)" />
-  <meta property="og:description" content="Different jobs that compose: Harden Windows Security applies a hardened baseline; Apotrope audits read-only against CIS Benchmarks. Audit, harden, re-audit." />
+  <meta property="og:description" content="Harden Windows Security applies a hardened baseline; Apotrope is a read-only auditor with its own 0–100 score and CIS Benchmark references on applicable findings. Different jobs — they compose." />
   <meta property="og:url" content="https://apotrope.sh/vs-harden-windows-security/" />
   <meta property="og:image" content="https://apotrope.sh/og-image.png" />
   <meta property="og:image:width" content="1200" />
@@ -25,7 +25,7 @@
   <!-- Twitter / X Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Apotrope vs Harden Windows Security (HotCakeX)" />
-  <meta name="twitter:description" content="Harden Windows Security applies a hardened baseline; Apotrope audits read-only against CIS Benchmarks. Different jobs — they compose." />
+  <meta name="twitter:description" content="Harden Windows Security applies a hardened baseline; Apotrope is a read-only auditor with its own 0–100 score and CIS Benchmark references on applicable findings. Different jobs — they compose." />
   <meta name="twitter:image" content="https://apotrope.sh/og-image.png" />
   <meta name="twitter:image:alt" content="Apotrope — security posture auditing for Windows, entirely offline." />
 
@@ -35,8 +35,8 @@
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
-      { "@type": "Question", "name": "Should I use Apotrope or Harden Windows Security?", "acceptedAnswer": { "@type": "Answer", "text": "Both, if you like — they do different jobs. Harden Windows Security applies a hardened baseline to your machine; Apotrope is a read-only auditor that scores any Windows box against CIS Benchmarks. Audit with Apotrope, harden with Harden Windows Security or Group Policy, then re-audit." } },
-      { "@type": "Question", "name": "Does Apotrope apply fixes like Harden Windows Security does?", "acceptedAnswer": { "@type": "Answer", "text": "No. Apotrope never changes the machine. Every finding ships with a copy-paste PowerShell fix you review and apply yourself. If you want a tool that applies a full hardened baseline for you, HotCakeX's Harden System Security is the best free option." } },
+      { "@type": "Question", "name": "Should I use Apotrope or Harden Windows Security?", "acceptedAnswer": { "@type": "Answer", "text": "Both, if you like — they do different jobs. Harden Windows Security applies a hardened baseline to your machine; Apotrope is a read-only auditor that gives any Windows box its own 0–100 posture score and cites CIS Benchmark recommendations on applicable findings. Audit with Apotrope, harden with Harden Windows Security or Group Policy, then re-audit." } },
+      { "@type": "Question", "name": "Does Apotrope apply fixes like Harden Windows Security does?", "acceptedAnswer": { "@type": "Answer", "text": "No. Apotrope never changes the machine. Failed and warning checks ship with a copy-paste PowerShell fix you review and apply yourself. If you want a tool that applies a full hardened baseline for you, HotCakeX's Harden System Security is the best free option." } },
       { "@type": "Question", "name": "Is Apotrope affiliated with HotCakeX, Microsoft, or CIS?", "acceptedAnswer": { "@type": "Answer", "text": "No. Apotrope is an independent, MIT-licensed open-source project. Harden Windows Security is an unrelated project by Violet Hansen (HotCakeX). Apotrope references CIS Benchmark control IDs for informational purposes and is not affiliated with or endorsed by CIS." } }
     ]
   }
@@ -84,7 +84,7 @@
 
   <main class="content">
     <div class="wrap prose">
-      <p class="short-answer"><b>Short answer:</b> different job. <b>Harden Windows Security</b> <i>changes</i> your machine — it applies a hardened baseline using only official Microsoft features, and it's excellent at that. <b>Apotrope</b> never changes anything: it's a read-only assessor that scores any Windows box against CIS Benchmarks and hands you a report with plain-English fixes. Audit with Apotrope, harden with Harden Windows Security or Group Policy, then re-audit. They compose.</p>
+      <p class="short-answer"><b>Short answer:</b> different job. <b>Harden Windows Security</b> <i>changes</i> your machine — it applies a hardened baseline using only official Microsoft features, and it's excellent at that. <b>Apotrope</b> never changes anything: it's a read-only assessor that gives any Windows box its own 0–100 posture score, cites CIS Benchmark recommendations on applicable findings, and hands you a report with plain-English fixes. Audit with Apotrope, harden with Harden Windows Security or Group Policy, then re-audit. They compose.</p>
 
       <p><a href="https://github.com/HotCakeX/Harden-Windows-Security">Harden Windows Security</a>, by Microsoft MVP Violet Hansen (HotCakeX), ships two signed MSIX apps on the Microsoft Store. <b>Harden System Security</b> applies hardening to Windows using only built-in Microsoft features, then verifies workstation compliance against its baseline and reports a security score. <b>AppControl Manager</b> is the deepest free WDAC / App Control for Business tooling around. Its supply-chain posture — SLSA build attestations, signed releases, a relentless release cadence — is a genuine strength.</p>
 
@@ -99,7 +99,7 @@
         </thead>
         <tbody>
           <tr><th>Maker</th><td>Violet Hansen (HotCakeX), Microsoft MVP</td><td class="col-ap">Independent (hexorcist404)</td></tr>
-          <tr><th>What it does</th><td><b>Applies</b> a hardened baseline; verifies compliance against its baseline</td><td class="col-ap"><b>Audits</b> read-only against CIS Benchmarks</td></tr>
+          <tr><th>What it does</th><td><b>Applies</b> a hardened baseline; verifies compliance against its baseline</td><td class="col-ap"><b>Audits</b> read-only; own 0–100 score; CIS references where applicable</td></tr>
           <tr><th>Install</th><td>Microsoft Store (signed MSIX apps)</td><td class="col-ap">None — single portable <code>.exe</code>, or pip</td></tr>
           <tr><th>Benchmark frame</th><td>Its own baseline, built on official Microsoft features</td><td class="col-ap">CIS Win11 v5.0.0 / Win10 v4.0.0, auto-selected</td></tr>
           <tr><th>System changes</th><td>Yes — that's the job</td><td class="col-ap">None — no writes, no network</td></tr>
@@ -114,11 +114,11 @@
       <div class="faq-list">
         <details class="faq-item" open>
           <summary>Should I use Apotrope or Harden Windows Security?</summary>
-          <p>Both, if you like — they do different jobs. Harden Windows Security applies a hardened baseline to your machine; Apotrope is a read-only auditor that scores any Windows box against CIS Benchmarks. Audit with Apotrope, harden with Harden Windows Security or Group Policy, then re-audit.</p>
+          <p>Both, if you like — they do different jobs. Harden Windows Security applies a hardened baseline to your machine; Apotrope is a read-only auditor that gives any Windows box its own 0–100 posture score and cites CIS Benchmark recommendations on applicable findings. Audit with Apotrope, harden with Harden Windows Security or Group Policy, then re-audit.</p>
         </details>
         <details class="faq-item">
           <summary>Does Apotrope apply fixes like Harden Windows Security does?</summary>
-          <p>No. Apotrope never changes the machine. Every finding ships with a copy-paste PowerShell fix you review and apply yourself. If you want a tool that applies a full hardened baseline for you, HotCakeX's Harden System Security is the best free option.</p>
+          <p>No. Apotrope never changes the machine. Failed and warning checks ship with a copy-paste PowerShell fix you review and apply yourself. If you want a tool that applies a full hardened baseline for you, HotCakeX's Harden System Security is the best free option.</p>
         </details>
         <details class="faq-item">
           <summary>Is Apotrope affiliated with HotCakeX, Microsoft, or CIS?</summary>
