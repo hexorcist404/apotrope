@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 
 from apotrope.checks import services
 from apotrope.exceptions import ApotropeError
-from apotrope.models import CheckResult, Status, Severity
+from apotrope.compare import save_baseline
+from apotrope.models import AuditReport, CheckResult, Status, Severity
+from apotrope.reporter import Reporter
 
 
 def _svc(name: str, display: str = "") -> dict:
@@ -96,10 +102,11 @@ class TestCheckUnquotedPaths:
         r = self._run([_unquoted("MySvc", "C:\\Program Files\\svc.exe")])[0]
         assert "MySvc" in r.details
 
-    def test_fail_includes_path(self):
+    def test_fail_withholds_path(self):
         path = "C:\\Program Files\\My Service\\svc.exe"
         r = self._run([_unquoted("MySvc", path)])[0]
-        assert path in r.details
+        assert path not in r.details
+        assert "Command lines withheld" in r.details
 
     def test_fail_has_remediation(self):
         r = self._run([_unquoted("MySvc", "C:\\My Path\\svc.exe")])[0]
@@ -148,3 +155,49 @@ class TestRun:
         with patch("apotrope.checks.services.run_powershell_json", return_value=[]):
             results = services.run()
         assert all(r.category == "Services" for r in results)
+
+
+@pytest.mark.parametrize("command_line", [
+    r"C:\Program Files\Agent\svc.exe --password SECRET_PASSWORD --token SECRET_TOKEN",
+    r'C:\Program Files\Agent\svc.exe --config="C:\secrets\SECRET_TOKEN.exe"',
+    r"C:\Program Files\Agent\svc.dll /password:SECRET_PASSWORD",
+    r"C:\Program Files\SECRET_PASSWORD.exe folder\svc.exe --token=SECRET_TOKEN",
+    r"C:\Program Files\Agent\svc --token SECRET_TOKEN",
+])
+@pytest.mark.parametrize("single", [False, True])
+def test_unquoted_service_secrets_do_not_reach_exports(
+    tmp_path: Path, command_line: str, single: bool,
+) -> None:
+    """Service command lines stay out of every exported representation."""
+    item = _unquoted("SentinelService", command_line)
+    data = item if single else [item, _unquoted("SecondService", command_line)]
+    with patch("apotrope.checks.services.run_powershell_json", return_value=data):
+        results = services._check_unquoted_paths()
+    result = results[0]
+    assert result.status == Status.FAIL
+    assert result.severity == Severity.HIGH
+    assert "SentinelService" in result.details
+    assert f"{1 if single else 2} service(s)" in result.details
+    assert "preserving any arguments" in result.remediation
+    report = AuditReport("TEST-PC", "Windows 11", datetime.now(timezone.utc), 1.0, results, 90)
+    reporter = Reporter()
+    outputs = [
+        (reporter.generate_json_report, "report.json"),
+        (save_baseline, "baseline.json"),
+        (reporter.generate_html_report, "report.html"),
+        (reporter.generate_executive_report, "executive.html"),
+    ]
+    for exporter, filename in outputs:
+        output = tmp_path / filename
+        assert exporter(report, str(output))
+        text = output.read_text(encoding="utf-8")
+        assert "SentinelService" in text
+        for secret in ("SECRET_PASSWORD", "SECRET_TOKEN"):
+            assert secret.lower() not in text.lower()
+    assert command_line not in result.details
+
+
+def test_unquoted_query_exports_only_service_identity() -> None:
+    """Keep argument-bearing PathName inside the detection filter."""
+    projection = services._PS_UNQUOTED.split("| Select-Object", 1)[1]
+    assert projection.strip() == "Name | ConvertTo-Json -Compress"
