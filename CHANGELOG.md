@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Unquoted-service-path findings no longer export the service command line.**
+  The check queried `Win32_Service.PathName` and copied it verbatim into the
+  finding's details, so a service registered with a secret in its arguments
+  (`svc.exe --token ...`) put that secret into the JSON export, the `--baseline`
+  file and both HTML reports. HTML autoescaping protects against markup, not
+  disclosure, and the technical report also keeps a lowercase copy of every
+  detail in a `data-text` attribute for search. An unquoted `ImagePath` is
+  ambiguous by definition, so there is no safe split between "path" and
+  "arguments" (the secret can sit in a directory name before the real
+  executable); the finding now reports service names only and says the command
+  lines were withheld. The PowerShell projection is `Select-Object Name`, so the
+  arguments never leave the subprocess. The remediation command is unchanged and
+  still prints the current `ImagePath` for the operator to inspect. A test now
+  renders a sentinel secret through every exporter and asserts it survives in
+  none of them. Reported by a Codex security scan (CWE-200, low).
+
 ### Changed
 
 - **Public copy and the executive report now describe the score as Apotrope's

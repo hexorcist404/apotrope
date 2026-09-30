@@ -31,7 +31,7 @@ _PS_UNQUOTED = (
     "    $_.PathName.Trim() -notmatch '^[A-Za-z]:\\\\Windows\\\\' -and "
     "    $_.PathName.Trim() -match '^[A-Za-z]:\\\\.+ .+\\.(exe|dll)' "
     "} "
-    "| Select-Object Name, DisplayName, PathName "
+    "| Select-Object Name "
     "| ConvertTo-Json -Compress"
 )
 
@@ -166,8 +166,9 @@ def _check_unquoted_paths() -> list[CheckResult]:
         )]
 
     names = [str(i.get("Name") or "Unknown") for i in items]
-    paths = [str(i.get("PathName") or "") for i in items]
-    detail_lines = "; ".join(f"{n}: {p}" for n, p in zip(names, paths, strict=True))
+    # Unquoted command lines are ambiguous and may contain argument secrets.
+    # Retain service identity only; never parse or export the command line.
+    detail_lines = "; ".join(names)
 
     return [CheckResult(
         category=CATEGORY,
@@ -180,6 +181,7 @@ def _check_unquoted_paths() -> list[CheckResult]:
         ),
         details=(
             f"{len(items)} service(s) with unquoted paths: {detail_lines}. "
+            "Command lines withheld because they may contain sensitive arguments. "
             "An attacker with write access to a parent directory could place a malicious "
             "executable that Windows resolves before the intended binary."
         ),
