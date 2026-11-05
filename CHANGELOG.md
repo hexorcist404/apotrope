@@ -27,6 +27,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **`build_exe.py` now sets `PYTHONHASHSEED` and `SOURCE_DATE_EPOCH`** (HEAD's
+  commit timestamp, fixed fallback without git) and passes `--noupx` to
+  PyInstaller. UPX packing was never on in CI, but only because the runner
+  happened not to have UPX installed; it is now an explicit decision. Both
+  env vars are `setdefault`, so CI can override them. This is a deterministic
+  CI build with published provenance — not a reproducible-build claim, which
+  would also need identical build paths and Python patch level.
+- **Compare pages (`/lynis-for-windows/`, `/vs-cis-cat/`,
+  `/vs-harden-windows-security/`) use the brand mark in the nav** instead of
+  the old `◈` glyph, and gain the **Get Started** link the homepage nav has.
+  The "vs Harden Windows Security" page no longer says Apotrope "scores
+  against" CIS; it produces its own score with applicable findings mapped.
 - **Public copy and the executive report now describe the score as Apotrope's
   own 0–100 posture metric.** CIS Benchmark recommendation IDs are shown on
   applicable findings — not every check has a CIS mapping — and remediation is

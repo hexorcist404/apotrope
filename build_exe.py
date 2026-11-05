@@ -119,6 +119,25 @@ def _ensure_icon() -> Path:
     return icon_path
 
 
+def _source_date_epoch() -> str:
+    """Unix timestamp of HEAD's commit, for SOURCE_DATE_EPOCH.
+
+    Falls back to a fixed epoch if git is unavailable (e.g. building from an
+    sdist) so the build stays deterministic rather than picking up wall-clock
+    time.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "log", "-1", "--format=%ct"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=10, check=True,
+        ).stdout.strip()
+        if out.isdigit():
+            return out
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return "1700000000"
+
+
 def build(use_icon: bool = True) -> int:
     """Run PyInstaller and return its exit code."""
     print("[build] Starting PyInstaller build …")
@@ -141,6 +160,7 @@ def build(use_icon: bool = True) -> int:
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--onefile",
+        "--noupx",  # UPX-packed exes are an AV false-positive magnet; make this a decision, not an accident
         "--name", "apotrope",
         "--add-data", f"{templates_src};templates",
         "--paths", str(ROOT / "src"),
@@ -167,6 +187,14 @@ def build(use_icon: bool = True) -> int:
     env["PYTHONPATH"] = os.pathsep.join(
         p for p in (str(ROOT / "src"), env.get("PYTHONPATH")) if p
     )
+
+    # Deterministic CI builds (not a "reproducible build" claim — cross-machine
+    # byte-identity also needs identical build paths and Python patch level).
+    # PYTHONHASHSEED fixes set/dict ordering inside PyInstaller's bootloader
+    # archive; SOURCE_DATE_EPOCH fixes the timestamps PyInstaller embeds.
+    # Both are setdefault so CI can override them explicitly.
+    env.setdefault("PYTHONHASHSEED", "0")
+    env.setdefault("SOURCE_DATE_EPOCH", _source_date_epoch())
 
     print(f"[build] Running: {' '.join(cmd)}\n")
     result = subprocess.run(cmd, cwd=str(ROOT), env=env)
