@@ -1,0 +1,81 @@
+name: Dependency audit
+
+# Why this exists: apotrope ships as a PyInstaller exe, so whatever dependency
+# versions resolve at build time are frozen into the binary. A user who
+# downloads apotrope.exe cannot `pip install --upgrade` their way out of a CVE
+# in rich or jinja2 — the release cadence IS their patch cadence. Dependabot is
+# deliberately NOT configured for the pip ecosystem (see .github/dependabot.yml
+# for why), so without this job nothing watches the runtime dependency set.
+#
+# What it audits: the exact set release.yml installs — `.[dev]` plus
+# PyInstaller — resolved fresh on the day the job runs. That answers the
+# question that matters: "if we cut a release today, would the exe carry a
+# known-vulnerable dependency?" pyproject.toml's ranges can be clean on Monday
+# and permit a vulnerable resolve on Tuesday without a single line changing
+# here, which is why the schedule is daily, not on-push. PyInstaller is in the
+# set on purpose: its bootloader is compiled into every exe it produces, so a
+# PyInstaller advisory IS an apotrope.exe advisory.
+#
+# This job is an early warning. The HARD gate is the identical pip-audit step
+# in release.yml, which runs against the actual build environment and blocks
+# the exe from being built at all. Keep the two in sync.
+#
+# Known limitation: GitHub pauses scheduled workflows on public repos after 60
+# days without a push. If the repo goes quiet, re-enable this from the Actions
+# tab — or push something.
+
+on:
+  schedule:
+    # Daily. New advisories land daily; a weekly run leaves a six-day window in
+    # which a release could freeze a known CVE into the exe. Off the hour to
+    # dodge the :00 queue.
+    - cron: "17 7 * * *"
+  push:
+    branches: ["main"]
+    paths:
+      - "pyproject.toml"
+      - ".github/workflows/audit.yml"
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - ".github/workflows/audit.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  pip-audit:
+    name: pip-audit (release dependency set)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # Matches release.yml. The resolved set can differ by interpreter
+          # version (markers, wheel availability), so audit the one we ship from.
+          python-version: "3.12"
+
+      - name: Install the release dependency set
+        # Mirrors release.yml's install line exactly. An audit of a different
+        # set than the one that gets frozen is theatre.
+        run: pip install -e ".[dev]" pyinstaller
+
+      - name: Audit it
+        # pip-audit lives in its own throwaway venv and is pointed at the build
+        # interpreter's site-packages with --path, so pip-audit's own ~20
+        # dependencies are not part of the set being audited (a CVE in
+        # cyclonedx-python-lib must not read as a CVE in apotrope).
+        #
+        # To suppress a finding that genuinely does not apply to apotrope's
+        # usage, add `--ignore-vuln <ID>` WITH a comment stating why it does
+        # not apply and when to re-check — never a bare ignore. A security tool
+        # that silences its own advisories without explanation is a bad look.
+        run: |
+          site="$(python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")"
+          python -m venv .audit
+          .audit/bin/pip install --quiet pip-audit
+          .audit/bin/pip-audit --strict --desc on --progress-spinner off --path "$site"
