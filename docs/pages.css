@@ -37,7 +37,7 @@ nav { position:sticky; top:0; z-index:200; border-bottom:1px solid var(--line);
       background:rgba(5,9,12,0.82); backdrop-filter:blur(9px); }
 nav .wrap { display:flex; align-items:center; justify-content:space-between; height:62px; }
 .brand { display:flex; align-items:center; gap:11px; }
-.brand .dia { color:var(--accent); font-size:18px; filter:drop-shadow(0 0 7px var(--accent)); }
+.brand .dia { width:30px; height:30px; display:block; filter:drop-shadow(0 0 7px rgba(43,255,136,0.4)); }
 .brand .nm { font-family:"IBM Plex Mono",monospace; font-weight:700; font-size:15px; letter-spacing:0.34em;
              text-transform:uppercase; color:var(--bright); }
 .nav-links { display:flex; align-items:center; gap:26px; }

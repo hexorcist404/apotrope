@@ -51,7 +51,7 @@
   <nav>
     <div class="wrap">
       <a class="brand" href="/">
-        <span class="dia">◈</span>
+        <img class="dia" src="/apotrope-mark.png" width="30" height="30" alt="Apotrope" decoding="async">
         <span class="nm">APOTROPE</span>
       </a>
       <div class="nav-links">
@@ -67,6 +67,7 @@
             <a href="/vs-harden-windows-security/" title="Apotrope vs Harden Windows Security">vs HWS</a>
           </div>
         </div>
+        <a href="/#start">Get Started</a>
         <a href="/#faq">FAQ</a>
         <a href="https://github.com/hexorcist404/apotrope">GitHub ↗</a>
       </div>
@@ -88,7 +89,7 @@
 
       <p><a href="https://github.com/HotCakeX/Harden-Windows-Security">Harden Windows Security</a>, by Microsoft MVP Violet Hansen (HotCakeX), ships two signed MSIX apps on the Microsoft Store. <b>Harden System Security</b> applies hardening to Windows using only built-in Microsoft features, then verifies workstation compliance against its baseline and reports a security score. <b>AppControl Manager</b> is the deepest free WDAC / App Control for Business tooling around. Its supply-chain posture — SLSA build attestations, signed releases, a relentless release cadence — is a genuine strength.</p>
 
-      <p>Apotrope solves the other half of the problem: knowing where a box stands against a published external benchmark. It's one portable <code>.exe</code> (or <code>pip install apotrope</code>), read-only by design — no install, no registry writes, no network — and it scores against an external yardstick: the CIS Microsoft Windows Benchmarks (Windows 11 v5.0.0 / Windows 10 v4.0.0, selected automatically from the OS build). That matters most when the machine isn't yours to change: a client box during an assessment, a fleet you're only allowed to measure, an audit deliverable that needs a recognized benchmark behind it.</p>
+      <p>Apotrope solves the other half of the problem: knowing where a box stands against a published external benchmark. It's one portable <code>.exe</code> (or <code>pip install apotrope</code>), read-only by design — no install, no registry writes, no network — and it produces its own 0–100 score, with applicable findings mapped to an external yardstick: the CIS Microsoft Windows Benchmarks (Windows 11 v5.0.0 / Windows 10 v4.0.0, selected automatically from the OS build). That matters most when the machine isn't yours to change: a client box during an assessment, a fleet you're only allowed to measure, an audit deliverable that needs a recognized benchmark behind it.</p>
 
       <p>If you want your own machine hardened and kept hardened, use Harden Windows Security — it's the best free option for that job, and Apotrope deliberately doesn't compete with it. If you need to <i>measure</i> a machine against a published benchmark without touching it, that's Apotrope: drop one exe on the box, get a scored, CIS-mapped, emailable report, leave nothing behind. Then hand the fixing to Harden Windows Security, Group Policy, or the paste-ready PowerShell in Apotrope's own report — and re-audit to prove it worked.</p>
 
