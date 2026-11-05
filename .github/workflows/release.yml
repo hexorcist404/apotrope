@@ -43,6 +43,26 @@ jobs:
       - name: Install package, dev deps, and PyInstaller
         run: pip install -e ".[dev]" pyinstaller
 
+      - name: Audit dependencies (hard gate)
+        # Audits THIS environment — the exact set PyInstaller is about to freeze
+        # into the exe. A known-vulnerable resolve fails the release here, before
+        # a binary exists to attest. audit.yml runs the same audit daily as an
+        # early warning; this step is the one that actually blocks a bad build.
+        #
+        # pip-audit lives in its own throwaway venv and is pointed at the build
+        # interpreter's site-packages with --path. Installing it into the build
+        # env would (a) add pip-audit's own ~20 dependencies to the set being
+        # audited, so a CVE in cyclonedx-python-lib could block an apotrope
+        # release, and (b) leave those packages in the environment PyInstaller
+        # collects from. Same pattern as audit.yml — keep them in sync.
+        shell: pwsh
+        run: |
+          $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          python -m venv .audit
+          .\.audit\Scripts\pip install --quiet pip-audit
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          .\.audit\Scripts\pip-audit --strict --desc on --progress-spinner off --path "$site"
+
       - name: Run tests
         # Same rationale as publish.yml's gate: test.yml does NOT run on tags.
         # Deliberately duplicated here on Windows — the OS this exe ships for.

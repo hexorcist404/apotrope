@@ -25,6 +25,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   renders a sentinel secret through every exporter and asserts it survives in
   none of them. Reported by a Codex security scan (CWE-200, low).
 
+### Added
+
+- **Dependency CVE audit, in two places.** `release.yml` now runs `pip-audit`
+  against the build interpreter's site-packages — the exact set PyInstaller is
+  about to freeze into the exe — and fails the release before a binary exists
+  to attest. A new daily `audit.yml` runs the same audit against the same
+  install line as an early warning, so a vulnerable resolve surfaces the day
+  the advisory lands rather than on the next release. pip-audit runs from its
+  own throwaway venv via `--path`, so its ~20 dependencies are not part of the
+  audited set. Dependabot remains off for the pip ecosystem on purpose; this is
+  the alarm, not the updater.
+
 ### Changed
 
 - **`build_exe.py` now sets `PYTHONHASHSEED` and `SOURCE_DATE_EPOCH`** (HEAD's
